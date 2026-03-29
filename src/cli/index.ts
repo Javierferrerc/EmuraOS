@@ -1,19 +1,40 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import {
+  ConfigManager,
+  EmulatorMapper,
+  EmulatorDetector,
+  SetupWizard,
+} from "../core/index.js";
 import { registerScanCommand } from "./commands/scan.js";
 import { registerListCommand } from "./commands/list.js";
 import { registerLaunchCommand } from "./commands/launch.js";
+import { registerSetupCommand } from "./commands/setup.js";
+import { registerConfigCommand } from "./commands/config.js";
 
 const program = new Command();
 
 program
   .name("retro-launcher")
-  .description("Open-source retro gaming frontend — detect ROMs, map emulators, launch games")
+  .description(
+    "Open-source retro gaming frontend — detect ROMs, map emulators, launch games"
+  )
   .version("0.1.0");
 
 registerScanCommand(program);
 registerListCommand(program);
 registerLaunchCommand(program);
+registerSetupCommand(program);
+registerConfigCommand(program);
 
-program.parse();
+// First-run check: if no config file and no subcommand, launch wizard
+const config = new ConfigManager();
+if (!config.exists() && process.argv.length <= 2) {
+  const mapper = new EmulatorMapper();
+  const detector = new EmulatorDetector(mapper);
+  const wizard = new SetupWizard(config, detector);
+  wizard.run().then(() => program.parse());
+} else {
+  program.parse();
+}

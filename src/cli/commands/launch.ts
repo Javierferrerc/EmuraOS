@@ -121,9 +121,24 @@ export function registerLaunchCommand(program: Command): void {
           console.log(
             chalk.red(`\n  Error: ${launchResult.error}\n`)
           );
+
+          // Show compatible emulators for this system
+          const compatible = mapper.getForSystem(rom.systemId);
+          if (compatible.length > 0) {
+            console.log(
+              chalk.gray(`  Compatible emulators for ${rom.systemName}:`)
+            );
+            for (const emu of compatible) {
+              console.log(
+                chalk.gray(`    - ${emu.name} (${emu.executable})`)
+              );
+            }
+            console.log();
+          }
+
           console.log(
             chalk.gray(
-              "  Install an emulator for this system or configure emulator paths.\n"
+              "  Run 'retro-launcher config --detect' to check installed emulators.\n"
             )
           );
           return;

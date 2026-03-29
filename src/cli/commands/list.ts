@@ -5,7 +5,6 @@ import {
   SystemsRegistry,
   RomScanner,
 } from "../../core/index.js";
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -41,21 +40,40 @@ export function registerListCommand(program: Command): void {
 
       let filteredSystems = result.systems;
       if (options.system) {
+        // Validate that the system ID exists in the registry
+        const validSystem = registry.getById(options.system);
+        if (!validSystem) {
+          console.log(
+            chalk.red(
+              `  Unknown system: "${options.system}"\n`
+            )
+          );
+          console.log(chalk.gray("  Valid system IDs:\n"));
+          const allSystems = registry.getAll();
+          for (const sys of allSystems) {
+            console.log(
+              chalk.gray(`    ${sys.id.padEnd(14)}`) +
+                chalk.white(sys.name)
+            );
+          }
+          console.log();
+          return;
+        }
+
         filteredSystems = result.systems.filter(
           (s) => s.systemId === options.system
         );
         if (filteredSystems.length === 0) {
           console.log(
             chalk.yellow(
-              `  No ROMs found for system "${options.system}".`
+              `  No ROMs found for system "${options.system}" (${validSystem.name}).`
             )
           );
           console.log(
             chalk.gray(
-              `  Available systems: ${result.systems.map((s) => s.systemId).join(", ")}`
+              `  Add ROM files to: roms/${validSystem.romFolder}/\n`
             )
           );
-          console.log();
           return;
         }
       }
