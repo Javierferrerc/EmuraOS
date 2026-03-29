@@ -68,6 +68,10 @@ export class ConfigManager {
     return this.configFilePath;
   }
 
+  exists(): boolean {
+    return existsSync(this.configFilePath);
+  }
+
   ensureDirectories(): void {
     const dirs = [this.getRomsPath(), this.getEmulatorsPath()];
     for (const dir of dirs) {

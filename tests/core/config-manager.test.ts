@@ -55,4 +55,12 @@ describe("ConfigManager", () => {
     expect(existsSync(resolve(TEST_PROJECT_ROOT, "roms"))).toBe(true);
     expect(existsSync(resolve(TEST_PROJECT_ROOT, "emulators"))).toBe(true);
   });
+
+  it("should return false for exists() when no config file, true after save()", () => {
+    const manager = new ConfigManager(TEST_PROJECT_ROOT);
+    expect(manager.exists()).toBe(false);
+
+    manager.save();
+    expect(manager.exists()).toBe(true);
+  });
 });

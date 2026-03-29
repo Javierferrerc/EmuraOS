@@ -15,7 +15,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "keywords": ["retro", "gaming", "emulator", "launcher", "roms"],
+  "keywords": [
+    "retro",
+    "gaming",
+    "emulator",
+    "launcher",
+    "roms"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=20.0.0"
@@ -23,6 +29,7 @@
   "dependencies": {
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
+    "enquirer": "^2.4.1",
     "glob": "^11.0.1"
   },
   "devDependencies": {

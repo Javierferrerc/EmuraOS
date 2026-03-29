@@ -55,3 +55,17 @@ export interface LaunchResult {
   pid?: number;
   error?: string;
 }
+
+export interface DetectedEmulator {
+  id: string;
+  name: string;
+  executablePath: string;
+  systems: string[];
+  source: "emulatorsPath" | "defaultPath";
+}
+
+export interface DetectionResult {
+  detected: DetectedEmulator[];
+  notFound: string[];
+  totalChecked: number;
+}

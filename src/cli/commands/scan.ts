@@ -27,11 +27,21 @@ export function registerScanCommand(program: Command): void {
 
       if (result.totalRoms === 0) {
         console.log(
-          chalk.yellow("  No ROMs found. Add ROM files to the roms/ subfolders.")
+          chalk.yellow("  No ROMs found. Add ROM files to the roms/ subfolders.\n")
         );
+        console.log(chalk.gray("  Scanning path: " + romsPath + "\n"));
+        console.log(chalk.gray("  Expected folder structure:"));
+        console.log(chalk.gray("    roms/"));
+        console.log(chalk.gray("      nes/       → .nes, .unf"));
+        console.log(chalk.gray("      snes/      → .sfc, .smc"));
+        console.log(chalk.gray("      n64/       → .n64, .z64, .v64"));
+        console.log(chalk.gray("      gb/        → .gb"));
+        console.log(chalk.gray("      gba/       → .gba"));
+        console.log(chalk.gray("      psx/       → .bin, .cue, .iso"));
+        console.log(chalk.gray("      ...and more\n"));
         console.log(
           chalk.gray(
-            "  Expected structure: roms/nes/, roms/snes/, roms/psx/, etc.\n"
+            "  To change ROM path: retro-launcher config set romsPath <path>\n"
           )
         );
         return;
