@@ -155,13 +155,38 @@ roms/
     Final Fantasy VII.bin
 ```
 
+## GUI (Electron)
+
+Retro Launcher includes a desktop GUI built with Electron + React + Tailwind CSS.
+
+```bash
+# Start the Electron GUI (development mode)
+npm run start:electron
+
+# Package the app
+npm run package
+
+# Build distributable installer
+npm run make
+```
+
+### GUI Features
+
+- **ROM Grid** — Browse all detected ROMs in a responsive card grid
+- **System Sidebar** — Filter by system with ROM count badges
+- **Search** — Real-time search with 300ms debounce
+- **Click-to-Launch** — Double-click any ROM card to launch with the mapped emulator
+- **Settings** — Edit ROM/emulator paths, detect emulators, re-scan ROMs
+
+The GUI uses the same core engine as the CLI — no code duplication.
+
 ## Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Build
+# Build CLI
 npm run build
 
 # Run tests
@@ -170,6 +195,11 @@ npm test
 # Watch mode
 npm run dev        # TypeScript watch
 npm run test:watch # Test watch
+
+# Electron GUI
+npm run start:electron   # Dev mode with hot reload
+npm run package          # Package app
+npm run make             # Build distributable
 ```
 
 ## License

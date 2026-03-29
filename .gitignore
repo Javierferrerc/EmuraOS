@@ -157,3 +157,10 @@ emulators/*
 
 # Configs locales (si usás después)
 config/local.json
+
+# Planning docs (local only)
+planning/
+
+# Electron Forge / Vite
+.vite/
+out/
