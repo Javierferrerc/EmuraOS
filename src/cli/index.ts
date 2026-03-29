@@ -2,6 +2,8 @@
 
 import { Command } from "commander";
 import { registerScanCommand } from "./commands/scan.js";
+import { registerListCommand } from "./commands/list.js";
+import { registerLaunchCommand } from "./commands/launch.js";
 
 const program = new Command();
 
@@ -11,5 +13,7 @@ program
   .version("0.1.0");
 
 registerScanCommand(program);
+registerListCommand(program);
+registerLaunchCommand(program);
 
 program.parse();

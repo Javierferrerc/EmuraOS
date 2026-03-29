@@ -1,0 +1,181 @@
+[
+  {
+    "id": "retroarch",
+    "name": "RetroArch",
+    "executable": "retroarch.exe",
+    "defaultPaths": [
+      "C:\\RetroArch-Win64",
+      "C:\\RetroArch",
+      "C:\\Program Files\\RetroArch",
+      "C:\\Program Files (x86)\\RetroArch"
+    ],
+    "systems": ["nes", "snes", "n64", "gb", "gbc", "gba", "megadrive", "mastersystem", "psx"],
+    "launchTemplate": "\"{executable}\" -L \"{args}\" \"{romPath}\"",
+    "args": {
+      "nes": "cores\\fceumm_libretro.dll",
+      "snes": "cores\\snes9x_libretro.dll",
+      "n64": "cores\\mupen64plus_next_libretro.dll",
+      "gb": "cores\\gambatte_libretro.dll",
+      "gbc": "cores\\gambatte_libretro.dll",
+      "gba": "cores\\mgba_libretro.dll",
+      "megadrive": "cores\\genesis_plus_gx_libretro.dll",
+      "mastersystem": "cores\\genesis_plus_gx_libretro.dll",
+      "psx": "cores\\mednafen_psx_hw_libretro.dll"
+    },
+    "defaultArgs": ""
+  },
+  {
+    "id": "snes9x",
+    "name": "Snes9x",
+    "executable": "snes9x-x64.exe",
+    "defaultPaths": [
+      "C:\\Snes9x",
+      "C:\\Program Files\\Snes9x",
+      "C:\\Program Files (x86)\\Snes9x"
+    ],
+    "systems": ["snes"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "project64",
+    "name": "Project64",
+    "executable": "Project64.exe",
+    "defaultPaths": [
+      "C:\\Program Files (x86)\\Project64 3.0",
+      "C:\\Program Files (x86)\\Project64",
+      "C:\\Program Files\\Project64"
+    ],
+    "systems": ["n64"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "mgba",
+    "name": "mGBA",
+    "executable": "mGBA.exe",
+    "defaultPaths": [
+      "C:\\mGBA",
+      "C:\\Program Files\\mGBA",
+      "C:\\Program Files (x86)\\mGBA"
+    ],
+    "systems": ["gb", "gbc", "gba"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "desmume",
+    "name": "DeSmuME",
+    "executable": "DeSmuME_0.9.13_x64.exe",
+    "defaultPaths": [
+      "C:\\DeSmuME",
+      "C:\\Program Files\\DeSmuME",
+      "C:\\Program Files (x86)\\DeSmuME"
+    ],
+    "systems": ["nds"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "melonds",
+    "name": "melonDS",
+    "executable": "melonDS.exe",
+    "defaultPaths": [
+      "C:\\melonDS",
+      "C:\\Program Files\\melonDS",
+      "C:\\Program Files (x86)\\melonDS"
+    ],
+    "systems": ["nds"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "dolphin",
+    "name": "Dolphin",
+    "executable": "Dolphin.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\Dolphin-x64",
+      "C:\\Program Files\\Dolphin",
+      "C:\\Dolphin-x64"
+    ],
+    "systems": ["gamecube", "wii"],
+    "launchTemplate": "\"{executable}\" --exec=\"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "pcsx2",
+    "name": "PCSX2",
+    "executable": "pcsx2-qt.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\PCSX2",
+      "C:\\Program Files (x86)\\PCSX2",
+      "C:\\PCSX2"
+    ],
+    "systems": ["ps2"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "duckstation",
+    "name": "DuckStation",
+    "executable": "duckstation-qt-x64-ReleaseLTCG.exe",
+    "defaultPaths": [
+      "C:\\DuckStation",
+      "C:\\Program Files\\DuckStation",
+      "C:\\Program Files (x86)\\DuckStation"
+    ],
+    "systems": ["psx"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "ppsspp",
+    "name": "PPSSPP",
+    "executable": "PPSSPPWindows64.exe",
+    "defaultPaths": [
+      "C:\\PPSSPP",
+      "C:\\Program Files\\PPSSPP",
+      "C:\\Program Files (x86)\\PPSSPP"
+    ],
+    "systems": ["psp"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "flycast",
+    "name": "Flycast",
+    "executable": "flycast.exe",
+    "defaultPaths": [
+      "C:\\Flycast",
+      "C:\\Program Files\\Flycast",
+      "C:\\Program Files (x86)\\Flycast"
+    ],
+    "systems": ["dreamcast"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "kega-fusion",
+    "name": "Kega Fusion",
+    "executable": "Fusion.exe",
+    "defaultPaths": [
+      "C:\\Kega Fusion",
+      "C:\\Program Files\\Kega Fusion",
+      "C:\\Program Files (x86)\\Kega Fusion"
+    ],
+    "systems": ["megadrive", "mastersystem"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  }
+]

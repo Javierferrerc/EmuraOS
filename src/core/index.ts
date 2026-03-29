@@ -8,4 +8,7 @@ export type {
   DiscoveredRom,
   ScanResult,
   AppConfig,
+  EmulatorDefinition,
+  ResolvedEmulator,
+  LaunchResult,
 } from "./types.js";
