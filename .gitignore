@@ -137,3 +137,23 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# =========================
+# 🎮 Retro Launcher (custom)
+# =========================
+
+# ROMs (no subir juegos)
+roms/*
+!roms/.gitkeep
+
+# Emuladores descargados (opcional)
+emulators/*
+!emulators/.gitkeep
+
+# Archivos pesados o locales
+*.iso
+*.bin
+*.img
+
+# Configs locales (si usás después)
+config/local.json
