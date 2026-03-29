@@ -1,0 +1,107 @@
+[
+  {
+    "id": "nes",
+    "name": "Nintendo Entertainment System",
+    "manufacturer": "Nintendo",
+    "extensions": [".nes", ".unf", ".unif"],
+    "romFolder": "nes"
+  },
+  {
+    "id": "snes",
+    "name": "Super Nintendo",
+    "manufacturer": "Nintendo",
+    "extensions": [".sfc", ".smc", ".fig", ".swc"],
+    "romFolder": "snes"
+  },
+  {
+    "id": "n64",
+    "name": "Nintendo 64",
+    "manufacturer": "Nintendo",
+    "extensions": [".n64", ".z64", ".v64"],
+    "romFolder": "n64"
+  },
+  {
+    "id": "gb",
+    "name": "Game Boy",
+    "manufacturer": "Nintendo",
+    "extensions": [".gb"],
+    "romFolder": "gb"
+  },
+  {
+    "id": "gbc",
+    "name": "Game Boy Color",
+    "manufacturer": "Nintendo",
+    "extensions": [".gbc"],
+    "romFolder": "gbc"
+  },
+  {
+    "id": "gba",
+    "name": "Game Boy Advance",
+    "manufacturer": "Nintendo",
+    "extensions": [".gba"],
+    "romFolder": "gba"
+  },
+  {
+    "id": "nds",
+    "name": "Nintendo DS",
+    "manufacturer": "Nintendo",
+    "extensions": [".nds", ".dsi"],
+    "romFolder": "nds"
+  },
+  {
+    "id": "gamecube",
+    "name": "Nintendo GameCube",
+    "manufacturer": "Nintendo",
+    "extensions": [".iso", ".gcm", ".gcz", ".ciso"],
+    "romFolder": "gamecube"
+  },
+  {
+    "id": "wii",
+    "name": "Nintendo Wii",
+    "manufacturer": "Nintendo",
+    "extensions": [".iso", ".wbfs", ".wad", ".ciso"],
+    "romFolder": "wii"
+  },
+  {
+    "id": "megadrive",
+    "name": "Sega Mega Drive / Genesis",
+    "manufacturer": "Sega",
+    "extensions": [".md", ".gen", ".bin", ".smd"],
+    "romFolder": "megadrive"
+  },
+  {
+    "id": "mastersystem",
+    "name": "Sega Master System",
+    "manufacturer": "Sega",
+    "extensions": [".sms"],
+    "romFolder": "mastersystem"
+  },
+  {
+    "id": "dreamcast",
+    "name": "Sega Dreamcast",
+    "manufacturer": "Sega",
+    "extensions": [".cdi", ".gdi", ".chd"],
+    "romFolder": "dreamcast"
+  },
+  {
+    "id": "psx",
+    "name": "PlayStation",
+    "manufacturer": "Sony",
+    "extensions": [".bin", ".cue", ".img", ".iso", ".pbp", ".chd"],
+    "romFolder": "psx"
+  },
+  {
+    "id": "ps2",
+    "name": "PlayStation 2",
+    "manufacturer": "Sony",
+    "extensions": [".iso", ".bin", ".chd", ".cso", ".gz"],
+    "romFolder": "ps2"
+  },
+  {
+    "id": "psp",
+    "name": "PlayStation Portable",
+    "manufacturer": "Sony",
+    "extensions": [".iso", ".cso", ".pbp"],
+    "romFolder": "psp"
+  }
+]
