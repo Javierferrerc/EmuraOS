@@ -3,10 +3,6 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  root: "src/electron/renderer",
   plugins: [react(), tailwindcss()],
-  build: {
-    rollupOptions: {
-      input: "src/electron/renderer/index.html",
-    },
-  },
 });
