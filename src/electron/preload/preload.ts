@@ -35,6 +35,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeCoverFetchProgressListener: () => {
     ipcRenderer.removeAllListeners("cover-fetch-progress");
   },
+  toggleFullscreen: () => ipcRenderer.invoke("toggle-fullscreen"),
+  getFullscreen: () => ipcRenderer.invoke("get-fullscreen"),
+  onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => {
+    ipcRenderer.on("fullscreen-changed", (_event, isFullscreen) =>
+      callback(isFullscreen)
+    );
+  },
+  removeFullscreenChangedListener: () => {
+    ipcRenderer.removeAllListeners("fullscreen-changed");
+  },
   getUserLibrary: () => ipcRenderer.invoke("get-user-library"),
   toggleFavorite: (systemId: string, fileName: string) =>
     ipcRenderer.invoke("toggle-favorite", systemId, fileName),

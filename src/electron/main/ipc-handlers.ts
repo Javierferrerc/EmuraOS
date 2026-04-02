@@ -1,4 +1,4 @@
-import { ipcMain, app } from "electron";
+import { ipcMain, app, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
@@ -203,6 +203,20 @@ export function registerIpcHandlers(): void {
     return thumbs.fetchAllCovers(scanResult.systems, (progress) => {
       event.sender.send("cover-fetch-progress", progress);
     });
+  });
+
+  // --- Fullscreen handlers ---
+
+  ipcMain.handle("toggle-fullscreen", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      win.setFullScreen(!win.isFullScreen());
+    }
+  });
+
+  ipcMain.handle("get-fullscreen", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return win?.isFullScreen() ?? false;
   });
 
   // --- User Library handlers ---

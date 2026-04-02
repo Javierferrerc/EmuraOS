@@ -1,9 +1,25 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { GameCard } from "./GameCard";
 import type { DiscoveredRom } from "../../../core/types";
 
-export function GameGrid() {
+const MIN_CARD_WIDTH = 200;
+
+interface GameGridProps {
+  focusedIndex?: number;
+  focusActive?: boolean;
+  onColumnCountChange?: (count: number) => void;
+  onItemCountChange?: (count: number) => void;
+  onFilteredRomsChange?: (roms: DiscoveredRom[]) => void;
+}
+
+export function GameGrid({
+  focusedIndex = -1,
+  focusActive = false,
+  onColumnCountChange,
+  onItemCountChange,
+  onFilteredRomsChange,
+}: GameGridProps) {
   const {
     scanResult,
     activeFilter,
@@ -12,6 +28,8 @@ export function GameGrid() {
     recentlyPlayed,
     collections,
   } = useApp();
+
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const allRoms = useMemo(() => {
     if (!scanResult) return [];
@@ -101,6 +119,44 @@ export function GameGrid() {
     collections,
   ]);
 
+  // Report filtered roms and item count to parent
+  useEffect(() => {
+    onFilteredRomsChange?.(filteredRoms);
+  }, [filteredRoms, onFilteredRomsChange]);
+
+  useEffect(() => {
+    onItemCountChange?.(filteredRoms.length);
+  }, [filteredRoms.length, onItemCountChange]);
+
+  // ResizeObserver to compute column count
+  const computeColumns = useCallback(() => {
+    if (!gridRef.current) return;
+    const width = gridRef.current.clientWidth;
+    const gap = 12; // gap-3 = 0.75rem = 12px
+    const cols = Math.max(1, Math.floor((width + gap) / (MIN_CARD_WIDTH + gap)));
+    onColumnCountChange?.(cols);
+  }, [onColumnCountChange]);
+
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(computeColumns);
+    observer.observe(el);
+    computeColumns();
+    return () => observer.disconnect();
+  }, [computeColumns]);
+
+  // Scroll focused card into view
+  useEffect(() => {
+    if (focusedIndex < 0 || !focusActive) return;
+    const el = gridRef.current?.querySelector(
+      `[data-grid-index="${focusedIndex}"]`
+    );
+    if (el) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [focusedIndex, focusActive]);
+
   if (!scanResult) {
     return (
       <div className="flex h-full items-center justify-center text-gray-500">
@@ -142,9 +198,17 @@ export function GameGrid() {
   }
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-      {filteredRoms.map((rom) => (
-        <GameCard key={rom.filePath} rom={rom} />
+    <div
+      ref={gridRef}
+      className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3"
+    >
+      {filteredRoms.map((rom, idx) => (
+        <GameCard
+          key={rom.filePath}
+          rom={rom}
+          gridIndex={idx}
+          isFocused={focusActive && focusedIndex === idx}
+        />
       ))}
     </div>
   );

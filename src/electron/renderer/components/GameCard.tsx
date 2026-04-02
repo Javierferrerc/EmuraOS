@@ -22,9 +22,11 @@ const SYSTEM_COLORS: Record<string, string> = {
 
 interface GameCardProps {
   rom: DiscoveredRom;
+  isFocused?: boolean;
+  gridIndex?: number;
 }
 
-export function GameCard({ rom }: GameCardProps) {
+export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const {
     launchGame,
     lastLaunchResult,
@@ -69,12 +71,17 @@ export function GameCard({ rom }: GameCardProps) {
   const isLastLaunched =
     lastLaunchResult?.romPath === rom.filePath && lastLaunchResult?.success;
 
+  const ringClass = isFocused
+    ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900"
+    : isLastLaunched
+      ? "ring-2 ring-green-500"
+      : "";
+
   return (
     <div
+      data-grid-index={gridIndex}
       onDoubleClick={handleDoubleClick}
-      className={`group relative cursor-pointer rounded-lg border border-gray-700 bg-gray-800 p-4 transition-all duration-200 hover:border-gray-500 hover:bg-gray-750 hover:shadow-lg hover:shadow-black/20 ${
-        isLastLaunched ? "ring-2 ring-green-500" : ""
-      }`}
+      className={`group relative cursor-pointer rounded-lg border border-gray-700 bg-gray-800 p-4 transition-all duration-200 hover:border-gray-500 hover:bg-gray-750 hover:shadow-lg hover:shadow-black/20 ${ringClass}`}
       title={`Double-click to launch\n${rom.filePath}`}
     >
       {/* Favorite heart button */}

@@ -50,6 +50,8 @@ interface AppState {
   collections: Collection[];
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
+  isFullscreen: boolean;
+  gamepadConnected: boolean;
 }
 
 interface AppActions {
@@ -82,6 +84,8 @@ interface AppActions {
     systemId: string,
     fileName: string
   ) => Promise<void>;
+  toggleFullscreen: () => void;
+  setGamepadConnected: (connected: boolean) => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -125,6 +129,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [playHistory, setPlayHistory] = useState<Record<string, PlayRecord>>(
     {}
   );
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [gamepadConnected, setGamepadConnected] = useState(false);
+
+  // Fullscreen sync
+  useEffect(() => {
+    window.electronAPI.getFullscreen().then(setIsFullscreen);
+    window.electronAPI.onFullscreenChanged(setIsFullscreen);
+    return () => {
+      window.electronAPI.removeFullscreenChangedListener();
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    window.electronAPI.toggleFullscreen();
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -477,6 +496,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     collections,
     recentlyPlayed,
     playHistory,
+    isFullscreen,
+    gamepadConnected,
     setActiveFilter,
     setSearchQuery,
     setCurrentView,
@@ -495,6 +516,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCollection: deleteCollectionAction,
     addToCollection: addToCollectionAction,
     removeFromCollection: removeFromCollectionAction,
+    toggleFullscreen,
+    setGamepadConnected,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
