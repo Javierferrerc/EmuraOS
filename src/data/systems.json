@@ -52,14 +52,14 @@
     "id": "gamecube",
     "name": "Nintendo GameCube",
     "manufacturer": "Nintendo",
-    "extensions": [".iso", ".gcm", ".gcz", ".ciso"],
+    "extensions": [".iso", ".gcm", ".gcz", ".ciso", ".rvz"],
     "romFolder": "gamecube"
   },
   {
     "id": "wii",
     "name": "Nintendo Wii",
     "manufacturer": "Nintendo",
-    "extensions": [".iso", ".wbfs", ".wad", ".ciso"],
+    "extensions": [".iso", ".wbfs", ".wad", ".ciso", ".rvz"],
     "romFolder": "wii"
   },
   {

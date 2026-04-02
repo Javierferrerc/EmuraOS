@@ -149,42 +149,56 @@ export class LibretroThumbnails {
     return candidates[0];
   }
 
-  async fetchCover(
+  /**
+   * Try downloading a cover directly by constructing URLs from the ROM filename,
+   * without needing the GitHub Trees API. Tries the full name first, then title only.
+   */
+  private async fetchCoverDirect(
     systemId: string,
     romFileName: string
   ): Promise<string | null> {
-    // Skip if cover already cached
-    if (this.cache.coverExists(systemId, romFileName)) {
-      return this.cache.getCoverPath(systemId, romFileName);
-    }
-
     const repoName = this.systemMap[systemId];
     if (!repoName) return null;
 
-    // Get available thumbnails and find best match
-    const thumbnails = await this.fetchThumbnailList(systemId);
-    const match = this.findBestMatch(romFileName, thumbnails);
-    if (!match) return null;
+    // Build candidate filenames: full name (with region), then stripped title
+    const baseName = basename(
+      romFileName,
+      romFileName.substring(romFileName.lastIndexOf("."))
+    );
+    const title = this.extractTitle(romFileName);
+    const candidates = [`${baseName}.png`];
+    if (title !== baseName) {
+      candidates.push(`${title}.png`);
+    }
 
-    const url = this.buildDownloadUrl(systemId, match);
-    if (!url) return null;
+    for (const candidate of candidates) {
+      const url = this.buildDownloadUrl(systemId, candidate);
+      if (!url) continue;
 
-    const response = await fetch(url);
-    if (!response.ok) return null;
+      const response = await fetch(url);
+      if (!response.ok) continue;
 
-    this.cache.ensureDirectories(systemId);
-    const coverPath = this.cache.getCoverPath(systemId, romFileName);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    writeFileSync(coverPath, buffer);
+      this.cache.ensureDirectories(systemId);
+      const coverPath = this.cache.getCoverPath(systemId, romFileName);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      writeFileSync(coverPath, buffer);
+      return coverPath;
+    }
 
-    // Update metadata cache with cover info
+    return null;
+  }
+
+  private saveCoverMetadata(
+    systemId: string,
+    romFileName: string,
+    coverPath: string
+  ): void {
     const existing = this.cache.getMetadata(systemId, romFileName);
     if (existing) {
       existing.coverPath = coverPath;
       existing.coverSource = "libretro";
       this.cache.setMetadata(systemId, romFileName, existing);
     } else {
-      // Create minimal metadata entry with cover
       this.cache.setMetadata(systemId, romFileName, {
         title: "",
         description: "",
@@ -201,7 +215,44 @@ export class LibretroThumbnails {
         lastScraped: "",
       });
     }
+  }
 
+  async fetchCover(
+    systemId: string,
+    romFileName: string
+  ): Promise<string | null> {
+    // Skip if cover already cached
+    if (this.cache.coverExists(systemId, romFileName)) {
+      return this.cache.getCoverPath(systemId, romFileName);
+    }
+
+    const repoName = this.systemMap[systemId];
+    if (!repoName) return null;
+
+    // First try direct download (avoids rate-limited Trees API)
+    const directPath = await this.fetchCoverDirect(systemId, romFileName);
+    if (directPath) {
+      this.saveCoverMetadata(systemId, romFileName, directPath);
+      return directPath;
+    }
+
+    // Fall back to listing thumbnails and fuzzy matching
+    const thumbnails = await this.fetchThumbnailList(systemId);
+    const match = this.findBestMatch(romFileName, thumbnails);
+    if (!match) return null;
+
+    const url = this.buildDownloadUrl(systemId, match);
+    if (!url) return null;
+
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    this.cache.ensureDirectories(systemId);
+    const coverPath = this.cache.getCoverPath(systemId, romFileName);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    writeFileSync(coverPath, buffer);
+
+    this.saveCoverMetadata(systemId, romFileName, coverPath);
     return coverPath;
   }
 

@@ -121,8 +121,10 @@ describe("LibretroThumbnails", () => {
   it("downloads cover and saves to cache", async () => {
     const fakeImageData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
-    // Mock: master tree → boxarts tree → image download
+    // Mock: direct attempts (404) → master tree → boxarts tree → image download
     mockFetch
+      .mockResolvedValueOnce({ ok: false }) // direct: "Super Mario Bros. (World).png"
+      .mockResolvedValueOnce({ ok: false }) // direct: "Super Mario Bros..png"
       .mockResolvedValueOnce({
         ok: true,
         json: async () => MOCK_MASTER_TREE,
@@ -182,9 +184,11 @@ describe("LibretroThumbnails", () => {
   it("reports progress during fetchCoversForSystem", async () => {
     const fakeImageData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
-    // First ROM: tree fetch + tree fetch + image download
-    // Second ROM: tree cached + no match → not_found
+    // First ROM: direct attempts (2x 404) → tree fetch + boxarts tree + image download
+    // Second ROM: direct attempts (2x 404) → tree cached + no match → not_found
     mockFetch
+      .mockResolvedValueOnce({ ok: false }) // direct: "Super Mario Bros. (World).png"
+      .mockResolvedValueOnce({ ok: false }) // direct: "Super Mario Bros..png"
       .mockResolvedValueOnce({
         ok: true,
         json: async () => MOCK_MASTER_TREE,
@@ -196,7 +200,9 @@ describe("LibretroThumbnails", () => {
       .mockResolvedValueOnce({
         ok: true,
         arrayBuffer: async () => fakeImageData.buffer,
-      });
+      })
+      .mockResolvedValueOnce({ ok: false }) // direct: "Unknown Game (USA).png"
+      .mockResolvedValueOnce({ ok: false }); // direct: "Unknown Game.png"
 
     const progressUpdates: CoverFetchProgress[] = [];
     const roms = [
@@ -229,6 +235,8 @@ describe("LibretroThumbnails", () => {
     const fakeImageData = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
     mockFetch
+      .mockResolvedValueOnce({ ok: false }) // direct: "Metroid (USA).png"
+      .mockResolvedValueOnce({ ok: false }) // direct: "Metroid.png"
       .mockResolvedValueOnce({
         ok: true,
         json: async () => MOCK_MASTER_TREE,
@@ -240,7 +248,9 @@ describe("LibretroThumbnails", () => {
       .mockResolvedValueOnce({
         ok: true,
         arrayBuffer: async () => fakeImageData.buffer,
-      });
+      })
+      .mockResolvedValueOnce({ ok: false }) // direct: "Missing Game (USA).png"
+      .mockResolvedValueOnce({ ok: false }); // direct: "Missing Game.png"
 
     const roms = [
       makeRom({ fileName: "Metroid (USA).nes" }),
