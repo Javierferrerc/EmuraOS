@@ -1,7 +1,10 @@
 import chalk from "chalk";
 import Enquirer from "enquirer";
+import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import type { ConfigManager } from "./config-manager.js";
 import type { EmulatorDetector } from "./emulator-detector.js";
+import type { SystemsRegistry } from "./systems-registry.js";
 import type { DetectionResult } from "./types.js";
 
 // @ts-expect-error — enquirer CJS default export
@@ -10,10 +13,16 @@ const { Input } = Enquirer;
 export class SetupWizard {
   private configManager: ConfigManager;
   private detector: EmulatorDetector;
+  private registry: SystemsRegistry;
 
-  constructor(configManager: ConfigManager, detector: EmulatorDetector) {
+  constructor(
+    configManager: ConfigManager,
+    detector: EmulatorDetector,
+    registry: SystemsRegistry
+  ) {
     this.configManager = configManager;
     this.detector = detector;
+    this.registry = registry;
   }
 
   async run(): Promise<void> {
@@ -31,6 +40,21 @@ export class SetupWizard {
     const detection = this.detector.detect(
       this.configManager.getEmulatorsPath()
     );
+
+    // Create ROM directories for each system supported by detected emulators
+    const detectedSystemIds = new Set(
+      detection.detected.flatMap((emu) => emu.systems)
+    );
+    const resolvedRomsPath = this.configManager.getRomsPath();
+    for (const systemId of detectedSystemIds) {
+      const system = this.registry.getById(systemId);
+      if (system) {
+        mkdirSync(resolve(resolvedRomsPath, system.romFolder), {
+          recursive: true,
+        });
+      }
+    }
+
     this.printDetectionResults(detection);
 
     this.printComplete();

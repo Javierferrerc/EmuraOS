@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ConfigManager } from "../../src/core/config-manager.js";
+import { SystemsRegistry } from "../../src/core/systems-registry.js";
 import { EmulatorMapper } from "../../src/core/emulator-mapper.js";
 import { EmulatorDetector } from "../../src/core/emulator-detector.js";
 import { SetupWizard } from "../../src/core/setup-wizard.js";
@@ -31,9 +32,10 @@ describe("SetupWizard", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
     configManager = new ConfigManager(TEST_DIR);
+    const registry = new SystemsRegistry();
     const mapper = new EmulatorMapper();
     detector = new EmulatorDetector(mapper);
-    wizard = new SetupWizard(configManager, detector);
+    wizard = new SetupWizard(configManager, detector, registry);
   });
 
   afterEach(() => {
