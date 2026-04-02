@@ -1,7 +1,7 @@
 import { ipcMain, app } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
@@ -76,7 +76,22 @@ export function registerIpcHandlers(): void {
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const detector = new EmulatorDetector(mapper);
-    return detector.detect(configManager.getEmulatorsPath());
+    const result = detector.detect(configManager.getEmulatorsPath());
+
+    // Create ROM directories for each system supported by detected emulators
+    const registry = new SystemsRegistry(getSystemsPath());
+    const detectedSystemIds = new Set(
+      result.detected.flatMap((emu) => emu.systems)
+    );
+    const romsPath = configManager.getRomsPath();
+    for (const systemId of detectedSystemIds) {
+      const system = registry.getById(systemId);
+      if (system) {
+        mkdirSync(path.join(romsPath, system.romFolder), { recursive: true });
+      }
+    }
+
+    return result;
   });
 
   ipcMain.handle("get-all-metadata", () => {

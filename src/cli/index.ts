@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import {
   ConfigManager,
+  SystemsRegistry,
   EmulatorMapper,
   EmulatorDetector,
   SetupWizard,
@@ -33,9 +34,10 @@ registerScrapeCommand(program);
 // First-run check: if no config file and no subcommand, launch wizard
 const config = new ConfigManager();
 if (!config.exists() && process.argv.length <= 2) {
+  const registry = new SystemsRegistry();
   const mapper = new EmulatorMapper();
   const detector = new EmulatorDetector(mapper);
-  const wizard = new SetupWizard(config, detector);
+  const wizard = new SetupWizard(config, detector, registry);
   wizard.run().then(() => program.parse());
 } else {
   program.parse();

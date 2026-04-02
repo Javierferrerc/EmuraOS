@@ -2,6 +2,7 @@ import chalk from "chalk";
 import type { Command } from "commander";
 import {
   ConfigManager,
+  SystemsRegistry,
   EmulatorMapper,
   EmulatorDetector,
   SetupWizard,
@@ -27,17 +28,19 @@ export function registerConfigCommand(program: Command): void {
       const config = new ConfigManager();
 
       if (options.wizard) {
+        const registry = new SystemsRegistry();
         const mapper = new EmulatorMapper();
         const detector = new EmulatorDetector(mapper);
-        const wizard = new SetupWizard(config, detector);
+        const wizard = new SetupWizard(config, detector, registry);
         await wizard.run();
         return;
       }
 
       if (options.detect) {
+        const registry = new SystemsRegistry();
         const mapper = new EmulatorMapper();
         const detector = new EmulatorDetector(mapper);
-        const wizard = new SetupWizard(config, detector);
+        const wizard = new SetupWizard(config, detector, registry);
         const detection = detector.detect(config.getEmulatorsPath());
 
         console.log(chalk.cyan("\n  Retro Launcher — Emulator Detection\n"));
