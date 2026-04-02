@@ -1,6 +1,7 @@
 import { ipcMain, app } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
+import { readFileSync, existsSync } from "node:fs";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
@@ -146,6 +147,22 @@ export function registerIpcHandlers(): void {
         return cache.getCoverPath(systemId, romFileName);
       }
       return null;
+    }
+  );
+
+  ipcMain.handle(
+    "read-cover-data-url",
+    (_event: IpcMainInvokeEvent, coverPath: string) => {
+      if (!coverPath || !existsSync(coverPath)) return null;
+      try {
+        const data = readFileSync(coverPath);
+        const ext = path.extname(coverPath).toLowerCase();
+        const mime =
+          ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+        return `data:${mime};base64,${data.toString("base64")}`;
+      } catch {
+        return null;
+      }
     }
   );
 
