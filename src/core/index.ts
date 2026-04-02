@@ -8,6 +8,7 @@ export { SetupWizard } from "./setup-wizard.js";
 export { MetadataCache } from "./metadata-cache.js";
 export { MetadataScraper } from "./metadata-scraper.js";
 export { LibretroThumbnails } from "./libretro-thumbnails.js";
+export { UserLibrary } from "./user-library.js";
 export type {
   SystemDefinition,
   DiscoveredRom,
@@ -26,4 +27,8 @@ export type {
   ScreenScraperCredentials,
   CoverFetchProgress,
   CoverFetchResult,
+  RomReference,
+  PlayRecord,
+  Collection,
+  UserLibraryFile,
 } from "./types.js";

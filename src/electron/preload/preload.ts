@@ -35,4 +35,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeCoverFetchProgressListener: () => {
     ipcRenderer.removeAllListeners("cover-fetch-progress");
   },
+  getUserLibrary: () => ipcRenderer.invoke("get-user-library"),
+  toggleFavorite: (systemId: string, fileName: string) =>
+    ipcRenderer.invoke("toggle-favorite", systemId, fileName),
+  getCollections: () => ipcRenderer.invoke("get-collections"),
+  createCollection: (name: string) =>
+    ipcRenderer.invoke("create-collection", name),
+  renameCollection: (id: string, name: string) =>
+    ipcRenderer.invoke("rename-collection", id, name),
+  deleteCollection: (id: string) =>
+    ipcRenderer.invoke("delete-collection", id),
+  addToCollection: (collectionId: string, systemId: string, fileName: string) =>
+    ipcRenderer.invoke("add-to-collection", collectionId, systemId, fileName),
+  removeFromCollection: (collectionId: string, systemId: string, fileName: string) =>
+    ipcRenderer.invoke("remove-from-collection", collectionId, systemId, fileName),
+  getRecentlyPlayed: (limit?: number) =>
+    ipcRenderer.invoke("get-recently-played", limit),
 });

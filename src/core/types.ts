@@ -140,3 +140,29 @@ export interface CoverFetchResult {
   totalNotFound: number;
   totalErrors: number;
 }
+
+export interface RomReference {
+  systemId: string;
+  fileName: string;
+}
+
+export interface PlayRecord {
+  lastPlayed: string;
+  playCount: number;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  roms: string[]; // "systemId:fileName" keys
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserLibraryFile {
+  version: 1;
+  favorites: string[];
+  collections: Collection[];
+  recentlyPlayed: string[];
+  playHistory: Record<string, PlayRecord>;
+}

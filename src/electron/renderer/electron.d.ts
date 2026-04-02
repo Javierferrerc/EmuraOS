@@ -10,6 +10,8 @@ import type {
   ScrapeProgress,
   CoverFetchResult,
   CoverFetchProgress,
+  UserLibraryFile,
+  Collection,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -38,6 +40,23 @@ export interface ElectronAPI {
     callback: (progress: CoverFetchProgress) => void
   ): void;
   removeCoverFetchProgressListener(): void;
+  getUserLibrary(): Promise<UserLibraryFile>;
+  toggleFavorite(systemId: string, fileName: string): Promise<boolean>;
+  getCollections(): Promise<Collection[]>;
+  createCollection(name: string): Promise<Collection>;
+  renameCollection(id: string, name: string): Promise<void>;
+  deleteCollection(id: string): Promise<void>;
+  addToCollection(
+    collectionId: string,
+    systemId: string,
+    fileName: string
+  ): Promise<void>;
+  removeFromCollection(
+    collectionId: string,
+    systemId: string,
+    fileName: string
+  ): Promise<void>;
+  getRecentlyPlayed(limit?: number): Promise<string[]>;
 }
 
 declare global {

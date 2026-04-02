@@ -4,16 +4,82 @@ import { GameCard } from "./GameCard";
 import type { DiscoveredRom } from "../../../core/types";
 
 export function GameGrid() {
-  const { scanResult, selectedSystemId, searchQuery } = useApp();
+  const {
+    scanResult,
+    activeFilter,
+    searchQuery,
+    favorites,
+    recentlyPlayed,
+    collections,
+  } = useApp();
+
+  const allRoms = useMemo(() => {
+    if (!scanResult) return [];
+    const roms: DiscoveredRom[] = [];
+    for (const sys of scanResult.systems) {
+      roms.push(...sys.roms);
+    }
+    return roms;
+  }, [scanResult]);
+
+  // Build a lookup map from "systemId:fileName" → DiscoveredRom
+  const romByKey = useMemo(() => {
+    const map = new Map<string, DiscoveredRom>();
+    for (const rom of allRoms) {
+      map.set(`${rom.systemId}:${rom.fileName}`, rom);
+    }
+    return map;
+  }, [allRoms]);
 
   const filteredRoms = useMemo(() => {
-    if (!scanResult) return [];
+    let roms: DiscoveredRom[];
 
-    let roms: DiscoveredRom[] = [];
-
-    for (const sys of scanResult.systems) {
-      if (selectedSystemId && sys.systemId !== selectedSystemId) continue;
-      roms = roms.concat(sys.roms);
+    switch (activeFilter.type) {
+      case "all":
+        roms = [...allRoms];
+        break;
+      case "system":
+        roms = allRoms.filter((r) => r.systemId === activeFilter.systemId);
+        break;
+      case "favorites": {
+        roms = [];
+        for (const key of favorites) {
+          const rom = romByKey.get(key);
+          if (rom) roms.push(rom);
+        }
+        break;
+      }
+      case "recent": {
+        // Preserve recency order — no alpha sort
+        roms = [];
+        for (const key of recentlyPlayed) {
+          const rom = romByKey.get(key);
+          if (rom) roms.push(rom);
+        }
+        // Apply search filter then return without sorting
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          roms = roms.filter((rom) =>
+            rom.fileName.toLowerCase().includes(query)
+          );
+        }
+        return roms;
+      }
+      case "collection": {
+        const col = collections.find(
+          (c) => c.id === activeFilter.collectionId
+        );
+        roms = [];
+        if (col) {
+          for (const key of col.roms) {
+            const rom = romByKey.get(key);
+            if (rom) roms.push(rom);
+          }
+        }
+        break;
+      }
+      default:
+        roms = [...allRoms];
     }
 
     if (searchQuery.trim()) {
@@ -25,7 +91,15 @@ export function GameGrid() {
 
     roms.sort((a, b) => a.fileName.localeCompare(b.fileName));
     return roms;
-  }, [scanResult, selectedSystemId, searchQuery]);
+  }, [
+    allRoms,
+    romByKey,
+    activeFilter,
+    searchQuery,
+    favorites,
+    recentlyPlayed,
+    collections,
+  ]);
 
   if (!scanResult) {
     return (
@@ -38,10 +112,22 @@ export function GameGrid() {
   if (filteredRoms.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center text-gray-500">
-        <div className="mb-3 text-5xl">🔍</div>
+        <div className="mb-3 text-5xl">
+          {activeFilter.type === "favorites"
+            ? "\u2605"
+            : activeFilter.type === "recent"
+              ? "\u25F7"
+              : "\uD83D\uDD0D"}
+        </div>
         {searchQuery ? (
           <p>No ROMs match "{searchQuery}"</p>
-        ) : selectedSystemId ? (
+        ) : activeFilter.type === "favorites" ? (
+          <p>No favorites yet. Click the heart on a game to add it.</p>
+        ) : activeFilter.type === "recent" ? (
+          <p>No recently played games yet. Double-click a game to launch it.</p>
+        ) : activeFilter.type === "collection" ? (
+          <p>This collection is empty.</p>
+        ) : activeFilter.type === "system" ? (
           <p>No ROMs found for this system.</p>
         ) : (
           <div className="text-center">
