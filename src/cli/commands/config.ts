@@ -7,7 +7,14 @@ import {
   SetupWizard,
 } from "../../core/index.js";
 
-const VALID_KEYS = ["romsPath", "emulatorsPath"] as const;
+const VALID_KEYS = [
+  "romsPath",
+  "emulatorsPath",
+  "screenScraperDevId",
+  "screenScraperDevPassword",
+  "screenScraperUserId",
+  "screenScraperUserPassword",
+] as const;
 type ConfigKey = (typeof VALID_KEYS)[number];
 
 export function registerConfigCommand(program: Command): void {

@@ -1,4 +1,5 @@
 import { ipcMain, app } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
@@ -6,6 +7,9 @@ import { RomScanner } from "../../core/rom-scanner.js";
 import { EmulatorMapper } from "../../core/emulator-mapper.js";
 import { GameLauncher } from "../../core/game-launcher.js";
 import { EmulatorDetector } from "../../core/emulator-detector.js";
+import { MetadataCache } from "../../core/metadata-cache.js";
+import { MetadataScraper } from "../../core/metadata-scraper.js";
+import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import type { AppConfig, DiscoveredRom } from "../../core/types.js";
 
 function getDataPath(): string {
@@ -72,5 +76,94 @@ export function registerIpcHandlers(): void {
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const detector = new EmulatorDetector(mapper);
     return detector.detect(configManager.getEmulatorsPath());
+  });
+
+  ipcMain.handle("get-all-metadata", () => {
+    const cache = new MetadataCache(getProjectRoot());
+    const registry = new SystemsRegistry(getSystemsPath());
+    const systemIds = registry.getAll().map((s) => s.id);
+    const metadataMap = cache.getAllMetadataAllSystems(systemIds);
+    // Convert Map to plain object for IPC serialization
+    const result: Record<string, Record<string, unknown>> = {};
+    for (const [key, value] of metadataMap) {
+      result[key] = value;
+    }
+    return result;
+  });
+
+  ipcMain.handle(
+    "get-metadata",
+    (_event: IpcMainInvokeEvent, systemId: string, romFileName: string) => {
+      const cache = new MetadataCache(getProjectRoot());
+      return cache.getMetadata(systemId, romFileName);
+    }
+  );
+
+  ipcMain.handle(
+    "scrape-all-metadata",
+    async (event: IpcMainInvokeEvent) => {
+      const configManager = new ConfigManager(getProjectRoot());
+      const appConfig = configManager.get();
+
+      const devId = appConfig.screenScraperDevId;
+      const devPassword = appConfig.screenScraperDevPassword;
+      if (!devId || !devPassword) {
+        throw new Error("ScreenScraper credentials not configured");
+      }
+
+      const registry = new SystemsRegistry(getSystemsPath());
+      const scanner = new RomScanner(registry);
+      const scanResult = scanner.scan(configManager.getRomsPath());
+
+      const cache = new MetadataCache(getProjectRoot());
+      const systemMapPath = path.join(
+        getDataPath(),
+        "screenscraper-systems.json"
+      );
+      const scraper = new MetadataScraper(
+        {
+          devId,
+          devPassword,
+          softName: "retro-launcher",
+          ssId: appConfig.screenScraperUserId,
+          ssPassword: appConfig.screenScraperUserPassword,
+        },
+        cache,
+        { systemMapPath }
+      );
+
+      return scraper.scrapeAll(scanResult.systems, (progress) => {
+        event.sender.send("scrape-progress", progress);
+      });
+    }
+  );
+
+  ipcMain.handle(
+    "get-cover-path",
+    (_event: IpcMainInvokeEvent, systemId: string, romFileName: string) => {
+      const cache = new MetadataCache(getProjectRoot());
+      if (cache.coverExists(systemId, romFileName)) {
+        return cache.getCoverPath(systemId, romFileName);
+      }
+      return null;
+    }
+  );
+
+  ipcMain.handle("fetch-covers", async (event: IpcMainInvokeEvent) => {
+    const configManager = new ConfigManager(getProjectRoot());
+    const registry = new SystemsRegistry(getSystemsPath());
+    const scanner = new RomScanner(registry);
+    const scanResult = scanner.scan(configManager.getRomsPath());
+
+    const cache = new MetadataCache(getProjectRoot());
+    const systemMapPath = path.join(
+      getDataPath(),
+      "libretro-systems.json"
+    );
+    const thumbs = new LibretroThumbnails(cache, { systemMapPath });
+
+    return thumbs.fetchAllCovers(scanResult.systems, (progress) => {
+      event.sender.send("cover-fetch-progress", progress);
+    });
   });
 }

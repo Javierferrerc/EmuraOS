@@ -5,6 +5,9 @@ export { EmulatorMapper } from "./emulator-mapper.js";
 export { GameLauncher } from "./game-launcher.js";
 export { EmulatorDetector } from "./emulator-detector.js";
 export { SetupWizard } from "./setup-wizard.js";
+export { MetadataCache } from "./metadata-cache.js";
+export { MetadataScraper } from "./metadata-scraper.js";
+export { LibretroThumbnails } from "./libretro-thumbnails.js";
 export type {
   SystemDefinition,
   DiscoveredRom,
@@ -15,4 +18,12 @@ export type {
   LaunchResult,
   DetectedEmulator,
   DetectionResult,
+  GameMetadata,
+  MetadataCacheFile,
+  ScrapeResult,
+  ScrapeError,
+  ScrapeProgress,
+  ScreenScraperCredentials,
+  CoverFetchProgress,
+  CoverFetchResult,
 } from "./types.js";

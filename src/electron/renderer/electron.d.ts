@@ -5,6 +5,11 @@ import type {
   DiscoveredRom,
   LaunchResult,
   DetectionResult,
+  GameMetadata,
+  ScrapeResult,
+  ScrapeProgress,
+  CoverFetchResult,
+  CoverFetchProgress,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -15,6 +20,23 @@ export interface ElectronAPI {
   scanRoms(): Promise<ScanResult>;
   launchGame(rom: DiscoveredRom): Promise<LaunchResult>;
   detectEmulators(): Promise<DetectionResult>;
+  getAllMetadata(): Promise<Record<string, Record<string, GameMetadata>>>;
+  getMetadata(
+    systemId: string,
+    romFileName: string
+  ): Promise<GameMetadata | null>;
+  scrapeAllMetadata(): Promise<ScrapeResult>;
+  getCoverPath(
+    systemId: string,
+    romFileName: string
+  ): Promise<string | null>;
+  onScrapeProgress(callback: (progress: ScrapeProgress) => void): void;
+  removeScrapeProgressListener(): void;
+  fetchCovers(): Promise<CoverFetchResult>;
+  onCoverFetchProgress(
+    callback: (progress: CoverFetchProgress) => void
+  ): void;
+  removeCoverFetchProgressListener(): void;
 }
 
 declare global {

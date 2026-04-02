@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 
@@ -25,15 +25,19 @@ interface GameCardProps {
 }
 
 export function GameCard({ rom }: GameCardProps) {
-  const { launchGame, lastLaunchResult } = useApp();
+  const { launchGame, lastLaunchResult, getMetadataForRom } = useApp();
+  const [imgError, setImgError] = useState(false);
+
+  const metadata = getMetadataForRom(rom.systemId, rom.fileName);
 
   const handleDoubleClick = useCallback(() => {
     launchGame(rom);
   }, [launchGame, rom]);
 
-  const displayName = rom.fileName.replace(/\.[^.]+$/, "");
+  const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
   const colorClass = SYSTEM_COLORS[rom.systemId] ?? "bg-gray-600";
   const sizeMB = (rom.sizeBytes / (1024 * 1024)).toFixed(1);
+  const hasCover = metadata?.coverPath && !imgError;
 
   const isLastLaunched =
     lastLaunchResult?.romPath === rom.filePath && lastLaunchResult?.success;
@@ -46,8 +50,17 @@ export function GameCard({ rom }: GameCardProps) {
       }`}
       title={`Double-click to launch\n${rom.filePath}`}
     >
-      <div className="mb-3 flex h-16 items-center justify-center rounded bg-gray-700/50 text-3xl transition-transform duration-200 group-hover:scale-105">
-        🎮
+      <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded bg-gray-700/50 transition-transform duration-200 group-hover:scale-105">
+        {hasCover ? (
+          <img
+            src={`file://${metadata.coverPath}`}
+            alt={displayName}
+            className="h-full w-full object-contain"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span className="text-3xl">🎮</span>
+        )}
       </div>
       <h3 className="mb-2 truncate text-sm font-medium text-gray-100">
         {displayName}
@@ -58,7 +71,9 @@ export function GameCard({ rom }: GameCardProps) {
         >
           {rom.systemId.toUpperCase()}
         </span>
-        <span className="text-xs text-gray-500">{sizeMB} MB</span>
+        <span className="text-xs text-gray-500">
+          {metadata?.year || `${sizeMB} MB`}
+        </span>
       </div>
     </div>
   );

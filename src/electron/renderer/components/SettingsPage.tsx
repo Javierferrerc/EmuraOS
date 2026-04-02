@@ -10,19 +10,51 @@ export function SettingsPage() {
     lastDetection,
     setCurrentView,
     isLoading,
+    isScraping,
+    scrapeProgress,
+    lastScrapeResult,
+    startScraping,
+    isFetchingCovers,
+    coverFetchProgress,
+    lastCoverFetchResult,
+    startFetchingCovers,
   } = useApp();
 
   const [romsPath, setRomsPath] = useState(config?.romsPath ?? "./roms");
   const [emulatorsPath, setEmulatorsPath] = useState(
     config?.emulatorsPath ?? "./emulators"
   );
+  const [ssDevId, setSsDevId] = useState(
+    config?.screenScraperDevId ?? ""
+  );
+  const [ssDevPassword, setSsDevPassword] = useState(
+    config?.screenScraperDevPassword ?? ""
+  );
+  const [ssUserId, setSsUserId] = useState(
+    config?.screenScraperUserId ?? ""
+  );
+  const [ssUserPassword, setSsUserPassword] = useState(
+    config?.screenScraperUserPassword ?? ""
+  );
   const [saved, setSaved] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [credsSaved, setCredsSaved] = useState(false);
 
   async function handleSave() {
     await updateConfig({ romsPath, emulatorsPath });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleSaveCreds() {
+    await updateConfig({
+      screenScraperDevId: ssDevId || undefined,
+      screenScraperDevPassword: ssDevPassword || undefined,
+      screenScraperUserId: ssUserId || undefined,
+      screenScraperUserPassword: ssUserPassword || undefined,
+    });
+    setCredsSaved(true);
+    setTimeout(() => setCredsSaved(false), 2000);
   }
 
   async function handleDetect() {
@@ -160,6 +192,192 @@ export function SettingsPage() {
                         {lastDetection.notFound.join(", ")}
                       </p>
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Covers (Automatic) Section */}
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Covers (Automatic)
+            </h2>
+            <div className="space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <p className="text-sm text-gray-400">
+                Download box art from Libretro Thumbnails. No credentials
+                needed — covers are fetched automatically when ROMs are scanned.
+              </p>
+              <button
+                onClick={startFetchingCovers}
+                disabled={isFetchingCovers}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              >
+                {isFetchingCovers ? "Downloading..." : "Download Covers"}
+              </button>
+
+              {isFetchingCovers && coverFetchProgress && (
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-gray-400">
+                    <span>
+                      {coverFetchProgress.current} /{" "}
+                      {coverFetchProgress.total}
+                    </span>
+                    <span className="ml-2 truncate">
+                      {coverFetchProgress.romFileName}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-700">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.round((coverFetchProgress.current / coverFetchProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {lastCoverFetchResult && !isFetchingCovers && (
+                <div className="space-y-1 rounded bg-gray-700/50 p-3 text-sm">
+                  <p className="text-gray-300">
+                    Processed:{" "}
+                    <span className="font-medium text-gray-100">
+                      {lastCoverFetchResult.totalProcessed}
+                    </span>
+                  </p>
+                  <p className="text-green-400">
+                    Found: {lastCoverFetchResult.totalFound}
+                  </p>
+                  <p className="text-yellow-400">
+                    Not Found: {lastCoverFetchResult.totalNotFound}
+                  </p>
+                  {lastCoverFetchResult.totalErrors > 0 && (
+                    <p className="text-red-400">
+                      Errors: {lastCoverFetchResult.totalErrors}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Full Metadata (ScreenScraper) Section */}
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Full Metadata (ScreenScraper)
+            </h2>
+            <div className="space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <p className="text-sm text-gray-400">
+                Fetch descriptions, genres, years, and additional covers from
+                ScreenScraper. Requires credentials.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    ScreenScraper Dev ID
+                  </label>
+                  <input
+                    type="text"
+                    value={ssDevId}
+                    onChange={(e) => setSsDevId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="Your dev ID"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    Dev Password
+                  </label>
+                  <input
+                    type="password"
+                    value={ssDevPassword}
+                    onChange={(e) => setSsDevPassword(e.target.value)}
+                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="Your dev password"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    User ID (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={ssUserId}
+                    onChange={(e) => setSsUserId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="ScreenScraper username"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-gray-300">
+                    User Password (optional)
+                  </label>
+                  <input
+                    type="password"
+                    value={ssUserPassword}
+                    onChange={(e) => setSsUserPassword(e.target.value)}
+                    className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="ScreenScraper password"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveCreds}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                >
+                  {credsSaved ? "Saved!" : "Save Credentials"}
+                </button>
+                <button
+                  onClick={startScraping}
+                  disabled={isScraping || !ssDevId || !ssDevPassword}
+                  className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+                >
+                  {isScraping ? "Scraping..." : "Scrape All Metadata"}
+                </button>
+              </div>
+
+              {isScraping && scrapeProgress && (
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-gray-400">
+                    <span>
+                      {scrapeProgress.current} / {scrapeProgress.total}
+                    </span>
+                    <span className="ml-2 truncate">
+                      {scrapeProgress.romFileName}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-700">
+                    <div
+                      className="h-full rounded-full bg-purple-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.round((scrapeProgress.current / scrapeProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {lastScrapeResult && !isScraping && (
+                <div className="space-y-1 rounded bg-gray-700/50 p-3 text-sm">
+                  <p className="text-gray-300">
+                    Processed:{" "}
+                    <span className="font-medium text-gray-100">
+                      {lastScrapeResult.totalProcessed}
+                    </span>
+                  </p>
+                  <p className="text-green-400">
+                    Found: {lastScrapeResult.totalFound}
+                  </p>
+                  <p className="text-yellow-400">
+                    Not Found: {lastScrapeResult.totalNotFound}
+                  </p>
+                  {lastScrapeResult.totalErrors > 0 && (
+                    <p className="text-red-400">
+                      Errors: {lastScrapeResult.totalErrors}
+                    </p>
                   )}
                 </div>
               )}
