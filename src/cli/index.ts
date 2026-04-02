@@ -12,6 +12,7 @@ import { registerListCommand } from "./commands/list.js";
 import { registerLaunchCommand } from "./commands/launch.js";
 import { registerSetupCommand } from "./commands/setup.js";
 import { registerConfigCommand } from "./commands/config.js";
+import { registerScrapeCommand } from "./commands/scrape.js";
 
 const program = new Command();
 
@@ -27,6 +28,7 @@ registerListCommand(program);
 registerLaunchCommand(program);
 registerSetupCommand(program);
 registerConfigCommand(program);
+registerScrapeCommand(program);
 
 // First-run check: if no config file and no subcommand, launch wizard
 const config = new ConfigManager();
