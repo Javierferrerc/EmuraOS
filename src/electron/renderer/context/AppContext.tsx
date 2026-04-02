@@ -143,6 +143,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const scan = await window.electronAPI.scanRoms();
       setScanResult(scan);
+
+      // Reload metadata for any new ROMs
+      const metadata = await window.electronAPI.getAllMetadata();
+      setMetadataMap(metadata);
+
+      // Auto-fetch covers for ROMs that don't have one yet
+      const hasRomsWithoutCovers = scan.systems.some((system) =>
+        system.roms.some(
+          (rom) => !metadata[system.systemId]?.[rom.fileName]?.coverPath
+        )
+      );
+      if (hasRomsWithoutCovers && scan.totalRoms > 0) {
+        setIsFetchingCovers(true);
+        window.electronAPI.onCoverFetchProgress((progress) => {
+          setCoverFetchProgress(progress);
+        });
+        try {
+          const coverResult = await window.electronAPI.fetchCovers();
+          setLastCoverFetchResult(coverResult);
+          const updatedMetadata = await window.electronAPI.getAllMetadata();
+          setMetadataMap(updatedMetadata);
+        } catch (coverErr) {
+          console.error("Failed to auto-fetch covers:", coverErr);
+        } finally {
+          setIsFetchingCovers(false);
+          window.electronAPI.removeCoverFetchProgressListener();
+        }
+      }
     } catch (err) {
       console.error("Failed to scan ROMs:", err);
     } finally {
