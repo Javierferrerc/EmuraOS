@@ -155,8 +155,9 @@ emulators/*
 *.bin
 *.img
 
-# Configs locales (si usás después)
-config/local.json
+# Configs locales y datos generados
+config/retro-launcher.json
+config/metadata/
 
 # Planning docs (local only)
 planning/

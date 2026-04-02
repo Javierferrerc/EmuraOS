@@ -18,13 +18,22 @@ import type {
   ScrapeProgress,
   CoverFetchResult,
   CoverFetchProgress,
+  Collection,
+  PlayRecord,
 } from "../../../core/types.js";
+
+export type ActiveFilter =
+  | { type: "all" }
+  | { type: "system"; systemId: string }
+  | { type: "favorites" }
+  | { type: "recent" }
+  | { type: "collection"; collectionId: string };
 
 interface AppState {
   config: AppConfig | null;
   systems: SystemDefinition[];
   scanResult: ScanResult | null;
-  selectedSystemId: string | null;
+  activeFilter: ActiveFilter;
   searchQuery: string;
   isLoading: boolean;
   currentView: "library" | "settings";
@@ -37,10 +46,14 @@ interface AppState {
   isFetchingCovers: boolean;
   coverFetchProgress: CoverFetchProgress | null;
   lastCoverFetchResult: CoverFetchResult | null;
+  favorites: Set<string>;
+  collections: Collection[];
+  recentlyPlayed: string[];
+  playHistory: Record<string, PlayRecord>;
 }
 
 interface AppActions {
-  setSelectedSystemId: (id: string | null) => void;
+  setActiveFilter: (filter: ActiveFilter) => void;
   setSearchQuery: (query: string) => void;
   setCurrentView: (view: "library" | "settings") => void;
   refreshScan: () => Promise<void>;
@@ -54,6 +67,21 @@ interface AppActions {
     systemId: string,
     romFileName: string
   ) => GameMetadata | null;
+  toggleFavorite: (systemId: string, fileName: string) => Promise<void>;
+  isFavorite: (systemId: string, fileName: string) => boolean;
+  createCollection: (name: string) => Promise<void>;
+  renameCollection: (id: string, name: string) => Promise<void>;
+  deleteCollection: (id: string) => Promise<void>;
+  addToCollection: (
+    collectionId: string,
+    systemId: string,
+    fileName: string
+  ) => Promise<void>;
+  removeFromCollection: (
+    collectionId: string,
+    systemId: string,
+    fileName: string
+  ) => Promise<void>;
 }
 
 type AppContextType = AppState & AppActions;
@@ -64,7 +92,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [systems, setSystems] = useState<SystemDefinition[]>([]);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>({
+    type: "all",
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<"library" | "settings">(
@@ -89,20 +119,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<CoverFetchProgress | null>(null);
   const [lastCoverFetchResult, setLastCoverFetchResult] =
     useState<CoverFetchResult | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<string[]>([]);
+  const [playHistory, setPlayHistory] = useState<Record<string, PlayRecord>>(
+    {}
+  );
 
   useEffect(() => {
     async function init() {
       try {
-        const [cfg, sys, scan, metadata] = await Promise.all([
+        const [cfg, sys, scan, metadata, userLib] = await Promise.all([
           window.electronAPI.getConfig(),
           window.electronAPI.getSystems(),
           window.electronAPI.scanRoms(),
           window.electronAPI.getAllMetadata(),
+          window.electronAPI.getUserLibrary(),
         ]);
         setConfig(cfg);
         setSystems(sys);
         setScanResult(scan);
         setMetadataMap(metadata);
+        setFavorites(new Set(userLib.favorites));
+        setCollections(userLib.collections);
+        setRecentlyPlayed(userLib.recentlyPlayed);
+        setPlayHistory(userLib.playHistory);
 
         // Auto-fetch covers from Libretro if there are ROMs without covers
         const hasRomsWithoutCovers = scan.systems.some((system) =>
@@ -200,6 +241,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const result = await window.electronAPI.launchGame(rom);
       setLastLaunchResult(result);
+      if (result.success) {
+        // Optimistically update recently played and play history
+        const key = `${rom.systemId}:${rom.fileName}`;
+        setRecentlyPlayed((prev) => {
+          const filtered = prev.filter((k) => k !== key);
+          return [key, ...filtered].slice(0, 50);
+        });
+        setPlayHistory((prev) => {
+          const existing = prev[key];
+          return {
+            ...prev,
+            [key]: {
+              lastPlayed: new Date().toISOString(),
+              playCount: (existing?.playCount ?? 0) + 1,
+            },
+          };
+        });
+      }
     } catch (err) {
       console.error("Failed to launch game:", err);
     }
@@ -267,11 +326,141 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [metadataMap]
   );
 
+  const toggleFavorite = useCallback(
+    async (systemId: string, fileName: string) => {
+      try {
+        const isFav = await window.electronAPI.toggleFavorite(
+          systemId,
+          fileName
+        );
+        const key = `${systemId}:${fileName}`;
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          if (isFav) {
+            next.add(key);
+          } else {
+            next.delete(key);
+          }
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to toggle favorite:", err);
+      }
+    },
+    []
+  );
+
+  const isFavoriteCheck = useCallback(
+    (systemId: string, fileName: string): boolean => {
+      return favorites.has(`${systemId}:${fileName}`);
+    },
+    [favorites]
+  );
+
+  const createCollectionAction = useCallback(async (name: string) => {
+    try {
+      const col = await window.electronAPI.createCollection(name);
+      setCollections((prev) => [...prev, col]);
+    } catch (err) {
+      console.error("Failed to create collection:", err);
+    }
+  }, []);
+
+  const renameCollectionAction = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await window.electronAPI.renameCollection(id, name);
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === id
+              ? { ...c, name, updatedAt: new Date().toISOString() }
+              : c
+          )
+        );
+      } catch (err) {
+        console.error("Failed to rename collection:", err);
+      }
+    },
+    []
+  );
+
+  const deleteCollectionAction = useCallback(
+    async (id: string) => {
+      try {
+        await window.electronAPI.deleteCollection(id);
+        setCollections((prev) => prev.filter((c) => c.id !== id));
+        // If we were viewing the deleted collection, switch to "all"
+        setActiveFilter((prev) =>
+          prev.type === "collection" && prev.collectionId === id
+            ? { type: "all" }
+            : prev
+        );
+      } catch (err) {
+        console.error("Failed to delete collection:", err);
+      }
+    },
+    []
+  );
+
+  const addToCollectionAction = useCallback(
+    async (collectionId: string, systemId: string, fileName: string) => {
+      try {
+        await window.electronAPI.addToCollection(
+          collectionId,
+          systemId,
+          fileName
+        );
+        const key = `${systemId}:${fileName}`;
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === collectionId && !c.roms.includes(key)
+              ? {
+                  ...c,
+                  roms: [...c.roms, key],
+                  updatedAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      } catch (err) {
+        console.error("Failed to add to collection:", err);
+      }
+    },
+    []
+  );
+
+  const removeFromCollectionAction = useCallback(
+    async (collectionId: string, systemId: string, fileName: string) => {
+      try {
+        await window.electronAPI.removeFromCollection(
+          collectionId,
+          systemId,
+          fileName
+        );
+        const key = `${systemId}:${fileName}`;
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === collectionId
+              ? {
+                  ...c,
+                  roms: c.roms.filter((r) => r !== key),
+                  updatedAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      } catch (err) {
+        console.error("Failed to remove from collection:", err);
+      }
+    },
+    []
+  );
+
   const value: AppContextType = {
     config,
     systems,
     scanResult,
-    selectedSystemId,
+    activeFilter,
     searchQuery,
     isLoading,
     currentView,
@@ -284,7 +473,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isFetchingCovers,
     coverFetchProgress,
     lastCoverFetchResult,
-    setSelectedSystemId,
+    favorites,
+    collections,
+    recentlyPlayed,
+    playHistory,
+    setActiveFilter,
     setSearchQuery,
     setCurrentView,
     refreshScan,
@@ -295,6 +488,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startScraping,
     startFetchingCovers,
     getMetadataForRom,
+    toggleFavorite,
+    isFavorite: isFavoriteCheck,
+    createCollection: createCollectionAction,
+    renameCollection: renameCollectionAction,
+    deleteCollection: deleteCollectionAction,
+    addToCollection: addToCollectionAction,
+    removeFromCollection: removeFromCollectionAction,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

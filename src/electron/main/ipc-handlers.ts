@@ -11,6 +11,7 @@ import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
+import { UserLibrary } from "../../core/user-library.js";
 import type { AppConfig, DiscoveredRom } from "../../core/types.js";
 
 function getDataPath(): string {
@@ -69,7 +70,12 @@ export function registerIpcHandlers(): void {
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const launcher = new GameLauncher(mapper);
-    return launcher.launch(rom, configManager.getEmulatorsPath());
+    const result = launcher.launch(rom, configManager.getEmulatorsPath());
+    if (result.success) {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.recordPlay(rom.systemId, rom.fileName);
+    }
+    return result;
   });
 
   ipcMain.handle("detect-emulators", () => {
@@ -198,4 +204,82 @@ export function registerIpcHandlers(): void {
       event.sender.send("cover-fetch-progress", progress);
     });
   });
+
+  // --- User Library handlers ---
+
+  ipcMain.handle("get-user-library", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getAll();
+  });
+
+  ipcMain.handle(
+    "toggle-favorite",
+    (_event: IpcMainInvokeEvent, systemId: string, fileName: string) => {
+      const lib = new UserLibrary(getProjectRoot());
+      return lib.toggleFavorite(systemId, fileName);
+    }
+  );
+
+  ipcMain.handle("get-collections", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getCollections();
+  });
+
+  ipcMain.handle(
+    "create-collection",
+    (_event: IpcMainInvokeEvent, name: string) => {
+      const lib = new UserLibrary(getProjectRoot());
+      return lib.createCollection(name);
+    }
+  );
+
+  ipcMain.handle(
+    "rename-collection",
+    (_event: IpcMainInvokeEvent, id: string, name: string) => {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.renameCollection(id, name);
+    }
+  );
+
+  ipcMain.handle(
+    "delete-collection",
+    (_event: IpcMainInvokeEvent, id: string) => {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.deleteCollection(id);
+    }
+  );
+
+  ipcMain.handle(
+    "add-to-collection",
+    (
+      _event: IpcMainInvokeEvent,
+      collectionId: string,
+      systemId: string,
+      fileName: string
+    ) => {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.addToCollection(collectionId, systemId, fileName);
+    }
+  );
+
+  ipcMain.handle(
+    "remove-from-collection",
+    (
+      _event: IpcMainInvokeEvent,
+      collectionId: string,
+      systemId: string,
+      fileName: string
+    ) => {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.removeFromCollection(collectionId, systemId, fileName);
+    }
+  );
+
+  ipcMain.handle(
+    "get-recently-played",
+    (_event: IpcMainInvokeEvent, limit?: number) => {
+      const lib = new UserLibrary(getProjectRoot());
+      return lib.getRecentlyPlayed(limit);
+    }
+  );
 }

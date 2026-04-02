@@ -6,6 +6,7 @@ import {
   RomScanner,
   EmulatorMapper,
   GameLauncher,
+  UserLibrary,
 } from "../../core/index.js";
 import type { DiscoveredRom } from "../../core/index.js";
 
@@ -159,6 +160,10 @@ export function registerLaunchCommand(program: Command): void {
         console.log(
           chalk.green("\n  Game launched successfully!\n")
         );
+
+        // Record play in user library
+        const userLibrary = new UserLibrary();
+        userLibrary.recordPlay(rom.systemId, rom.fileName);
       }
     );
 }
