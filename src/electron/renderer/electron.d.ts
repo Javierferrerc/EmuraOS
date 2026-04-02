@@ -30,6 +30,7 @@ export interface ElectronAPI {
     systemId: string,
     romFileName: string
   ): Promise<string | null>;
+  readCoverDataUrl(coverPath: string): Promise<string | null>;
   onScrapeProgress(callback: (progress: ScrapeProgress) => void): void;
   removeScrapeProgressListener(): void;
   fetchCovers(): Promise<CoverFetchResult>;

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 
@@ -27,8 +27,17 @@ interface GameCardProps {
 export function GameCard({ rom }: GameCardProps) {
   const { launchGame, lastLaunchResult, getMetadataForRom } = useApp();
   const [imgError, setImgError] = useState(false);
+  const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
 
   const metadata = getMetadataForRom(rom.systemId, rom.fileName);
+
+  useEffect(() => {
+    if (metadata?.coverPath) {
+      window.electronAPI.readCoverDataUrl(metadata.coverPath).then((url) => {
+        if (url) setCoverDataUrl(url);
+      });
+    }
+  }, [metadata?.coverPath]);
 
   const handleDoubleClick = useCallback(() => {
     launchGame(rom);
@@ -37,7 +46,7 @@ export function GameCard({ rom }: GameCardProps) {
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
   const colorClass = SYSTEM_COLORS[rom.systemId] ?? "bg-gray-600";
   const sizeMB = (rom.sizeBytes / (1024 * 1024)).toFixed(1);
-  const hasCover = metadata?.coverPath && !imgError;
+  const hasCover = coverDataUrl && !imgError;
 
   const isLastLaunched =
     lastLaunchResult?.romPath === rom.filePath && lastLaunchResult?.success;
@@ -53,7 +62,7 @@ export function GameCard({ rom }: GameCardProps) {
       <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded bg-gray-700/50 transition-transform duration-200 group-hover:scale-105">
         {hasCover ? (
           <img
-            src={`file://${metadata.coverPath}`}
+            src={coverDataUrl}
             alt={displayName}
             className="h-full w-full object-contain"
             onError={() => setImgError(true)}

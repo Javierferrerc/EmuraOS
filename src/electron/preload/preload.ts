@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   scrapeAllMetadata: () => ipcRenderer.invoke("scrape-all-metadata"),
   getCoverPath: (systemId: string, romFileName: string) =>
     ipcRenderer.invoke("get-cover-path", systemId, romFileName),
+  readCoverDataUrl: (coverPath: string) =>
+    ipcRenderer.invoke("read-cover-data-url", coverPath),
   onScrapeProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("scrape-progress", (_event, progress) =>
       callback(progress)
