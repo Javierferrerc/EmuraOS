@@ -40,6 +40,10 @@ export interface ElectronAPI {
     callback: (progress: CoverFetchProgress) => void
   ): void;
   removeCoverFetchProgressListener(): void;
+  toggleFullscreen(): Promise<void>;
+  getFullscreen(): Promise<boolean>;
+  onFullscreenChanged(callback: (isFullscreen: boolean) => void): void;
+  removeFullscreenChangedListener(): void;
   getUserLibrary(): Promise<UserLibraryFile>;
   toggleFavorite(systemId: string, fileName: string): Promise<boolean>;
   getCollections(): Promise<Collection[]>;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, globalShortcut, Menu } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
@@ -36,6 +36,37 @@ function createWindow(): void {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+
+  mainWindow.on("enter-full-screen", () =>
+    mainWindow?.webContents.send("fullscreen-changed", true)
+  );
+  mainWindow.on("leave-full-screen", () =>
+    mainWindow?.webContents.send("fullscreen-changed", false)
+  );
+
+  // Keep dev-friendly menu items
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "toggleDevTools" },
+      ],
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
+
+  // Register F10 globally when window is focused, unregister on blur
+  mainWindow.on("focus", () => {
+    globalShortcut.register("F10", () => {
+      if (mainWindow) {
+        mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      }
+    });
+  });
+  mainWindow.on("blur", () => {
+    globalShortcut.unregister("F10");
   });
 }
 

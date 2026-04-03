@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 
 export function SearchBar() {
@@ -20,6 +20,15 @@ export function SearchBar() {
     setLocalQuery(searchQuery);
   }, [searchQuery]);
 
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        e.currentTarget.blur();
+      }
+    },
+    []
+  );
+
   return (
     <header className="flex items-center gap-3 border-b border-gray-700 bg-gray-800 px-4 py-2">
       <div className="text-lg font-bold text-gray-100">Retro Launcher</div>
@@ -28,6 +37,7 @@ export function SearchBar() {
           type="text"
           value={localQuery}
           onChange={(e) => setLocalQuery(e.target.value)}
+          onKeyDown={handleInputKeyDown}
           placeholder="Search ROMs..."
           className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 pl-8 text-sm text-gray-100 placeholder-gray-400 outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         />
