@@ -2,8 +2,9 @@ import { useMemo, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { GameCard } from "./GameCard";
 import type { DiscoveredRom } from "../../../core/types";
+import "./GameGrid.css";
 
-const MIN_CARD_WIDTH = 200;
+const MIN_CARD_WIDTH = 292;
 
 interface GameGridProps {
   focusedIndex?: number;
@@ -132,7 +133,7 @@ export function GameGrid({
   const computeColumns = useCallback(() => {
     if (!gridRef.current) return;
     const width = gridRef.current.clientWidth;
-    const gap = 12; // gap-3 = 0.75rem = 12px
+    const gap = 32;
     const cols = Math.max(1, Math.floor((width + gap) / (MIN_CARD_WIDTH + gap)));
     onColumnCountChange?.(cols);
   }, [onColumnCountChange]);
@@ -153,13 +154,13 @@ export function GameGrid({
       `[data-grid-index="${focusedIndex}"]`
     );
     if (el) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   }, [focusedIndex, focusActive]);
 
   if (!scanResult) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-500">
+      <div className="flex h-full items-center justify-center text-gray-600">
         <p>No scan data available. Check your configuration.</p>
       </div>
     );
@@ -167,7 +168,7 @@ export function GameGrid({
 
   if (filteredRoms.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-gray-500">
+      <div className="flex h-full flex-col items-center justify-center text-gray-600">
         <div className="mb-3 text-5xl">
           {activeFilter.type === "favorites"
             ? "\u2605"
@@ -197,18 +198,32 @@ export function GameGrid({
     );
   }
 
+  const filterKey =
+    activeFilter.type === "system"
+      ? `system-${activeFilter.systemId}`
+      : activeFilter.type === "collection"
+        ? `col-${activeFilter.collectionId}`
+        : activeFilter.type;
+
   return (
     <div
+      key={filterKey}
       ref={gridRef}
-      className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3"
+      className="grid grid-cols-[repeat(auto-fill,minmax(292px,1fr))] pt-10"
+      style={{ gap: "32px" }}
     >
       {filteredRoms.map((rom, idx) => (
-        <GameCard
+        <div
           key={rom.filePath}
-          rom={rom}
-          gridIndex={idx}
-          isFocused={focusActive && focusedIndex === idx}
-        />
+          className="game-grid-card"
+          style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
+        >
+          <GameCard
+            rom={rom}
+            gridIndex={idx}
+            isFocused={focusActive && focusedIndex === idx}
+          />
+        </div>
       ))}
     </div>
   );

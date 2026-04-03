@@ -2,22 +2,40 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 
-const SYSTEM_COLORS: Record<string, string> = {
-  nes: "bg-red-700",
-  snes: "bg-red-600",
-  n64: "bg-red-500",
-  gb: "bg-green-700",
-  gbc: "bg-purple-600",
-  gba: "bg-indigo-600",
-  nds: "bg-gray-600",
-  gamecube: "bg-indigo-700",
-  wii: "bg-sky-600",
-  megadrive: "bg-blue-700",
-  mastersystem: "bg-blue-600",
-  dreamcast: "bg-blue-500",
-  psx: "bg-slate-600",
-  ps2: "bg-blue-900",
-  psp: "bg-slate-700",
+const SYSTEM_COLORS: Record<string, [string, string]> = {
+  nes: ["#FF4444", "#8B2020"],
+  snes: ["#D43D3D", "#6B1E1E"],
+  n64: ["#4ADE80", "#1A6B3A"],
+  gb: ["#86EFAC", "#3D8B5E"],
+  gbc: ["#A78BFA", "#5B3A9E"],
+  gba: ["#818CF8", "#3D4A9E"],
+  nds: ["#94A3B8", "#475569"],
+  gamecube: ["#A855F7", "#5B2D8E"],
+  wii: ["#0BDDFF", "#107B8C"],
+  megadrive: ["#3B82F6", "#1E4A8E"],
+  mastersystem: ["#60A5FA", "#2563EB"],
+  dreamcast: ["#7DD3FC", "#2980B0"],
+  psx: ["#94A3B8", "#4A5568"],
+  ps2: ["#3B82F6", "#1E3A5F"],
+  psp: ["#6B7280", "#374151"],
+};
+
+const SYSTEM_NAMES: Record<string, string> = {
+  nes: "NES",
+  snes: "SNES",
+  n64: "N64",
+  gb: "Game Boy",
+  gbc: "GBC",
+  gba: "GBA",
+  nds: "NDS",
+  gamecube: "GameCube",
+  wii: "Wii",
+  megadrive: "Mega Drive",
+  mastersystem: "Master System",
+  dreamcast: "Dreamcast",
+  psx: "PSX",
+  ps2: "PS2",
+  psp: "PSP",
 };
 
 interface GameCardProps {
@@ -29,7 +47,6 @@ interface GameCardProps {
 export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const {
     launchGame,
-    lastLaunchResult,
     getMetadataForRom,
     toggleFavorite,
     isFavorite,
@@ -64,42 +81,50 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   );
 
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
-  const colorClass = SYSTEM_COLORS[rom.systemId] ?? "bg-gray-600";
-  const sizeMB = (rom.sizeBytes / (1024 * 1024)).toFixed(1);
+  const [systemLight, systemDark] = SYSTEM_COLORS[rom.systemId] ?? ["#718096", "#4A5568"];
   const hasCover = coverDataUrl && !imgError;
-
-  const isLastLaunched =
-    lastLaunchResult?.romPath === rom.filePath && lastLaunchResult?.success;
-
-  const ringClass = isFocused
-    ? "ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900"
-    : isLastLaunched
-      ? "ring-2 ring-green-500"
-      : "";
 
   return (
     <div
       data-grid-index={gridIndex}
       onDoubleClick={handleDoubleClick}
-      className={`group relative cursor-pointer rounded-lg border border-gray-700 bg-gray-800 p-4 transition-all duration-200 hover:border-gray-500 hover:bg-gray-750 hover:shadow-lg hover:shadow-black/20 ${ringClass}`}
+      className={`group relative h-full cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 ${
+        isFocused
+          ? "scale-105 ring-2 ring-blue-500"
+          : "hover:scale-[1.03]"
+      }`}
       title={`Double-click to launch\n${rom.filePath}`}
     >
-      {/* Favorite heart button */}
+      {/* Cover image or fallback */}
+      {hasCover ? (
+        <img
+          src={coverDataUrl}
+          alt={displayName}
+          className="h-full w-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-white/5 text-4xl">
+          🎮
+        </div>
+      )}
+
+      {/* Favorite heart — top-right */}
       <button
         onClick={handleToggleFavorite}
-        className={`absolute right-2 top-2 z-10 rounded-full p-1 transition-opacity ${
+        className={`absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity ${
           favorited
             ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100"
-        }`}
+            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+        } ${isFocused ? "opacity-100" : ""}`}
         title={favorited ? "Remove from favorites" : "Add to favorites"}
       >
         <svg
-          width="20"
-          height="20"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill={favorited ? "#ef4444" : "none"}
-          stroke={favorited ? "#ef4444" : "#9ca3af"}
+          stroke={favorited ? "#ef4444" : "#e5e7eb"}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -108,37 +133,30 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         </svg>
       </button>
 
-      <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded bg-gray-700/50 transition-transform duration-200 group-hover:scale-105">
-        {hasCover ? (
-          <img
-            src={coverDataUrl}
-            alt={displayName}
-            className="h-full w-full object-contain"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <span className="text-3xl">{"\uD83C\uDFAE"}</span>
-        )}
-      </div>
-      <h3 className="mb-2 truncate text-sm font-medium text-gray-100">
-        {displayName}
-      </h3>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+      {/* Bottom overlay — visible on hover/focus */}
+      <div
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-8 transition-opacity ${
+          isFocused
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
+        <div className="flex items-center gap-2">
           <span
-            className={`rounded px-1.5 py-0.5 text-xs text-white ${colorClass}`}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold leading-none text-white flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${systemLight}8c 0%, ${systemDark}8c 100%)` }}
           >
-            {rom.systemId.toUpperCase()}
+            {SYSTEM_NAMES[rom.systemId] ?? rom.systemId.toUpperCase()}
           </span>
-          {playCount > 0 && (
-            <span className="rounded bg-gray-600 px-1.5 py-0.5 text-xs text-gray-300">
-              {playCount}x
-            </span>
-          )}
+          <span className="truncate text-sm font-medium text-white">
+            {displayName}
+          </span>
         </div>
-        <span className="text-xs text-gray-500">
-          {metadata?.year || `${sizeMB} MB`}
-        </span>
+        {playCount > 0 && (
+          <p className="mt-0.5 text-xs text-gray-400">
+            Played {playCount} {playCount === 1 ? "time" : "times"}
+          </p>
+        )}
       </div>
     </div>
   );

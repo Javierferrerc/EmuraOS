@@ -1,10 +1,10 @@
 import { useReducer, useCallback } from "react";
 
-export type FocusRegion = "sidebar" | "grid";
+export type FocusRegion = "slider" | "grid";
 
 export interface FocusState {
   region: FocusRegion;
-  sidebarIndex: number;
+  sliderIndex: number;
   gridIndex: number;
   active: boolean;
 }
@@ -22,19 +22,19 @@ export type FocusAction =
   | { type: "NEXT_FILTER" }
   | { type: "SET_REGION"; region: FocusRegion }
   | { type: "SET_GRID_INDEX"; index: number }
-  | { type: "SET_SIDEBAR_INDEX"; index: number }
+  | { type: "SET_SLIDER_INDEX"; index: number }
   | { type: "DEACTIVATE" }
   | { type: "RESET_GRID" };
 
 interface FocusCounts {
-  sidebarItemCount: number;
+  sliderItemCount: number;
   gridItemCount: number;
   gridColumnCount: number;
 }
 
 const initialState: FocusState = {
   region: "grid",
-  sidebarIndex: 0,
+  sliderIndex: 0,
   gridIndex: 0,
   active: false,
 };
@@ -44,26 +44,29 @@ function createReducer(counts: FocusCounts) {
     state: FocusState,
     action: FocusAction
   ): FocusState {
-    const { sidebarItemCount, gridItemCount, gridColumnCount } = counts;
+    const { sliderItemCount, gridItemCount, gridColumnCount } = counts;
 
     switch (action.type) {
       case "MOVE_UP": {
         if (!state.active) return { ...state, active: true };
-        if (state.region === "sidebar") {
-          const next = Math.max(0, state.sidebarIndex - 1);
-          return { ...state, sidebarIndex: next };
+        if (state.region === "slider") {
+          // Already at top — do nothing
+          return state;
         }
-        // Grid: move up one row
+        // Grid: if in first row, move to slider
+        const row = Math.floor(state.gridIndex / gridColumnCount);
+        if (row === 0) {
+          return { ...state, region: "slider" };
+        }
         const next = state.gridIndex - gridColumnCount;
-        if (next < 0) return state;
         return { ...state, gridIndex: next };
       }
 
       case "MOVE_DOWN": {
         if (!state.active) return { ...state, active: true };
-        if (state.region === "sidebar") {
-          const next = Math.min(sidebarItemCount - 1, state.sidebarIndex + 1);
-          return { ...state, sidebarIndex: next };
+        if (state.region === "slider") {
+          // Move from slider into grid
+          return { ...state, region: "grid" };
         }
         // Grid: move down one row
         const next = state.gridIndex + gridColumnCount;
@@ -73,22 +76,33 @@ function createReducer(counts: FocusCounts) {
 
       case "MOVE_LEFT": {
         if (!state.active) return { ...state, active: true };
-        if (state.region === "sidebar") return state;
-        // Grid: at column 0 → switch to sidebar
-        const col = state.gridIndex % gridColumnCount;
-        if (col === 0) {
-          return { ...state, region: "sidebar" };
+        if (state.region === "slider") {
+          const next = Math.max(0, state.sliderIndex - 1);
+          return { ...state, sliderIndex: next };
+        }
+        // Grid: at column 0 → wrap to last item of previous row
+        const colL = state.gridIndex % gridColumnCount;
+        if (colL === 0) {
+          const prevRowEnd = state.gridIndex - 1;
+          if (prevRowEnd < 0) return state;
+          return { ...state, gridIndex: prevRowEnd };
         }
         return { ...state, gridIndex: state.gridIndex - 1 };
       }
 
       case "MOVE_RIGHT": {
         if (!state.active) return { ...state, active: true };
-        if (state.region === "sidebar") {
-          return { ...state, region: "grid" };
+        if (state.region === "slider") {
+          const next = Math.min(sliderItemCount - 1, state.sliderIndex + 1);
+          return { ...state, sliderIndex: next };
         }
-        const col = state.gridIndex % gridColumnCount;
-        if (col >= gridColumnCount - 1) return state;
+        // Grid: at last column → wrap to first item of next row
+        const colR = state.gridIndex % gridColumnCount;
+        if (colR >= gridColumnCount - 1) {
+          const nextRowStart = state.gridIndex + 1;
+          if (nextRowStart >= gridItemCount) return state;
+          return { ...state, gridIndex: nextRowStart };
+        }
         const next = state.gridIndex + 1;
         if (next >= gridItemCount) return state;
         return { ...state, gridIndex: next };
@@ -110,8 +124,8 @@ function createReducer(counts: FocusCounts) {
       case "SET_GRID_INDEX":
         return { ...state, gridIndex: action.index };
 
-      case "SET_SIDEBAR_INDEX":
-        return { ...state, sidebarIndex: action.index };
+      case "SET_SLIDER_INDEX":
+        return { ...state, sliderIndex: action.index };
 
       case "DEACTIVATE":
         return { ...state, active: false };
@@ -129,7 +143,7 @@ export function useFocusManager(counts: FocusCounts) {
   const reducer = useCallback(
     (state: FocusState, action: FocusAction) =>
       createReducer(counts)(state, action),
-    [counts.sidebarItemCount, counts.gridItemCount, counts.gridColumnCount]
+    [counts.sliderItemCount, counts.gridItemCount, counts.gridColumnCount]
   );
 
   const [state, dispatch] = useReducer(reducer, initialState);
