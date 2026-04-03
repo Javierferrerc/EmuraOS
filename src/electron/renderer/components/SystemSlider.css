@@ -1,0 +1,55 @@
+.slider-container {
+  gap: 30px;
+  position: relative;
+  z-index: 10;
+}
+
+
+.slider-btn {
+  width: 114px;
+  height: 114px;
+  flex-shrink: 0;
+  border-radius: 24px;
+  position: relative;
+  background: linear-gradient(135deg, var(--slider-dark) 16%, var(--slider-color-bg) 94%);
+  isolation: isolate;
+}
+
+.slider-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--slider-border-start) 0%, var(--slider-border-end) 100%) border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.slider-icon {
+  width: 60%;
+  height: 60%;
+  background-color: var(--slider-icon-color);
+  -webkit-mask-image: var(--slider-icon);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--slider-icon);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.slider-icon-img {
+  width: 50%;
+  height: 50%;
+  object-fit: contain;
+}

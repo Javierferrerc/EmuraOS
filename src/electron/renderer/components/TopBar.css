@@ -1,0 +1,53 @@
+.topbar-search {
+  background:
+    linear-gradient(335deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 100%);
+  position: relative;
+  border-radius: 999px;
+  isolation: isolate;
+}
+
+.topbar-search::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(95deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transform: translateZ(0);
+}
+
+.topbar-icon-btn {
+  background:
+    linear-gradient(166deg, transparent 0%, rgba(255, 255, 255, 0.3) 100%);
+  position: relative;
+  border-radius: 50%;
+  isolation: isolate;
+}
+
+.topbar-icon-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(134deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transform: translateZ(0);
+}

@@ -138,9 +138,13 @@ export function useGamepad(options: {
           prevButtonsRef.current[idx] = pressed;
         }
 
-        // Left stick axes
+        // Left stick axes — only fire the dominant axis to prevent diagonal inputs
         const axisX = gp.axes[0] ?? 0;
         const axisY = gp.axes[1] ?? 0;
+        const absX = Math.abs(axisX);
+        const absY = Math.abs(axisY);
+        const allowX = absX >= DEADZONE && absX > absY;
+        const allowY = absY >= DEADZONE && absY >= absX;
 
         const stickActions: Array<{
           key: string;
@@ -149,22 +153,22 @@ export function useGamepad(options: {
         }> = [
           {
             key: "stick-left",
-            pressed: axisX < -DEADZONE,
+            pressed: allowX && axisX < 0,
             action: { type: "MOVE_LEFT" },
           },
           {
             key: "stick-right",
-            pressed: axisX > DEADZONE,
+            pressed: allowX && axisX > 0,
             action: { type: "MOVE_RIGHT" },
           },
           {
             key: "stick-up",
-            pressed: axisY < -DEADZONE,
+            pressed: allowY && axisY < 0,
             action: { type: "MOVE_UP" },
           },
           {
             key: "stick-down",
-            pressed: axisY > DEADZONE,
+            pressed: allowY && axisY > 0,
             action: { type: "MOVE_DOWN" },
           },
         ];
