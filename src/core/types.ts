@@ -43,6 +43,7 @@ export interface EmulatorDefinition {
   launchTemplate: string;
   args: Record<string, string>;
   defaultArgs: string;
+  coreUrls?: Record<string, string>;
 }
 
 export interface ResolvedEmulator {
@@ -157,6 +158,41 @@ export interface Collection {
   roms: string[]; // "systemId:fileName" keys
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmbeddedLaunchResult {
+  success: boolean;
+  emulatorId: string;
+  romPath: string;
+  command: string;
+  pid?: number;
+  error?: string;
+}
+
+export interface GameSessionEvent {
+  rom: DiscoveredRom;
+  emulatorId: string;
+}
+
+export interface CoreDownloadProgress {
+  current: number;
+  total: number;
+  coreName: string;
+  status: "downloading" | "extracting" | "installed" | "already_installed" | "error";
+}
+
+export interface EmulatorReadinessResult {
+  emulatorId: string;
+  isReady: boolean;
+  issues: string[];
+  fixed: string[];
+  errors: string[];
+}
+
+export interface ReadinessReport {
+  results: EmulatorReadinessResult[];
+  totalFixed: number;
+  totalErrors: number;
 }
 
 export interface UserLibraryFile {

@@ -14,10 +14,13 @@ import type {
   DiscoveredRom,
   LaunchResult,
   GameMetadata,
+  GameSessionEvent,
   ScrapeResult,
   ScrapeProgress,
   CoverFetchResult,
   CoverFetchProgress,
+  CoreDownloadProgress,
+  ReadinessReport,
   Collection,
   PlayRecord,
 } from "../../../core/types.js";
@@ -36,7 +39,9 @@ interface AppState {
   activeFilter: ActiveFilter;
   searchQuery: string;
   isLoading: boolean;
-  currentView: "library" | "settings";
+  currentView: "library" | "settings" | "game";
+  isGameRunning: boolean;
+  currentGame: GameSessionEvent | null;
   lastDetection: DetectionResult | null;
   lastLaunchResult: LaunchResult | null;
   metadataMap: Record<string, Record<string, GameMetadata>>;
@@ -52,12 +57,16 @@ interface AppState {
   playHistory: Record<string, PlayRecord>;
   isFullscreen: boolean;
   gamepadConnected: boolean;
+  isDetectingEmulators: boolean;
+  coreDownloadProgress: CoreDownloadProgress | null;
+  readinessReport: ReadinessReport | null;
 }
 
 interface AppActions {
   setActiveFilter: (filter: ActiveFilter) => void;
   setSearchQuery: (query: string) => void;
-  setCurrentView: (view: "library" | "settings") => void;
+  setCurrentView: (view: "library" | "settings" | "game") => void;
+  stopGame: () => Promise<void>;
   refreshScan: () => Promise<void>;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
   detectEmulators: () => Promise<void>;
@@ -101,9 +110,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<"library" | "settings">(
-    "library"
-  );
+  const [currentView, setCurrentView] = useState<
+    "library" | "settings" | "game"
+  >("library");
+  const [isGameRunning, setIsGameRunning] = useState(false);
+  const [currentGame, setCurrentGame] = useState<GameSessionEvent | null>(null);
   const [lastDetection, setLastDetection] = useState<DetectionResult | null>(
     null
   );
@@ -131,6 +142,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gamepadConnected, setGamepadConnected] = useState(false);
+  const [isDetectingEmulators, setIsDetectingEmulators] = useState(false);
+  const [coreDownloadProgress, setCoreDownloadProgress] =
+    useState<CoreDownloadProgress | null>(null);
+  const [readinessReport, setReadinessReport] =
+    useState<ReadinessReport | null>(null);
 
   // Fullscreen sync
   useEffect(() => {
@@ -143,6 +159,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFullscreen = useCallback(() => {
     window.electronAPI.toggleFullscreen();
+  }, []);
+
+  // Game session listeners
+  useEffect(() => {
+    window.electronAPI.onGameSessionStarted((event: GameSessionEvent) => {
+      setIsGameRunning(true);
+      setCurrentGame(event);
+      setCurrentView("game");
+    });
+    window.electronAPI.onGameSessionEnded(() => {
+      setIsGameRunning(false);
+      setCurrentGame(null);
+      setCurrentView("library");
+    });
+    return () => {
+      window.electronAPI.removeGameSessionStartedListener();
+      window.electronAPI.removeGameSessionEndedListener();
+    };
+  }, []);
+
+  const stopGame = useCallback(async () => {
+    try {
+      await window.electronAPI.stopEmbeddedGame();
+    } catch (err) {
+      console.error("Failed to stop game:", err);
+    }
   }, []);
 
   useEffect(() => {
@@ -248,40 +290,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const detectEmulators = useCallback(async () => {
+    setIsDetectingEmulators(true);
+    setCoreDownloadProgress(null);
+    setReadinessReport(null);
+
+    window.electronAPI.onCoreDownloadProgress((progress) => {
+      setCoreDownloadProgress(progress);
+    });
+
     try {
       const result = await window.electronAPI.detectEmulators();
       setLastDetection(result);
+      if (result.readiness) {
+        setReadinessReport(result.readiness);
+      }
     } catch (err) {
       console.error("Failed to detect emulators:", err);
+    } finally {
+      setIsDetectingEmulators(false);
+      window.electronAPI.removeCoreDownloadProgressListener();
     }
   }, []);
 
-  const launchGame = useCallback(async (rom: DiscoveredRom) => {
-    try {
+  const updatePlayStats = useCallback((rom: DiscoveredRom) => {
+    const key = `${rom.systemId}:${rom.fileName}`;
+    setRecentlyPlayed((prev) => {
+      const filtered = prev.filter((k) => k !== key);
+      return [key, ...filtered].slice(0, 50);
+    });
+    setPlayHistory((prev) => {
+      const existing = prev[key];
+      return {
+        ...prev,
+        [key]: {
+          lastPlayed: new Date().toISOString(),
+          playCount: (existing?.playCount ?? 0) + 1,
+        },
+      };
+    });
+  }, []);
+
+  const fallbackLaunch = useCallback(
+    async (rom: DiscoveredRom) => {
       const result = await window.electronAPI.launchGame(rom);
       setLastLaunchResult(result);
-      if (result.success) {
-        // Optimistically update recently played and play history
-        const key = `${rom.systemId}:${rom.fileName}`;
-        setRecentlyPlayed((prev) => {
-          const filtered = prev.filter((k) => k !== key);
-          return [key, ...filtered].slice(0, 50);
-        });
-        setPlayHistory((prev) => {
-          const existing = prev[key];
-          return {
-            ...prev,
-            [key]: {
-              lastPlayed: new Date().toISOString(),
-              playCount: (existing?.playCount ?? 0) + 1,
-            },
-          };
-        });
+      if (result.success) updatePlayStats(rom);
+    },
+    [updatePlayStats]
+  );
+
+  const launchGame = useCallback(
+    async (rom: DiscoveredRom) => {
+      // Try embedded overlay first
+      try {
+        console.log("[renderer] calling launchGameEmbedded...");
+        const embeddedResult =
+          await window.electronAPI.launchGameEmbedded(rom);
+        console.log("[renderer] embeddedResult:", JSON.stringify(embeddedResult));
+        if (embeddedResult.success) {
+          updatePlayStats(rom);
+          return;
+        }
+        console.warn(
+          "Embedded launch failed, falling back to normal:",
+          embeddedResult.error
+        );
+      } catch (err) {
+        console.warn("Embedded launch threw, falling back to normal:", err);
       }
-    } catch (err) {
-      console.error("Failed to launch game:", err);
-    }
-  }, []);
+
+      // Fallback to normal (detached) launch
+      try {
+        await fallbackLaunch(rom);
+      } catch (err) {
+        console.error("Failed to launch game:", err);
+      }
+    },
+    [updatePlayStats, fallbackLaunch]
+  );
 
   const loadAllMetadata = useCallback(async () => {
     try {
@@ -483,6 +569,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     searchQuery,
     isLoading,
     currentView,
+    isGameRunning,
+    currentGame,
     lastDetection,
     lastLaunchResult,
     metadataMap,
@@ -498,9 +586,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     playHistory,
     isFullscreen,
     gamepadConnected,
+    isDetectingEmulators,
+    coreDownloadProgress,
+    readinessReport,
     setActiveFilter,
     setSearchQuery,
     setCurrentView,
+    stopGame,
     refreshScan,
     updateConfig,
     detectEmulators,

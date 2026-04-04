@@ -18,6 +18,9 @@ export function SettingsPage() {
     coverFetchProgress,
     lastCoverFetchResult,
     startFetchingCovers,
+    isDetectingEmulators,
+    coreDownloadProgress,
+    readinessReport,
   } = useApp();
 
   const [romsPath, setRomsPath] = useState(config?.romsPath ?? "./roms");
@@ -37,7 +40,6 @@ export function SettingsPage() {
     config?.screenScraperUserPassword ?? ""
   );
   const [saved, setSaved] = useState(false);
-  const [detecting, setDetecting] = useState(false);
   const [credsSaved, setCredsSaved] = useState(false);
 
   async function handleSave() {
@@ -58,9 +60,7 @@ export function SettingsPage() {
   }
 
   async function handleDetect() {
-    setDetecting(true);
     await detectEmulators();
-    setDetecting(false);
   }
 
   async function handleRescan() {
@@ -148,13 +148,43 @@ export function SettingsPage() {
             <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
               <button
                 onClick={handleDetect}
-                disabled={detecting}
+                disabled={isDetectingEmulators}
                 className="mb-4 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:opacity-50"
               >
-                {detecting ? "Detecting..." : "Detect Emulators"}
+                {isDetectingEmulators ? "Setting up..." : "Detect Emulators"}
               </button>
 
-              {lastDetection && (
+              {/* Core download progress */}
+              {isDetectingEmulators && coreDownloadProgress && (
+                <div className="mb-4">
+                  <div className="mb-1 flex justify-between text-xs text-gray-400">
+                    <span>
+                      {coreDownloadProgress.current} / {coreDownloadProgress.total}
+                    </span>
+                    <span className="ml-2 truncate">
+                      {coreDownloadProgress.status === "downloading"
+                        ? `Downloading ${coreDownloadProgress.coreName}...`
+                        : coreDownloadProgress.status === "installed"
+                          ? `Installed ${coreDownloadProgress.coreName}`
+                          : coreDownloadProgress.status === "already_installed"
+                            ? `${coreDownloadProgress.coreName} already installed`
+                            : coreDownloadProgress.status === "error"
+                              ? `Failed: ${coreDownloadProgress.coreName}`
+                              : `${coreDownloadProgress.coreName}`}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-700">
+                    <div
+                      className="h-full rounded-full bg-green-500 transition-all duration-300"
+                      style={{
+                        width: `${Math.round((coreDownloadProgress.current / coreDownloadProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {lastDetection && !isDetectingEmulators && (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-400">
                     Checked {lastDetection.totalChecked} emulators
@@ -166,19 +196,43 @@ export function SettingsPage() {
                         Found ({lastDetection.detected.length})
                       </h3>
                       <div className="space-y-1">
-                        {lastDetection.detected.map((emu) => (
-                          <div
-                            key={emu.id}
-                            className="flex items-center justify-between rounded bg-gray-700/50 px-3 py-1.5 text-sm"
-                          >
-                            <span className="text-gray-200">{emu.name}</span>
-                            <span className="text-xs text-gray-400">
-                              {emu.source === "emulatorsPath"
-                                ? "Custom path"
-                                : "Default path"}
-                            </span>
-                          </div>
-                        ))}
+                        {lastDetection.detected.map((emu) => {
+                          const readiness = readinessReport?.results.find(
+                            (r) => r.emulatorId === emu.id
+                          );
+                          return (
+                            <div
+                              key={emu.id}
+                              className="flex items-center justify-between rounded bg-gray-700/50 px-3 py-1.5 text-sm"
+                            >
+                              <span className="text-gray-200">{emu.name}</span>
+                              <div className="flex items-center gap-2">
+                                {readiness && (
+                                  <span
+                                    className={`text-xs font-medium ${
+                                      readiness.errors.length > 0
+                                        ? "text-red-400"
+                                        : readiness.fixed.length > 0
+                                          ? "text-blue-400"
+                                          : "text-green-400"
+                                    }`}
+                                  >
+                                    {readiness.errors.length > 0
+                                      ? `${readiness.errors.length} error(s)`
+                                      : readiness.fixed.length > 0
+                                        ? `${readiness.fixed.length} core(s) installed`
+                                        : "Ready"}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-400">
+                                  {emu.source === "emulatorsPath"
+                                    ? "Custom path"
+                                    : "Default path"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

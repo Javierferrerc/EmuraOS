@@ -4,12 +4,16 @@ import type {
   ScanResult,
   DiscoveredRom,
   LaunchResult,
+  EmbeddedLaunchResult,
   DetectionResult,
   GameMetadata,
+  GameSessionEvent,
   ScrapeResult,
   ScrapeProgress,
   CoverFetchResult,
   CoverFetchProgress,
+  CoreDownloadProgress,
+  ReadinessReport,
   UserLibraryFile,
   Collection,
 } from "../../core/types";
@@ -21,7 +25,7 @@ export interface ElectronAPI {
   getSystems(): Promise<SystemDefinition[]>;
   scanRoms(): Promise<ScanResult>;
   launchGame(rom: DiscoveredRom): Promise<LaunchResult>;
-  detectEmulators(): Promise<DetectionResult>;
+  detectEmulators(): Promise<DetectionResult & { readiness?: ReadinessReport }>;
   getAllMetadata(): Promise<Record<string, Record<string, GameMetadata>>>;
   getMetadata(
     systemId: string,
@@ -40,6 +44,10 @@ export interface ElectronAPI {
     callback: (progress: CoverFetchProgress) => void
   ): void;
   removeCoverFetchProgressListener(): void;
+  onCoreDownloadProgress(
+    callback: (progress: CoreDownloadProgress) => void
+  ): void;
+  removeCoreDownloadProgressListener(): void;
   toggleFullscreen(): Promise<void>;
   getFullscreen(): Promise<boolean>;
   onFullscreenChanged(callback: (isFullscreen: boolean) => void): void;
@@ -61,6 +69,21 @@ export interface ElectronAPI {
     fileName: string
   ): Promise<void>;
   getRecentlyPlayed(limit?: number): Promise<string[]>;
+
+  // Embedded overlay
+  launchGameEmbedded(rom: DiscoveredRom): Promise<EmbeddedLaunchResult>;
+  stopEmbeddedGame(): Promise<void>;
+  isGameRunning(): Promise<boolean>;
+  setGameAreaBounds(bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): Promise<void>;
+  onGameSessionStarted(callback: (event: GameSessionEvent) => void): void;
+  removeGameSessionStartedListener(): void;
+  onGameSessionEnded(callback: () => void): void;
+  removeGameSessionEndedListener(): void;
 }
 
 declare global {

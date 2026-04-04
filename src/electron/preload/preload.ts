@@ -61,4 +61,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("remove-from-collection", collectionId, systemId, fileName),
   getRecentlyPlayed: (limit?: number) =>
     ipcRenderer.invoke("get-recently-played", limit),
+
+  onCoreDownloadProgress: (callback: (progress: unknown) => void) => {
+    ipcRenderer.on("core-download-progress", (_event, progress) =>
+      callback(progress)
+    );
+  },
+  removeCoreDownloadProgressListener: () => {
+    ipcRenderer.removeAllListeners("core-download-progress");
+  },
+
+  // Embedded overlay
+  launchGameEmbedded: (rom: Record<string, unknown>) =>
+    ipcRenderer.invoke("launch-game-embedded", rom),
+  stopEmbeddedGame: () => ipcRenderer.invoke("stop-embedded-game"),
+  isGameRunning: () => ipcRenderer.invoke("is-game-running"),
+  setGameAreaBounds: (bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => ipcRenderer.invoke("set-game-area-bounds", bounds),
+  onGameSessionStarted: (callback: (event: unknown) => void) => {
+    ipcRenderer.on("game-session-started", (_event, data) => callback(data));
+  },
+  removeGameSessionStartedListener: () => {
+    ipcRenderer.removeAllListeners("game-session-started");
+  },
+  onGameSessionEnded: (callback: () => void) => {
+    ipcRenderer.on("game-session-ended", () => callback());
+  },
+  removeGameSessionEndedListener: () => {
+    ipcRenderer.removeAllListeners("game-session-ended");
+  },
 });

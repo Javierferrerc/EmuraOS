@@ -22,7 +22,16 @@
       "mastersystem": "cores\\genesis_plus_gx_libretro.dll",
       "psx": "cores\\mednafen_psx_hw_libretro.dll"
     },
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "coreUrls": {
+      "cores\\fceumm_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/fceumm_libretro.dll.zip",
+      "cores\\snes9x_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/snes9x_libretro.dll.zip",
+      "cores\\mupen64plus_next_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mupen64plus_next_libretro.dll.zip",
+      "cores\\gambatte_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/gambatte_libretro.dll.zip",
+      "cores\\mgba_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mgba_libretro.dll.zip",
+      "cores\\genesis_plus_gx_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/genesis_plus_gx_libretro.dll.zip",
+      "cores\\mednafen_psx_hw_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mednafen_psx_hw_libretro.dll.zip"
+    }
   },
   {
     "id": "snes9x",
@@ -104,7 +113,7 @@
       "C:\\Dolphin-x64"
     ],
     "systems": ["gamecube", "wii"],
-    "launchTemplate": "\"{executable}\" --exec=\"{romPath}\"",
+    "launchTemplate": "\"{executable}\" -b --exec=\"{romPath}\"",
     "args": {},
     "defaultArgs": ""
   },
