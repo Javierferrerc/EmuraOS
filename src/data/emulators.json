@@ -186,5 +186,58 @@
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
     "defaultArgs": ""
+  },
+  {
+    "id": "citra",
+    "name": "Citra",
+    "executable": "citra-qt.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\Citra",
+      "C:\\Program Files (x86)\\Citra",
+      "C:\\Citra"
+    ],
+    "systems": ["3ds"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "ryujinx",
+    "name": "Ryujinx",
+    "executable": "Ryujinx.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\Ryujinx",
+      "C:\\Ryujinx"
+    ],
+    "systems": ["switch"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "cemu",
+    "name": "Cemu",
+    "executable": "Cemu.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\Cemu",
+      "C:\\Cemu"
+    ],
+    "systems": ["wiiu"],
+    "launchTemplate": "\"{executable}\" -g \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
+  },
+  {
+    "id": "rpcs3",
+    "name": "RPCS3",
+    "executable": "rpcs3.exe",
+    "defaultPaths": [
+      "C:\\Program Files\\RPCS3",
+      "C:\\RPCS3"
+    ],
+    "systems": ["ps3"],
+    "launchTemplate": "\"{executable}\" \"{romPath}\"",
+    "args": {},
+    "defaultArgs": ""
   }
 ]

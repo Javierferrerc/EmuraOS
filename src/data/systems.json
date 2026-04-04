@@ -103,5 +103,33 @@
     "manufacturer": "Sony",
     "extensions": [".iso", ".cso", ".pbp"],
     "romFolder": "psp"
+  },
+  {
+    "id": "3ds",
+    "name": "Nintendo 3DS",
+    "manufacturer": "Nintendo",
+    "extensions": [".3ds", ".cia", ".cxi", ".app"],
+    "romFolder": "3ds"
+  },
+  {
+    "id": "switch",
+    "name": "Nintendo Switch",
+    "manufacturer": "Nintendo",
+    "extensions": [".nsp", ".xci"],
+    "romFolder": "switch"
+  },
+  {
+    "id": "wiiu",
+    "name": "Nintendo Wii U",
+    "manufacturer": "Nintendo",
+    "extensions": [".wud", ".wux", ".rpx", ".wua"],
+    "romFolder": "wiiu"
+  },
+  {
+    "id": "ps3",
+    "name": "PlayStation 3",
+    "manufacturer": "Sony",
+    "extensions": [".iso", ".bin", ".pkg"],
+    "romFolder": "ps3"
   }
 ]
