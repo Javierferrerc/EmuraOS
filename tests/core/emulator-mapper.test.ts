@@ -19,7 +19,7 @@ describe("EmulatorMapper", () => {
 
   it("should load emulators from JSON", () => {
     const all = mapper.getAll();
-    expect(all.length).toBe(12);
+    expect(all.length).toBe(16);
   });
 
   it("should get emulator by id", () => {
