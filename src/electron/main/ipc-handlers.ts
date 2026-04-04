@@ -8,11 +8,13 @@ import { RomScanner } from "../../core/rom-scanner.js";
 import { EmulatorMapper } from "../../core/emulator-mapper.js";
 import { GameLauncher } from "../../core/game-launcher.js";
 import { EmulatorDetector } from "../../core/emulator-detector.js";
+import { EmulatorReadiness } from "../../core/emulator-readiness.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import { UserLibrary } from "../../core/user-library.js";
-import type { AppConfig, DiscoveredRom } from "../../core/types.js";
+import { EmulatorOverlay } from "./emulator-overlay.js";
+import type { AppConfig, DiscoveredRom, EmulatorDefinition } from "../../core/types.js";
 
 function getDataPath(): string {
   if (app.isPackaged) {
@@ -36,7 +38,30 @@ function getProjectRoot(): string {
   return app.getAppPath();
 }
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(
+  getMainWindow: () => BrowserWindow | null
+): void {
+  let overlay: EmulatorOverlay | null = null;
+
+  function getOrCreateOverlay(): EmulatorOverlay | null {
+    const win = getMainWindow();
+    if (!win) return null;
+    if (!overlay) {
+      overlay = new EmulatorOverlay(win, {
+        onSessionStarted: (event) => {
+          win.setFullScreen(true);
+          win.webContents.send("game-session-started", event);
+        },
+        onSessionEnded: () => {
+          if (win.isFullScreen()) win.setFullScreen(false);
+          win.webContents.send("game-session-ended");
+          overlay = null;
+        },
+      });
+    }
+    return overlay;
+  }
+
   ipcMain.handle("get-config", () => {
     const configManager = new ConfigManager(getProjectRoot());
     return configManager.get();
@@ -78,7 +103,7 @@ export function registerIpcHandlers(): void {
     return result;
   });
 
-  ipcMain.handle("detect-emulators", () => {
+  ipcMain.handle("detect-emulators", async (event) => {
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const detector = new EmulatorDetector(mapper);
@@ -97,7 +122,20 @@ export function registerIpcHandlers(): void {
       }
     }
 
-    return result;
+    // Validate emulator readiness and auto-download missing cores
+    const emulatorDefs: EmulatorDefinition[] = JSON.parse(
+      readFileSync(getEmulatorsPath(), "utf-8")
+    );
+    const readiness = new EmulatorReadiness();
+    const readinessReport = await readiness.validateAndFix(
+      result.detected,
+      emulatorDefs,
+      (progress) => {
+        event.sender.send("core-download-progress", progress);
+      }
+    );
+
+    return { ...result, readiness: readinessReport };
   });
 
   ipcMain.handle("get-all-metadata", () => {
@@ -294,6 +332,79 @@ export function registerIpcHandlers(): void {
     (_event: IpcMainInvokeEvent, limit?: number) => {
       const lib = new UserLibrary(getProjectRoot());
       return lib.getRecentlyPlayed(limit);
+    }
+  );
+
+  // --- Embedded overlay handlers ---
+
+  ipcMain.handle(
+    "launch-game-embedded",
+    async (_event: IpcMainInvokeEvent, rom: DiscoveredRom) => {
+      console.log("[ipc] launch-game-embedded called for:", rom.fileName);
+      const ov = getOrCreateOverlay();
+      if (!ov) {
+        return {
+          success: false,
+          emulatorId: "",
+          romPath: rom.filePath,
+          command: "",
+          error: "Main window not available",
+        };
+      }
+
+      const configManager = new ConfigManager(getProjectRoot());
+      const mapper = new EmulatorMapper(getEmulatorsPath());
+      const launcher = new GameLauncher(mapper);
+      const emulatorsPath = configManager.getEmulatorsPath();
+      const resolved = mapper.resolve(rom.systemId, emulatorsPath);
+
+      if (!resolved) {
+        return {
+          success: false,
+          emulatorId: "",
+          romPath: rom.filePath,
+          command: "",
+          error: `No emulator found for system "${rom.systemId}"`,
+        };
+      }
+
+      const result = await ov.launchEmbedded(
+        rom,
+        resolved,
+        launcher,
+        emulatorsPath
+      );
+
+      console.log("[ipc] launch-game-embedded result:", result.success, result.error || "");
+
+      if (result.success) {
+        const lib = new UserLibrary(getProjectRoot());
+        lib.recordPlay(rom.systemId, rom.fileName);
+      }
+
+      return result;
+    }
+  );
+
+  ipcMain.handle("stop-embedded-game", () => {
+    if (overlay) {
+      overlay.stopGame();
+    }
+  });
+
+  ipcMain.handle("is-game-running", () => {
+    return overlay?.isActive() ?? false;
+  });
+
+  ipcMain.handle(
+    "set-game-area-bounds",
+    (
+      _event: IpcMainInvokeEvent,
+      bounds: { x: number; y: number; width: number; height: number }
+    ) => {
+      if (overlay) {
+        overlay.setGameAreaBounds(bounds);
+      }
     }
   );
 }

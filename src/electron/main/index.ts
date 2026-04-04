@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, Menu } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
+import { isGameActive } from "./game-state.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,21 +61,28 @@ function createWindow(): void {
   ]);
   Menu.setApplicationMenu(menu);
 
-  // Register F10 globally when window is focused, unregister on blur
+  // F10 toggles fullscreen — register once, re-register on focus only if needed
+  const f10Handler = () => {
+    if (mainWindow) {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    }
+  };
+  globalShortcut.register("F10", f10Handler);
+
   mainWindow.on("focus", () => {
-    globalShortcut.register("F10", () => {
-      if (mainWindow) {
-        mainWindow.setFullScreen(!mainWindow.isFullScreen());
-      }
-    });
+    if (!globalShortcut.isRegistered("F10")) {
+      globalShortcut.register("F10", f10Handler);
+    }
   });
   mainWindow.on("blur", () => {
-    globalShortcut.unregister("F10");
+    if (!isGameActive()) {
+      globalShortcut.unregister("F10");
+    }
   });
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers();
+  registerIpcHandlers(() => mainWindow);
   createWindow();
 
   app.on("activate", () => {

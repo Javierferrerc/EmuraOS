@@ -25,7 +25,7 @@ export default defineConfig({
   plugins: [cjsPackageJson],
   build: {
     rollupOptions: {
-      external: ["electron"],
+      external: ["electron", "koffi"],
     },
   },
 });
