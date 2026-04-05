@@ -33,7 +33,7 @@ export function SystemSlider({
   return (
     <div
       ref={scrollRef}
-      className="slider-container hide-scrollbar flex overflow-x-auto px-5 py-3"
+      className="slider-container hide-scrollbar flex overflow-x-auto py-3"
     >
       {items.map((item, idx) => {
         const isActive = idx === activeIndex;

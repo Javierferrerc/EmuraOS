@@ -1,0 +1,550 @@
+{
+  "configFile": "ppsspp.ini",
+  "configFormat": "ini",
+  "configLocations": ["{emuDir}/memstick/PSP/SYSTEM/ppsspp.ini"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "General.AutoRun",
+          "label": "Auto Run",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically start emulation when loading a game"
+        },
+        {
+          "key": "General.ConfirmOnQuit",
+          "label": "Confirm on Quit",
+          "type": "boolean",
+          "default": "false",
+          "description": "Ask for confirmation when quitting"
+        },
+        {
+          "key": "General.CPUCore",
+          "label": "CPU Core",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Interpreter (slowest, most accurate)" },
+            { "value": "1", "label": "Dynarec (JIT) — recommended" },
+            { "value": "2", "label": "IR Interpreter" },
+            { "value": "3", "label": "IR JIT" }
+          ],
+          "description": "CPU emulation engine. JIT is fastest on most hardware."
+        },
+        {
+          "key": "General.RewindFlushFrequency",
+          "label": "Rewind Snapshot Frequency (s)",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 60,
+          "description": "How often to take rewind snapshots in seconds. 0 disables rewind."
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "Graphics.GraphicsBackend",
+          "label": "Rendering Backend",
+          "type": "enum",
+          "default": "4",
+          "options": [
+            { "value": "0", "label": "OpenGL" },
+            { "value": "2", "label": "Direct3D 9" },
+            { "value": "3", "label": "Direct3D 11" },
+            { "value": "4", "label": "Vulkan (recommended)" }
+          ],
+          "description": "Graphics API used for rendering. Restart required after change."
+        },
+        {
+          "key": "Graphics.RenderingMode",
+          "label": "Rendering Mode",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Skip buffered effects (fastest, broken)" },
+            { "value": "1", "label": "Buffered rendering (recommended)" },
+            { "value": "2", "label": "Read framebuffers to memory (CPU)" },
+            { "value": "3", "label": "Read framebuffers to memory (GPU)" }
+          ],
+          "description": "How framebuffers are handled. Buffered is correct for most games."
+        },
+        {
+          "key": "Graphics.SoftwareRendering",
+          "label": "Software Rendering",
+          "type": "boolean",
+          "default": "false",
+          "description": "Use CPU-based reference renderer. Very slow but extremely accurate."
+        },
+        {
+          "key": "Graphics.HardwareTransform",
+          "label": "Hardware Transform",
+          "type": "boolean",
+          "default": "true",
+          "description": "Perform vertex transformations on the GPU. Disable only for debugging."
+        },
+        {
+          "key": "Graphics.SoftwareSkinning",
+          "label": "Software Skinning",
+          "type": "boolean",
+          "default": "true",
+          "description": "Do skeletal mesh animation on the CPU. Usually faster overall."
+        },
+        {
+          "key": "Graphics.VertexDecJit",
+          "label": "Vertex Decoder JIT",
+          "type": "boolean",
+          "default": "true",
+          "description": "Compile vertex decoders at runtime for better performance"
+        },
+
+        {
+          "key": "Graphics.InternalResolution",
+          "label": "Rendering Resolution",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Auto (display resolution)" },
+            { "value": "1", "label": "1x PSP (480x272)" },
+            { "value": "2", "label": "2x PSP (960x544)" },
+            { "value": "3", "label": "3x PSP (1440x816)" },
+            { "value": "4", "label": "4x PSP (1920x1088) — 1080p" },
+            { "value": "5", "label": "5x PSP (2400x1360)" },
+            { "value": "6", "label": "6x PSP (2880x1632)" },
+            { "value": "7", "label": "7x PSP (3360x1904)" },
+            { "value": "8", "label": "8x PSP (3840x2176) — 4K" },
+            { "value": "9", "label": "9x PSP (4320x2448)" },
+            { "value": "10", "label": "10x PSP (4800x2720)" }
+          ],
+          "description": "Internal render resolution. Higher is sharper but costs GPU performance."
+        },
+        {
+          "key": "Graphics.DisplayResolution",
+          "label": "Output Resolution",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Auto (match rendering)" },
+            { "value": "1", "label": "1x PSP" },
+            { "value": "2", "label": "2x PSP" },
+            { "value": "3", "label": "3x PSP" },
+            { "value": "4", "label": "4x PSP (1080p)" },
+            { "value": "5", "label": "5x PSP" }
+          ],
+          "description": "Final display downsample target. Leave on Auto in most cases."
+        },
+
+        {
+          "key": "Graphics.FullScreen",
+          "label": "Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Launch PPSSPP in fullscreen mode"
+        },
+        {
+          "key": "Graphics.SmallDisplayZoomType",
+          "label": "Screen Scaling",
+          "type": "enum",
+          "default": "2",
+          "options": [
+            { "value": "0", "label": "Stretch to fit" },
+            { "value": "1", "label": "Partial stretch (preserve aspect)" },
+            { "value": "2", "label": "Auto scaling (recommended)" },
+            { "value": "3", "label": "Manual scaling" }
+          ],
+          "description": "How the PSP image fits the window"
+        },
+        {
+          "key": "Graphics.StretchToDisplay",
+          "label": "Stretch to Display",
+          "type": "boolean",
+          "default": "false",
+          "description": "Force the image to fill the entire window (distorts aspect ratio)"
+        },
+        {
+          "key": "Graphics.PartialStretch",
+          "label": "Partial Stretch (16:9)",
+          "type": "boolean",
+          "default": "false",
+          "description": "Stretch horizontally to 16:9 while keeping vertical proportions"
+        },
+        {
+          "key": "Graphics.DisplayAspectRatio",
+          "label": "Display Aspect Ratio",
+          "type": "number",
+          "default": "1",
+          "min": 0,
+          "max": 2,
+          "description": "Manual aspect ratio scale. Only used with Manual scaling mode."
+        },
+
+        {
+          "key": "Graphics.VSync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable vertical sync to eliminate tearing. Adds a frame of latency."
+        },
+        {
+          "key": "Graphics.FrameSkip",
+          "label": "Frame Skipping",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Off" },
+            { "value": "1", "label": "1 frame" },
+            { "value": "2", "label": "2 frames" },
+            { "value": "3", "label": "3 frames" },
+            { "value": "4", "label": "4 frames" },
+            { "value": "5", "label": "5 frames" },
+            { "value": "6", "label": "6 frames" },
+            { "value": "7", "label": "7 frames" },
+            { "value": "8", "label": "8 frames" }
+          ],
+          "description": "Skip rendering N frames out of every group. Helps slow games run full speed."
+        },
+        {
+          "key": "Graphics.FrameSkipType",
+          "label": "Frame Skip Type",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Number of frames" },
+            { "value": "1", "label": "Percent of FPS" }
+          ],
+          "description": "Whether the Frame Skipping value is a count or a target percentage"
+        },
+        {
+          "key": "Graphics.AutoFrameSkip",
+          "label": "Auto Frame Skip",
+          "type": "boolean",
+          "default": "false",
+          "description": "Automatically skip frames when the emulator falls behind"
+        },
+        {
+          "key": "Graphics.ForceMaxEmulatedFPS",
+          "label": "Force Max Emulated FPS",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Disabled (native PSP speed)" },
+            { "value": "15", "label": "15 FPS" },
+            { "value": "30", "label": "30 FPS" },
+            { "value": "45", "label": "45 FPS" },
+            { "value": "60", "label": "60 FPS" },
+            { "value": "75", "label": "75 FPS" },
+            { "value": "90", "label": "90 FPS" },
+            { "value": "120", "label": "120 FPS" }
+          ],
+          "description": "Cap emulation speed. 0 uses the game's native framerate."
+        },
+
+        {
+          "key": "Graphics.TextureFiltering",
+          "label": "Texture Filtering",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "1", "label": "Auto" },
+            { "value": "2", "label": "Nearest (pixelated)" },
+            { "value": "3", "label": "Linear (smooth)" },
+            { "value": "4", "label": "Auto Max Quality" }
+          ],
+          "description": "In-game texture filter mode"
+        },
+        {
+          "key": "Graphics.AnisotropyLevel",
+          "label": "Anisotropic Filtering",
+          "type": "enum",
+          "default": "4",
+          "options": [
+            { "value": "0", "label": "Off" },
+            { "value": "1", "label": "2x" },
+            { "value": "2", "label": "4x" },
+            { "value": "3", "label": "8x" },
+            { "value": "4", "label": "16x" }
+          ],
+          "description": "Sharpens textures viewed at steep angles"
+        },
+        {
+          "key": "Graphics.MultiSampleLevel",
+          "label": "Antialiasing (MSAA)",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Off" },
+            { "value": "1", "label": "2x" },
+            { "value": "2", "label": "4x" },
+            { "value": "3", "label": "8x" }
+          ],
+          "description": "Multisample antialiasing. Vulkan/D3D11 only."
+        },
+        {
+          "key": "Graphics.TextureScalingLevel",
+          "label": "Texture Upscaling",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Off" },
+            { "value": "1", "label": "Auto" },
+            { "value": "2", "label": "2x" },
+            { "value": "3", "label": "3x" },
+            { "value": "4", "label": "4x" },
+            { "value": "5", "label": "5x" }
+          ],
+          "description": "Upscale original textures at runtime"
+        },
+        {
+          "key": "Graphics.TextureScalingType",
+          "label": "Texture Upscaling Type",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "xBRZ" },
+            { "value": "1", "label": "Hybrid" },
+            { "value": "2", "label": "Bicubic" },
+            { "value": "3", "label": "Hybrid + Bicubic" }
+          ],
+          "description": "Algorithm used when Texture Upscaling is active"
+        },
+        {
+          "key": "Graphics.TextureDeposterize",
+          "label": "Deposterize Textures",
+          "type": "boolean",
+          "default": "false",
+          "description": "Smooth color bands in upscaled textures"
+        },
+        {
+          "key": "Graphics.MipMap",
+          "label": "Mipmapping",
+          "type": "boolean",
+          "default": "true",
+          "description": "Use mip levels for better quality on distant surfaces"
+        },
+
+        {
+          "key": "Graphics.PostShader1",
+          "label": "Post-Processing Shader",
+          "type": "string",
+          "default": "Off",
+          "description": "Name of a post-processing shader (e.g. FXAA, CRT, LCD). Use 'Off' to disable."
+        },
+        {
+          "key": "Graphics.ShowFPSCounter",
+          "label": "Show FPS Counter",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Off" },
+            { "value": "1", "label": "Speed %" },
+            { "value": "2", "label": "FPS" },
+            { "value": "3", "label": "Both speed and FPS" },
+            { "value": "4", "label": "Frame timing" }
+          ],
+          "description": "On-screen performance overlay"
+        }
+      ]
+    },
+    {
+      "id": "system",
+      "name": "System",
+      "settings": [
+        {
+          "key": "SystemParam.PSPModel",
+          "label": "PSP Model",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "PSP-1000 (32 MB RAM)" },
+            { "value": "1", "label": "PSP-2000/3000 (64 MB RAM)" }
+          ],
+          "description": "Some games require the newer PSP-2000/3000 model to run."
+        },
+        {
+          "key": "SystemParam.NickName",
+          "label": "Nickname",
+          "type": "string",
+          "default": "PPSSPP",
+          "description": "User nickname shown in games that read it"
+        },
+        {
+          "key": "SystemParam.Language",
+          "label": "System Language",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Japanese" },
+            { "value": "1", "label": "English" },
+            { "value": "2", "label": "French" },
+            { "value": "3", "label": "Spanish" },
+            { "value": "4", "label": "German" },
+            { "value": "5", "label": "Italian" },
+            { "value": "6", "label": "Dutch" },
+            { "value": "7", "label": "Portuguese" },
+            { "value": "8", "label": "Russian" },
+            { "value": "9", "label": "Korean" },
+            { "value": "10", "label": "Chinese (Traditional)" },
+            { "value": "11", "label": "Chinese (Simplified)" }
+          ],
+          "description": "System language reported to games"
+        },
+        {
+          "key": "SystemParam.ButtonPreference",
+          "label": "Confirm Button",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Circle (Japan)" },
+            { "value": "1", "label": "Cross (Western)" }
+          ],
+          "description": "Which face button is used to confirm in-game menus"
+        },
+        {
+          "key": "SystemParam.TimeFormat",
+          "label": "Time Format",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "24-hour" },
+            { "value": "1", "label": "12-hour" }
+          ],
+          "description": "Clock format reported to games"
+        },
+        {
+          "key": "SystemParam.DateFormat",
+          "label": "Date Format",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "YYYY/MM/DD" },
+            { "value": "1", "label": "MM/DD/YYYY" },
+            { "value": "2", "label": "DD/MM/YYYY" }
+          ],
+          "description": "Date format reported to games"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "Sound.Enable",
+          "label": "Enable Audio",
+          "type": "boolean",
+          "default": "true",
+          "description": "Master audio on/off"
+        },
+        {
+          "key": "Sound.AudioBackend",
+          "label": "Audio Backend",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Auto" },
+            { "value": "1", "label": "DirectSound" },
+            { "value": "2", "label": "WASAPI" }
+          ],
+          "description": "Windows audio output API"
+        },
+        {
+          "key": "Sound.AudioLatency",
+          "label": "Audio Latency",
+          "type": "enum",
+          "default": "1",
+          "options": [
+            { "value": "0", "label": "Low (may crackle)" },
+            { "value": "1", "label": "Medium (recommended)" },
+            { "value": "2", "label": "High (safe)" }
+          ],
+          "description": "Trade latency for stability"
+        },
+        {
+          "key": "Sound.GlobalVolume",
+          "label": "Master Volume",
+          "type": "number",
+          "default": "10",
+          "min": 0,
+          "max": 10,
+          "description": "Global audio volume (0–10)"
+        },
+        {
+          "key": "Sound.ReverbVolume",
+          "label": "Reverb Volume",
+          "type": "number",
+          "default": "10",
+          "min": 0,
+          "max": 10,
+          "description": "Volume of reverb effects (0–10)"
+        },
+        {
+          "key": "Sound.AltSpeedVolume",
+          "label": "Alt Speed Volume",
+          "type": "number",
+          "default": "-1",
+          "min": -1,
+          "max": 10,
+          "description": "Volume when using alt speed. -1 mutes, 0–10 sets a level."
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "name": "Controls",
+      "settings": [
+        {
+          "key": "Control.ShowTouchControls",
+          "label": "Show On-Screen Controls",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display the touch/virtual controls overlay"
+        },
+        {
+          "key": "Control.HapticFeedback",
+          "label": "Haptic Feedback",
+          "type": "boolean",
+          "default": "false",
+          "description": "Vibrate on virtual button presses (mobile/controllers with rumble)"
+        },
+        {
+          "key": "Control.AnalogLimiterDeadzone",
+          "label": "Analog Deadzone",
+          "type": "number",
+          "default": "0.6",
+          "min": 0,
+          "max": 1,
+          "description": "Minimum stick deflection before input registers (0.0–1.0)"
+        },
+        {
+          "key": "Control.UseMouse",
+          "label": "Use Mouse as Input",
+          "type": "boolean",
+          "default": "false",
+          "description": "Treat mouse movement as right-analog input"
+        },
+        {
+          "key": "Control.MouseConfine",
+          "label": "Confine Mouse to Window",
+          "type": "boolean",
+          "default": "false",
+          "description": "Lock the mouse cursor to the PPSSPP window"
+        },
+        {
+          "key": "Control.MouseSensitivity",
+          "label": "Mouse Sensitivity",
+          "type": "number",
+          "default": "1",
+          "min": 0,
+          "max": 10,
+          "description": "Mouse-to-analog sensitivity multiplier"
+        }
+      ]
+    }
+  ]
+}

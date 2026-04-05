@@ -17,9 +17,14 @@ export function GameModeView() {
     });
   }, []);
 
-  // Escape key exits fullscreen
+  // F10 toggles fullscreen, Escape exits fullscreen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F10") {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
       if (e.key === "Escape" && isFullscreen) {
         toggleFullscreen();
       }

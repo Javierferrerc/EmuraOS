@@ -1,0 +1,112 @@
+.virtual-keyboard {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  padding: 20px 16px 24px;
+  background: rgba(12, 15, 22, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.45);
+  animation: vk-slide-up 180ms ease-out;
+}
+
+@keyframes vk-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.virtual-keyboard-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vk-row {
+  display: flex;
+  gap: 8px;
+}
+
+.vk-char-row .vk-key {
+  flex: 1 1 0;
+}
+
+.vk-action-row .vk-key-shift {
+  flex: 2 1 0;
+}
+
+.vk-action-row .vk-key-space {
+  flex: 4 1 0;
+}
+
+.vk-action-row .vk-key-backspace {
+  flex: 2 1 0;
+}
+
+.vk-action-row .vk-key-done {
+  flex: 2 1 0;
+}
+
+.vk-key {
+  height: 52px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  font-size: 16px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s,
+    border-color 0.15s;
+  user-select: none;
+}
+
+.vk-key:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.vk-key-focused {
+  background: rgba(59, 130, 246, 0.35);
+  border-color: rgba(96, 165, 250, 0.9);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.65),
+    0 0 18px rgba(59, 130, 246, 0.4);
+  transform: scale(1.06);
+  color: #ffffff;
+}
+
+.vk-key-active {
+  background: rgba(59, 130, 246, 0.5);
+  border-color: rgba(96, 165, 250, 0.95);
+}
+
+.vk-key-done {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+
+.vk-key-done.vk-key-focused {
+  background: rgba(34, 197, 94, 0.45);
+  border-color: rgba(74, 222, 128, 0.9);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6),
+    0 0 18px rgba(34, 197, 94, 0.4);
+  color: #ffffff;
+}
+
+.vk-hint {
+  margin-top: 6px;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.03em;
+}

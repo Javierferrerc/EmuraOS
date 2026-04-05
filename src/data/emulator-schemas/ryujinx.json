@@ -1,0 +1,160 @@
+{
+  "configFile": "Config.json",
+  "configFormat": "json",
+  "configLocations": ["{appdata}/Ryujinx/Config.json"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "enable_discord_integration",
+          "label": "Discord Integration",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable Discord Rich Presence integration"
+        },
+        {
+          "key": "check_updates_on_start",
+          "label": "Check Updates on Start",
+          "type": "boolean",
+          "default": "true",
+          "description": "Check for emulator updates on startup"
+        },
+        {
+          "key": "show_confirm_exit",
+          "label": "Confirm Exit",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show confirmation dialog when exiting"
+        },
+        {
+          "key": "enable_vsync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "enable_fs_integrity_checks",
+          "label": "FS Integrity Checks",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable file system integrity checks"
+        },
+        {
+          "key": "system_language",
+          "label": "System Language",
+          "type": "enum",
+          "default": "AmericanEnglish",
+          "options": [
+            "Japanese",
+            "AmericanEnglish",
+            "French",
+            "German",
+            "Italian",
+            "Spanish",
+            "Chinese",
+            "Korean",
+            "Dutch",
+            "Portuguese",
+            "Russian",
+            "Taiwanese",
+            "BritishEnglish"
+          ],
+          "description": "Emulated system language"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "graphics_backend",
+          "label": "Graphics Backend",
+          "type": "enum",
+          "default": "Vulkan",
+          "options": ["Vulkan", "OpenGl"],
+          "description": "Graphics rendering backend"
+        },
+        {
+          "key": "res_scale",
+          "label": "Resolution Scale",
+          "type": "number",
+          "default": "1",
+          "min": 1,
+          "max": 4,
+          "description": "Internal rendering resolution scale"
+        },
+        {
+          "key": "max_anisotropy",
+          "label": "Max Anisotropy",
+          "type": "enum",
+          "default": "-1",
+          "options": ["-1", "2", "4", "8", "16"],
+          "description": "-1=Auto"
+        },
+        {
+          "key": "aspect_ratio",
+          "label": "Aspect Ratio",
+          "type": "enum",
+          "default": "Fixed16x9",
+          "options": ["Fixed16x9", "Fixed4x3", "Fixed21x9", "Stretched"],
+          "description": "Display aspect ratio"
+        },
+        {
+          "key": "anti_aliasing",
+          "label": "Anti-Aliasing",
+          "type": "enum",
+          "default": "None",
+          "options": ["None", "Fxaa", "SmaaLow", "SmaaMedium", "SmaaHigh", "SmaaUltra"],
+          "description": "Anti-aliasing method"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "audio_backend",
+          "label": "Audio Backend",
+          "type": "enum",
+          "default": "SDL2",
+          "options": ["SDL2", "SoundIo", "OpenAL"],
+          "description": "Audio output backend"
+        },
+        {
+          "key": "audio_volume",
+          "label": "Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 100,
+          "description": "Audio output volume percentage"
+        }
+      ]
+    },
+    {
+      "id": "input",
+      "name": "Input",
+      "settings": [
+        {
+          "key": "enable_keyboard",
+          "label": "Enable Keyboard",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable keyboard input"
+        },
+        {
+          "key": "enable_mouse",
+          "label": "Enable Mouse",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable mouse input"
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 import { useMemo, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { GameCard } from "./GameCard";
+import { resolveSystemMembers } from "../utils/systemGroups";
 import type { DiscoveredRom } from "../../../core/types";
 import "./GameGrid.css";
 
 const MIN_CARD_WIDTH = 292;
+const GRID_GAP = 32;
 
 interface GameGridProps {
   focusedIndex?: number;
@@ -30,7 +32,11 @@ export function GameGrid({
     collections,
   } = useApp();
 
-  const gridRef = useRef<HTMLDivElement>(null);
+  // Mutable ref to the current grid element (used for scroll-into-view).
+  const gridElRef = useRef<HTMLDivElement | null>(null);
+  // Holds the active ResizeObserver so we can disconnect it when the element
+  // changes or unmounts.
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   const allRoms = useMemo(() => {
     if (!scanResult) return [];
@@ -57,9 +63,17 @@ export function GameGrid({
       case "all":
         roms = [...allRoms];
         break;
-      case "system":
-        roms = allRoms.filter((r) => r.systemId === activeFilter.systemId);
+      case "system": {
+        // activeFilter.systemId may be a real systemId (e.g. "nes") or a
+        // virtual group id (e.g. "gameboy"). resolveSystemMembers returns
+        // the list of real systems to include in either case.
+        const members = resolveSystemMembers(activeFilter.systemId);
+        roms =
+          members.length === 1
+            ? allRoms.filter((r) => r.systemId === members[0])
+            : allRoms.filter((r) => members.includes(r.systemId));
         break;
+      }
       case "favorites": {
         roms = [];
         for (const key of favorites) {
@@ -129,28 +143,55 @@ export function GameGrid({
     onItemCountChange?.(filteredRoms.length);
   }, [filteredRoms.length, onItemCountChange]);
 
-  // ResizeObserver to compute column count
-  const computeColumns = useCallback(() => {
-    if (!gridRef.current) return;
-    const width = gridRef.current.clientWidth;
-    const gap = 32;
-    const cols = Math.max(1, Math.floor((width + gap) / (MIN_CARD_WIDTH + gap)));
-    onColumnCountChange?.(cols);
-  }, [onColumnCountChange]);
+  // Callback ref: attaches a ResizeObserver whenever the grid div is
+  // mounted (or re-mounted — the `key={filterKey}` below forces a remount
+  // on every filter change). A plain useRef + useEffect would only attach
+  // once, causing gridColumnCount to stay stuck at its initial value after
+  // the first filter change. That breaks vertical gamepad navigation
+  // (MOVE_UP/MOVE_DOWN step by the wrong amount → diagonal jumps).
+  const setGridRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      // Tear down any previous observer before re-binding.
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+      gridElRef.current = el;
+      if (!el) return;
 
+      const compute = () => {
+        const width = el.clientWidth;
+        const cols = Math.max(
+          1,
+          Math.floor((width + GRID_GAP) / (MIN_CARD_WIDTH + GRID_GAP))
+        );
+        onColumnCountChange?.(cols);
+      };
+
+      const observer = new ResizeObserver(compute);
+      observer.observe(el);
+      observerRef.current = observer;
+      // Prime the count synchronously so the focus manager has the right
+      // column count on first paint.
+      compute();
+    },
+    [onColumnCountChange]
+  );
+
+  // Disconnect observer on unmount.
   useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(computeColumns);
-    observer.observe(el);
-    computeColumns();
-    return () => observer.disconnect();
-  }, [computeColumns]);
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+    };
+  }, []);
 
   // Scroll focused card into view
   useEffect(() => {
     if (focusedIndex < 0 || !focusActive) return;
-    const el = gridRef.current?.querySelector(
+    const el = gridElRef.current?.querySelector(
       `[data-grid-index="${focusedIndex}"]`
     );
     if (el) {
@@ -208,9 +249,9 @@ export function GameGrid({
   return (
     <div
       key={filterKey}
-      ref={gridRef}
+      ref={setGridRef}
       className="grid grid-cols-[repeat(auto-fill,minmax(292px,1fr))] pt-10"
-      style={{ gap: "32px" }}
+      style={{ gap: `${GRID_GAP}px` }}
     >
       {filteredRoms.map((rom, idx) => (
         <div

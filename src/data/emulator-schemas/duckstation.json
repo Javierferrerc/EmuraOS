@@ -1,0 +1,141 @@
+{
+  "configFile": "settings.ini",
+  "configFormat": "ini",
+  "configLocations": ["{emuDir}/settings.ini", "{docs}/DuckStation/settings.ini"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "Main.ConfirmPowerOff",
+          "label": "Confirm Power Off",
+          "type": "boolean",
+          "default": "true",
+          "description": "Ask for confirmation when powering off"
+        },
+        {
+          "key": "Main.SaveStateOnExit",
+          "label": "Save State on Exit",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically save state when exiting"
+        },
+        {
+          "key": "Main.StartFullscreen",
+          "label": "Start Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Start in fullscreen mode"
+        },
+        {
+          "key": "Console.Region",
+          "label": "Console Region",
+          "type": "enum",
+          "default": "Auto",
+          "options": ["Auto", "NTSC-U", "NTSC-J", "PAL"],
+          "description": "Emulated console region"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "GPU.Renderer",
+          "label": "GPU Renderer",
+          "type": "enum",
+          "default": "Vulkan",
+          "options": ["Vulkan", "D3D11", "D3D12", "OpenGL", "Software"],
+          "description": "GPU rendering backend"
+        },
+        {
+          "key": "GPU.ResolutionScale",
+          "label": "Resolution Scale",
+          "type": "enum",
+          "default": "1",
+          "options": ["1", "2", "3", "4", "5", "6", "7", "8"],
+          "description": "Internal rendering resolution multiplier"
+        },
+        {
+          "key": "GPU.TextureFilter",
+          "label": "Texture Filter",
+          "type": "enum",
+          "default": "Nearest",
+          "options": [
+            "Nearest",
+            "Bilinear",
+            "BilinearBinAlpha",
+            "JINC2",
+            "JINC2BinAlpha",
+            "xBR",
+            "xBRBinAlpha"
+          ],
+          "description": "Texture filtering method"
+        },
+        {
+          "key": "GPU.VSync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "GPU.TrueColor",
+          "label": "True Color",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable true color rendering (disables dithering)"
+        },
+        {
+          "key": "GPU.MSAA",
+          "label": "Anti-Aliasing (MSAA)",
+          "type": "enum",
+          "default": "1",
+          "options": ["1", "2", "4", "8"],
+          "description": "Multisample anti-aliasing level"
+        },
+        {
+          "key": "GPU.WidescreenHack",
+          "label": "Widescreen Hack",
+          "type": "boolean",
+          "default": "false",
+          "description": "Force widescreen rendering"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "Audio.Backend",
+          "label": "Audio Backend",
+          "type": "enum",
+          "default": "Cubeb",
+          "options": ["Cubeb", "XAudio2", "SDL", "Null"],
+          "description": "Audio output backend"
+        },
+        {
+          "key": "Audio.OutputVolume",
+          "label": "Output Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 200,
+          "description": "Audio output volume percentage"
+        },
+        {
+          "key": "Audio.BufferMS",
+          "label": "Buffer Size (ms)",
+          "type": "number",
+          "default": "50",
+          "min": 10,
+          "max": 500,
+          "description": "Audio buffer size in milliseconds"
+        }
+      ]
+    }
+  ]
+}

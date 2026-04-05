@@ -23,6 +23,9 @@ import type {
   ReadinessReport,
   Collection,
   PlayRecord,
+  EmulatorDefinition,
+  DriveEmulatorMapping,
+  EmulatorDownloadProgress,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -39,7 +42,7 @@ interface AppState {
   activeFilter: ActiveFilter;
   searchQuery: string;
   isLoading: boolean;
-  currentView: "library" | "settings" | "game";
+  currentView: "library" | "settings" | "emulator-config" | "game";
   isGameRunning: boolean;
   currentGame: GameSessionEvent | null;
   lastDetection: DetectionResult | null;
@@ -60,12 +63,20 @@ interface AppState {
   isDetectingEmulators: boolean;
   coreDownloadProgress: CoreDownloadProgress | null;
   readinessReport: ReadinessReport | null;
+  pendingCemuKeysLaunch: DiscoveredRom | null;
+  isCemuKeysModalOpen: boolean;
+  showCemuKeysError: boolean;
+  emulatorDefs: EmulatorDefinition[];
+  driveEmulators: Record<string, DriveEmulatorMapping>;
+  isLoadingDrive: boolean;
+  downloadingEmulatorId: string | null;
+  emulatorDownloadProgress: EmulatorDownloadProgress | null;
 }
 
 interface AppActions {
   setActiveFilter: (filter: ActiveFilter) => void;
   setSearchQuery: (query: string) => void;
-  setCurrentView: (view: "library" | "settings" | "game") => void;
+  setCurrentView: (view: "library" | "settings" | "emulator-config" | "game") => void;
   stopGame: () => Promise<void>;
   refreshScan: () => Promise<void>;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
@@ -95,6 +106,15 @@ interface AppActions {
   ) => Promise<void>;
   toggleFullscreen: () => void;
   setGamepadConnected: (connected: boolean) => void;
+  submitCemuKeys: (content: string) => Promise<void>;
+  cancelCemuKeys: () => void;
+  openCemuKeysModal: () => void;
+  goToCemuKeysSettings: () => void;
+  dismissCemuKeysError: () => void;
+  refreshDriveEmulators: (forceRefresh?: boolean) => Promise<void>;
+  downloadEmulator: (
+    emulatorId: string
+  ) => Promise<{ success: boolean; installPath: string; error?: string }>;
 }
 
 type AppContextType = AppState & AppActions;
@@ -111,7 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<
-    "library" | "settings" | "game"
+    "library" | "settings" | "emulator-config" | "game"
   >("library");
   const [isGameRunning, setIsGameRunning] = useState(false);
   const [currentGame, setCurrentGame] = useState<GameSessionEvent | null>(null);
@@ -147,6 +167,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<CoreDownloadProgress | null>(null);
   const [readinessReport, setReadinessReport] =
     useState<ReadinessReport | null>(null);
+  const [pendingCemuKeysLaunch, setPendingCemuKeysLaunch] =
+    useState<DiscoveredRom | null>(null);
+  const [isCemuKeysModalOpen, setIsCemuKeysModalOpen] = useState(false);
+  const [showCemuKeysError, setShowCemuKeysError] = useState(false);
+  const [emulatorDefs, setEmulatorDefs] = useState<EmulatorDefinition[]>([]);
+  const [driveEmulators, setDriveEmulators] = useState<
+    Record<string, DriveEmulatorMapping>
+  >({});
+  const [isLoadingDrive, setIsLoadingDrive] = useState(false);
+  const [downloadingEmulatorId, setDownloadingEmulatorId] = useState<
+    string | null
+  >(null);
+  const [emulatorDownloadProgress, setEmulatorDownloadProgress] =
+    useState<EmulatorDownloadProgress | null>(null);
+
+  // Load emulator definitions once on mount.
+  useEffect(() => {
+    window.electronAPI
+      .getEmulatorDefs()
+      .then(setEmulatorDefs)
+      .catch((err) => console.error("Failed to load emulator defs:", err));
+  }, []);
 
   // Fullscreen sync
   useEffect(() => {
@@ -289,6 +331,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshDriveEmulators = useCallback(
+    async (forceRefresh = false) => {
+      setIsLoadingDrive(true);
+      try {
+        const map =
+          await window.electronAPI.listDriveEmulators(forceRefresh);
+        setDriveEmulators(map);
+      } catch (err) {
+        console.error("Failed to list Drive emulators:", err);
+      } finally {
+        setIsLoadingDrive(false);
+      }
+    },
+    []
+  );
+
   const detectEmulators = useCallback(async () => {
     setIsDetectingEmulators(true);
     setCoreDownloadProgress(null);
@@ -299,18 +357,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     try {
-      const result = await window.electronAPI.detectEmulators();
+      // Run local detection and Drive listing together — one click should
+      // answer both "is it installed locally?" and "is there a downloadable
+      // copy on Drive?". Drive listing is force-refreshed so the cache is
+      // bypassed and the user always sees the latest Drive state.
+      setIsLoadingDrive(true);
+      const [result, driveMap] = await Promise.all([
+        window.electronAPI.detectEmulators(),
+        window.electronAPI
+          .listDriveEmulators(true)
+          .catch((err) => {
+            console.error("Failed to list Drive emulators:", err);
+            return {} as Record<string, DriveEmulatorMapping>;
+          }),
+      ]);
       setLastDetection(result);
       if (result.readiness) {
         setReadinessReport(result.readiness);
       }
+      setDriveEmulators(driveMap);
     } catch (err) {
       console.error("Failed to detect emulators:", err);
     } finally {
       setIsDetectingEmulators(false);
+      setIsLoadingDrive(false);
       window.electronAPI.removeCoreDownloadProgressListener();
     }
   }, []);
+
+  const downloadEmulatorAction = useCallback(
+    async (emulatorId: string) => {
+      setDownloadingEmulatorId(emulatorId);
+      setEmulatorDownloadProgress(null);
+      const unsubscribe = window.electronAPI.onEmulatorDownloadProgress(
+        (p) => setEmulatorDownloadProgress(p)
+      );
+      try {
+        const result =
+          await window.electronAPI.downloadEmulator(emulatorId);
+        if (result.success) {
+          // Re-run detection so the emulator flips from "Available" to
+          // "Installed" in the UI.
+          await detectEmulators();
+        }
+        return result;
+      } finally {
+        unsubscribe();
+        setDownloadingEmulatorId(null);
+        setEmulatorDownloadProgress(null);
+      }
+    },
+    [detectEmulators]
+  );
 
   const updatePlayStats = useCallback((rom: DiscoveredRom) => {
     const key = `${rom.systemId}:${rom.fileName}`;
@@ -339,7 +437,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [updatePlayStats]
   );
 
-  const launchGame = useCallback(
+  const doLaunch = useCallback(
     async (rom: DiscoveredRom) => {
       // Try embedded overlay first
       try {
@@ -368,6 +466,67 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [updatePlayStats, fallbackLaunch]
   );
+
+  const launchGame = useCallback(
+    async (rom: DiscoveredRom) => {
+      // Wii U: verify Cemu keys.txt exists before launching. If missing,
+      // stop here and show an explanatory error modal with a button that
+      // directs the user to Settings, where they can paste the keys. The
+      // rom is stashed in `pendingCemuKeysLaunch` so the paste-modal submit
+      // handler can auto-launch it once keys are saved.
+      if (rom.systemId === "wiiu") {
+        try {
+          const status = await window.electronAPI.checkCemuKeys();
+          if (status.emulatorFound && !status.exists) {
+            setPendingCemuKeysLaunch(rom);
+            setShowCemuKeysError(true);
+            return;
+          }
+        } catch (err) {
+          console.warn("Failed to check Cemu keys:", err);
+        }
+      }
+
+      await doLaunch(rom);
+    },
+    [doLaunch]
+  );
+
+  const submitCemuKeys = useCallback(
+    async (content: string) => {
+      await window.electronAPI.writeCemuKeys(content);
+      const rom = pendingCemuKeysLaunch;
+      setPendingCemuKeysLaunch(null);
+      setIsCemuKeysModalOpen(false);
+      setShowCemuKeysError(false);
+      if (rom) {
+        await doLaunch(rom);
+      }
+    },
+    [pendingCemuKeysLaunch, doLaunch]
+  );
+
+  const cancelCemuKeys = useCallback(() => {
+    setPendingCemuKeysLaunch(null);
+    setIsCemuKeysModalOpen(false);
+    setShowCemuKeysError(false);
+  }, []);
+
+  const openCemuKeysModal = useCallback(() => {
+    setIsCemuKeysModalOpen(true);
+  }, []);
+
+  const goToCemuKeysSettings = useCallback(() => {
+    // Keep pendingCemuKeysLaunch so the game auto-launches after the user
+    // pastes the keys in Settings.
+    setShowCemuKeysError(false);
+    setCurrentView("settings");
+  }, []);
+
+  const dismissCemuKeysError = useCallback(() => {
+    setShowCemuKeysError(false);
+    setPendingCemuKeysLaunch(null);
+  }, []);
 
   const loadAllMetadata = useCallback(async () => {
     try {
@@ -426,7 +585,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const getMetadataForRom = useCallback(
     (systemId: string, romFileName: string): GameMetadata | null => {
-      return metadataMap[systemId]?.[romFileName] ?? null;
+      // Metadata cache is keyed by basename (no extension) so that
+      // Silent Hill.bin / Silent Hill.cue / Silent Hill.chd share
+      // the same metadata entry.
+      const lastDot = romFileName.lastIndexOf(".");
+      const key = lastDot > 0 ? romFileName.substring(0, lastDot) : romFileName;
+      return metadataMap[systemId]?.[key] ?? null;
     },
     [metadataMap]
   );
@@ -589,6 +753,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isDetectingEmulators,
     coreDownloadProgress,
     readinessReport,
+    pendingCemuKeysLaunch,
+    isCemuKeysModalOpen,
+    showCemuKeysError,
+    emulatorDefs,
+    driveEmulators,
+    isLoadingDrive,
+    downloadingEmulatorId,
+    emulatorDownloadProgress,
     setActiveFilter,
     setSearchQuery,
     setCurrentView,
@@ -610,6 +782,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeFromCollection: removeFromCollectionAction,
     toggleFullscreen,
     setGamepadConnected,
+    submitCemuKeys,
+    cancelCemuKeys,
+    openCemuKeysModal,
+    goToCemuKeysSettings,
+    dismissCemuKeysError,
+    refreshDriveEmulators,
+    downloadEmulator: downloadEmulatorAction,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

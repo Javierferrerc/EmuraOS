@@ -16,6 +16,10 @@ import type {
   ReadinessReport,
   UserLibraryFile,
   Collection,
+  EmulatorConfigData,
+  EmulatorDefinition,
+  DriveEmulatorMapping,
+  EmulatorDownloadProgress,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -84,6 +88,40 @@ export interface ElectronAPI {
   removeGameSessionStartedListener(): void;
   onGameSessionEnded(callback: () => void): void;
   removeGameSessionEndedListener(): void;
+
+  // Emulator config
+  getEmulatorConfig(
+    emulatorId: string,
+    executablePath?: string
+  ): Promise<EmulatorConfigData>;
+  updateEmulatorConfig(
+    emulatorId: string,
+    changes: Record<string, string>,
+    executablePath?: string
+  ): Promise<void>;
+  getEmulatorSchemas(): Promise<string[]>;
+  openConfigFile(emulatorId: string, executablePath?: string): Promise<void>;
+
+  // Cemu keys.txt
+  checkCemuKeys(): Promise<{
+    emulatorFound: boolean;
+    exists: boolean;
+    path: string | null;
+    entryCount: number;
+  }>;
+  writeCemuKeys(content: string): Promise<{ path: string }>;
+
+  // Emulator downloads (Google Drive)
+  getEmulatorDefs(): Promise<EmulatorDefinition[]>;
+  listDriveEmulators(
+    forceRefresh?: boolean
+  ): Promise<Record<string, DriveEmulatorMapping>>;
+  downloadEmulator(
+    emulatorId: string
+  ): Promise<{ success: boolean; installPath: string; error?: string }>;
+  onEmulatorDownloadProgress(
+    callback: (progress: EmulatorDownloadProgress) => void
+  ): () => void;
 }
 
 declare global {
