@@ -6,6 +6,17 @@ import selectSound from "../assets/sounds/select.wav";
 const NAV_VOLUME = 0.3;
 const NAV_FADE_OUT_MS = 120; // fade-out when a new navigate interrupts
 const SELECT_VOLUME = 0.4;
+
+// Virtual keyboard click feedback. Reuses the navigate sample so the
+// keyboard feels consistent with the rest of the app's audio, applying
+// playback-rate and volume variations so different interactions still
+// feel distinct.
+const KB_NAV_VOLUME = 0.22;
+const KB_NAV_RATE = 1.15; // slightly brighter tick while moving cursor
+const KB_PRESS_VOLUME = 0.35;
+const KB_PRESS_RATE = 1.0; // base click for char/space/backspace
+const KB_SHIFT_RATE = 1.2; // higher pitch for modifier toggles
+const KB_CONFIRM_RATE = 0.85; // deeper thunk for the Done key
 // ────────────────────────────────────────────────────
 
 async function loadAudioBuffer(
@@ -28,9 +39,12 @@ function fadeOutAndStop(
   source.stop(now + fadeMs / 1000);
 }
 
+export type KeyboardSoundKind = "nav" | "press" | "shift" | "confirm";
+
 export function useNavigationSounds(): {
   playNavigate: () => void;
   playSelect: () => void;
+  playKeyboardSound: (kind: KeyboardSoundKind) => void;
 } {
   const ctxRef = useRef<AudioContext | null>(null);
   const navBufferRef = useRef<AudioBuffer | null>(null);
@@ -89,5 +103,43 @@ export function useNavigationSounds(): {
     source.start();
   }, []);
 
-  return { playNavigate, playSelect };
+  const playKeyboardSound = useCallback((kind: KeyboardSoundKind) => {
+    const ctx = ctxRef.current;
+    // Reuse the navigate buffer so the virtual keyboard shares the same
+    // base click sample as the rest of the app's navigation feedback.
+    const buffer = navBufferRef.current;
+    if (!ctx || !buffer) return;
+
+    let volume: number;
+    let rate: number;
+    switch (kind) {
+      case "nav":
+        volume = KB_NAV_VOLUME;
+        rate = KB_NAV_RATE;
+        break;
+      case "shift":
+        volume = KB_PRESS_VOLUME;
+        rate = KB_SHIFT_RATE;
+        break;
+      case "confirm":
+        volume = KB_PRESS_VOLUME;
+        rate = KB_CONFIRM_RATE;
+        break;
+      case "press":
+      default:
+        volume = KB_PRESS_VOLUME;
+        rate = KB_PRESS_RATE;
+        break;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const gain = ctx.createGain();
+    gain.gain.value = volume;
+    source.connect(gain).connect(ctx.destination);
+    source.start();
+  }, []);
+
+  return { playNavigate, playSelect, playKeyboardSound };
 }

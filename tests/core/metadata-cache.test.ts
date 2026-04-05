@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { resolve } from "node:path";
-import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { MetadataCache } from "../../src/core/metadata-cache.js";
 import type { GameMetadata } from "../../src/core/types.js";
 
@@ -65,15 +65,49 @@ describe("MetadataCache", () => {
     expect(cache.getMetadata("nes", "game2.nes")!.title).toBe("Game 2");
   });
 
-  it("loads metadata across multiple systems", () => {
+  it("loads metadata across multiple systems (keyed by basename)", () => {
     cache.setMetadata("nes", "mario.nes", makeMetadata({ title: "Mario" }));
     cache.setMetadata("snes", "zelda.smc", makeMetadata({ title: "Zelda" }));
 
     const all = cache.getAllMetadataAllSystems(["nes", "snes", "gba"]);
     expect(all.size).toBe(2);
-    expect(all.get("nes")!["mario.nes"].title).toBe("Mario");
-    expect(all.get("snes")!["zelda.smc"].title).toBe("Zelda");
+    expect(all.get("nes")!["mario"].title).toBe("Mario");
+    expect(all.get("snes")!["zelda"].title).toBe("Zelda");
     expect(all.has("gba")).toBe(false);
+  });
+
+  it("returns same metadata regardless of ROM extension", () => {
+    // Simulates a user migrating from .bin to .cue for a PS1 game
+    cache.setMetadata("psx", "Silent Hill.bin", makeMetadata({ title: "Silent Hill" }));
+
+    expect(cache.getMetadata("psx", "Silent Hill.bin")!.title).toBe("Silent Hill");
+    expect(cache.getMetadata("psx", "Silent Hill.cue")!.title).toBe("Silent Hill");
+    expect(cache.getMetadata("psx", "Silent Hill.chd")!.title).toBe("Silent Hill");
+  });
+
+  it("migrates legacy extension-keyed cache files on load", () => {
+    // Write a legacy cache file (keys with extensions) directly to disk
+    const metadataDir = resolve(TEST_PROJECT_ROOT, "config", "metadata");
+    mkdirSync(metadataDir, { recursive: true });
+    const legacy = {
+      systemId: "psx",
+      lastUpdated: "2026-01-01T00:00:00.000Z",
+      games: {
+        "Silent Hill (USA).bin": makeMetadata({ title: "Silent Hill" }),
+        "Crash Bandicoot.chd": makeMetadata({ title: "Crash" }),
+      },
+    };
+    writeFileSync(
+      resolve(metadataDir, "psx.json"),
+      JSON.stringify(legacy),
+      "utf-8"
+    );
+
+    // Reading through the cache should migrate the keys transparently
+    expect(cache.getMetadata("psx", "Silent Hill (USA).cue")!.title).toBe(
+      "Silent Hill"
+    );
+    expect(cache.getMetadata("psx", "Crash Bandicoot.pbp")!.title).toBe("Crash");
   });
 
   it("returns correct cover path", () => {

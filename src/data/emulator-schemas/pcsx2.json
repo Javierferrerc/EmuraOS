@@ -1,0 +1,396 @@
+{
+  "configFile": "PCSX2.ini",
+  "configFormat": "ini",
+  "configLocations": ["{docs}/PCSX2/inis/PCSX2.ini"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "EmuCore.EnableCheats",
+          "label": "Enable Cheats",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable cheat code support"
+        },
+        {
+          "key": "EmuCore.EnableWideScreenPatches",
+          "label": "Enable Widescreen Patches",
+          "type": "boolean",
+          "default": "false",
+          "description": "Apply widescreen patches to games"
+        },
+        {
+          "key": "EmuCore.EnableFastBoot",
+          "label": "Enable Fast Boot",
+          "type": "boolean",
+          "default": "true",
+          "description": "Skip the PS2 BIOS boot animation"
+        },
+        {
+          "key": "UI.ConfirmShutdown",
+          "label": "Confirm Shutdown",
+          "type": "boolean",
+          "default": "true",
+          "description": "Ask for confirmation before shutting down"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "EmuCore/GS.upscale_multiplier",
+          "label": "Upscale Multiplier",
+          "type": "enum",
+          "default": "1",
+          "options": ["1", "2", "3", "4", "5", "6", "8"],
+          "description": "Internal rendering resolution multiplier"
+        },
+        {
+          "key": "EmuCore/GS.VsyncEnable",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "EmuCore/GS.InterlaceMode",
+          "label": "Interlace Mode",
+          "type": "enum",
+          "default": "7",
+          "options": ["0", "1", "2", "3", "4", "5", "6", "7"],
+          "description": "0=Off, 7=Auto"
+        },
+        {
+          "key": "EmuCore/GS.linear_present_mode",
+          "label": "Linear Present Mode",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2"],
+          "description": "Texture filtering for final presentation"
+        },
+        {
+          "key": "EmuCore/GS.texture_filtering",
+          "label": "Texture Filtering",
+          "type": "enum",
+          "default": "2",
+          "options": ["0", "1", "2", "3"],
+          "description": "Texture filtering mode"
+        }
+      ]
+    },
+    {
+      "id": "view",
+      "name": "View",
+      "settings": [
+        {
+          "key": "UI.StartFullscreen",
+          "label": "Start in Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Launch PCSX2 directly in fullscreen mode. Close PCSX2 before saving changes."
+        },
+        {
+          "key": "UI.DoubleClickTogglesFullscreen",
+          "label": "Double-Click Toggles Fullscreen",
+          "type": "boolean",
+          "default": "true",
+          "description": "Double-click the render area to toggle fullscreen"
+        },
+        {
+          "key": "UI.HideMouseCursor",
+          "label": "Hide Cursor In Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Auto-hide the mouse cursor while in fullscreen"
+        },
+        {
+          "key": "UI.RenderToSeparateWindow",
+          "label": "Render To Separate Window",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display the emulator output in a separate window from the main PCSX2 interface"
+        },
+        {
+          "key": "UI.HideMainWindowWhenRunning",
+          "label": "Hide Main Window When Running",
+          "type": "boolean",
+          "default": "false",
+          "description": "Hide the PCSX2 main window while a game is running (only applies with Render To Separate Window)"
+        },
+        {
+          "key": "UI.DisableWindowResize",
+          "label": "Disable Window Resizing",
+          "type": "boolean",
+          "default": "false",
+          "description": "Prevent the display window from being resized by the user"
+        },
+        {
+          "key": "UI.ShowStatusBar",
+          "label": "Show Status Bar",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the bottom status bar in the main window"
+        },
+        {
+          "key": "UI.PauseOnFocusLoss",
+          "label": "Pause On Focus Loss",
+          "type": "boolean",
+          "default": "false",
+          "description": "Pause emulation when the PCSX2 window loses focus"
+        },
+        {
+          "key": "UI.InhibitScreensaver",
+          "label": "Inhibit Screensaver",
+          "type": "boolean",
+          "default": "true",
+          "description": "Prevent the screensaver from activating while a game is running"
+        },
+        {
+          "key": "UI.StartPaused",
+          "label": "Start Paused",
+          "type": "boolean",
+          "default": "false",
+          "description": "Start games in a paused state"
+        },
+        {
+          "key": "EmuCore/GS.AspectRatio",
+          "label": "Aspect Ratio",
+          "type": "enum",
+          "default": "Auto 4:3/3:2",
+          "options": [
+            { "value": "Stretch", "label": "Stretch" },
+            { "value": "Auto 4:3/3:2", "label": "Auto 4:3 / 3:2" },
+            { "value": "4:3", "label": "4:3" },
+            { "value": "16:9", "label": "16:9" }
+          ],
+          "description": "Display aspect ratio"
+        },
+        {
+          "key": "EmuCore/GS.FMVAspectRatioSwitch",
+          "label": "FMV Aspect Ratio Override",
+          "type": "enum",
+          "default": "Off",
+          "options": [
+            { "value": "Off", "label": "Off (use default)" },
+            { "value": "Auto 4:3/3:2", "label": "Auto 4:3 / 3:2" },
+            { "value": "4:3", "label": "4:3" },
+            { "value": "16:9", "label": "16:9" }
+          ],
+          "description": "Override aspect ratio while playing FMV cutscenes"
+        },
+        {
+          "key": "EmuCore/GS.IntegerScaling",
+          "label": "Integer Upscaling",
+          "type": "boolean",
+          "default": "false",
+          "description": "Scale the image by whole multiples only (crisper, leaves black borders)"
+        },
+        {
+          "key": "EmuCore/GS.StretchY",
+          "label": "Vertical Stretch (%)",
+          "type": "number",
+          "default": "100",
+          "min": 50,
+          "max": 200,
+          "description": "Vertical image stretch as a percentage (100 = no stretch)"
+        },
+        {
+          "key": "EmuCore/GS.pcrtc_antiblur",
+          "label": "Anti-Blur",
+          "type": "boolean",
+          "default": "true",
+          "description": "Reduce blurriness caused by PS2 internal image offsets"
+        },
+        {
+          "key": "EmuCore/GS.pcrtc_offsets",
+          "label": "Enable PCRTC Offsets",
+          "type": "boolean",
+          "default": "false",
+          "description": "Respect PS2 PCRTC screen positioning offsets"
+        },
+        {
+          "key": "EmuCore/GS.pcrtc_overscan",
+          "label": "Enable Overscan",
+          "type": "boolean",
+          "default": "false",
+          "description": "Show the overscan area that would be hidden on a real PS2"
+        },
+        {
+          "key": "EmuCore/GS.disable_interlace_offset",
+          "label": "Disable Interlace Offset",
+          "type": "boolean",
+          "default": "false",
+          "description": "Disable the vertical offset applied during deinterlacing"
+        }
+      ]
+    },
+    {
+      "id": "osd",
+      "name": "On-Screen Display",
+      "settings": [
+        {
+          "key": "EmuCore/GS.OsdScale",
+          "label": "OSD Scale (%)",
+          "type": "number",
+          "default": "100",
+          "min": 50,
+          "max": 500,
+          "description": "Size of on-screen messages and indicators, as a percentage"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowSpeed",
+          "label": "Show Speed Percent",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display current emulation speed percentage"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowFPS",
+          "label": "Show FPS",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display frames per second"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowVPS",
+          "label": "Show VPS",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display vertical sync / vblanks per second"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowCPU",
+          "label": "Show CPU Usage",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display host CPU usage"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowGPU",
+          "label": "Show GPU Usage",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display host GPU usage"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowResolution",
+          "label": "Show Resolution",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display the internal render resolution"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowGSStats",
+          "label": "Show GS Statistics",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display detailed GS (Graphics Synthesizer) statistics"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowFrameTimes",
+          "label": "Show Frame Times",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display frame-time graph"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowIndicators",
+          "label": "Show Indicators",
+          "type": "boolean",
+          "default": "true",
+          "description": "Display pause/fast-forward/turbo indicators"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowSettings",
+          "label": "Show Settings Overlay",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display the current value of toggled settings on screen"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowInputs",
+          "label": "Show Inputs",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display controller inputs on screen"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowVersion",
+          "label": "Show Version",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display the PCSX2 version at startup"
+        },
+        {
+          "key": "EmuCore/GS.OsdShowHardwareInfo",
+          "label": "Show Hardware Info",
+          "type": "boolean",
+          "default": "false",
+          "description": "Display host CPU/GPU info overlay"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "SPU2/Mixing.Interpolation",
+          "label": "Interpolation",
+          "type": "enum",
+          "default": "5",
+          "options": ["0", "1", "2", "3", "4", "5"],
+          "description": "Audio interpolation quality"
+        },
+        {
+          "key": "SPU2/Mixing.FinalVolume",
+          "label": "Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 200,
+          "description": "Final audio output volume percentage"
+        },
+        {
+          "key": "SPU2/Output.SynchMode",
+          "label": "Synchronization Mode",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1"],
+          "description": "0=TimeStretch, 1=None"
+        }
+      ]
+    },
+    {
+      "id": "paths",
+      "name": "Paths",
+      "settings": [
+        {
+          "key": "Folders.Bios",
+          "label": "BIOS Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to PS2 BIOS files"
+        },
+        {
+          "key": "Folders.Savestates",
+          "label": "Savestates Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to save state files"
+        },
+        {
+          "key": "Folders.MemoryCards",
+          "label": "Memory Cards Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to memory card files"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "configFile": "qt-config.ini",
+  "configFormat": "ini",
+  "configLocations": ["{appdata}/Citra/config/qt-config.ini"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "Controls.use_cpu_jit",
+          "label": "Use CPU JIT",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable CPU JIT recompiler for better performance"
+        },
+        {
+          "key": "Core.use_multi_core",
+          "label": "Use Multi-Core",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable multi-core CPU emulation"
+        },
+        {
+          "key": "Renderer.use_hw_renderer",
+          "label": "Use Hardware Renderer",
+          "type": "boolean",
+          "default": "true",
+          "description": "Use GPU for rendering instead of software"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "Renderer.resolution_factor",
+          "label": "Resolution Factor",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2", "3", "4", "5"],
+          "description": "0=Auto, 1=Native, 2=2x, 3=3x, 4=4x, 5=5x"
+        },
+        {
+          "key": "Renderer.use_vsync_new",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "Renderer.use_shader_jit",
+          "label": "Use Shader JIT",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable shader JIT compilation"
+        },
+        {
+          "key": "Renderer.shaders_accurate_mul",
+          "label": "Accurate Shader Multiplication",
+          "type": "boolean",
+          "default": "true",
+          "description": "Use accurate shader multiplication (fixes some games)"
+        },
+        {
+          "key": "Renderer.texture_filter",
+          "label": "Texture Filter",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1", "2", "3", "4"],
+          "description": "0=None, 1=Anime4K, 2=Bicubic, 3=ScaleForce, 4=xBRZ"
+        }
+      ]
+    },
+    {
+      "id": "view",
+      "name": "View",
+      "settings": [
+        {
+          "key": "UI.singleWindowMode",
+          "label": "Single Window Mode",
+          "type": "boolean",
+          "default": "true",
+          "description": "Render both screens in a single window instead of separate windows. Close Citra before saving changes."
+        },
+        {
+          "key": "UI.fullscreen",
+          "label": "Start in Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Launch Citra directly in fullscreen mode"
+        },
+        {
+          "key": "UI.displayTitleBars",
+          "label": "Show Dock Widget Headers",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show title bars on docked widgets"
+        },
+        {
+          "key": "UI.showFilterBar",
+          "label": "Show Filter Bar",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the game list filter/search bar"
+        },
+        {
+          "key": "UI.showStatusBar",
+          "label": "Show Status Bar",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the bottom status bar (FPS, frame time, etc.)"
+        },
+        {
+          "key": "UI.confirmClose",
+          "label": "Confirm Exit While Running",
+          "type": "boolean",
+          "default": "true",
+          "description": "Ask for confirmation before closing while a game is running"
+        },
+        {
+          "key": "UI.hideInactiveMouse",
+          "label": "Hide Mouse When Inactive",
+          "type": "boolean",
+          "default": "false",
+          "description": "Auto-hide the mouse cursor when idle"
+        },
+        {
+          "key": "UI.pauseWhenInBackground",
+          "label": "Pause When In Background",
+          "type": "boolean",
+          "default": "false",
+          "description": "Pause emulation when the Citra window loses focus"
+        },
+        {
+          "key": "UI.muteWhenInBackground",
+          "label": "Mute Audio When In Background",
+          "type": "boolean",
+          "default": "false",
+          "description": "Mute audio when the Citra window loses focus"
+        },
+        {
+          "key": "Layout.layout_option",
+          "label": "Screen Layout",
+          "type": "enum",
+          "default": "0",
+          "options": [
+            { "value": "0", "label": "Default" },
+            { "value": "1", "label": "Single Screen" },
+            { "value": "2", "label": "Large Screen" },
+            { "value": "3", "label": "Side by Side" },
+            { "value": "4", "label": "Separate Windows" },
+            { "value": "5", "label": "Hybrid" }
+          ],
+          "description": "How the top and bottom 3DS screens are arranged"
+        },
+        {
+          "key": "Layout.swap_screen",
+          "label": "Swap Screens",
+          "type": "boolean",
+          "default": "false",
+          "description": "Swap top and bottom screen positions"
+        },
+        {
+          "key": "Layout.upright_screen",
+          "label": "Rotate Screens Upright",
+          "type": "boolean",
+          "default": "false",
+          "description": "Rotate both screens 90 degrees (for games designed to be held sideways)"
+        },
+        {
+          "key": "Layout.large_screen_proportion",
+          "label": "Large Screen Proportion",
+          "type": "number",
+          "default": "4",
+          "min": 1,
+          "max": 16,
+          "description": "Size ratio of the large screen relative to the small screen in Large Screen layout"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "Audio.volume",
+          "label": "Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 100,
+          "description": "Audio output volume percentage"
+        },
+        {
+          "key": "Audio.output_type",
+          "label": "Output Type",
+          "type": "enum",
+          "default": "auto",
+          "options": ["auto", "cubeb", "sdl2", "null"],
+          "description": "Audio output backend"
+        },
+        {
+          "key": "Audio.enable_audio_stretching",
+          "label": "Audio Stretching",
+          "type": "boolean",
+          "default": "true",
+          "description": "Stretch audio to reduce stuttering"
+        }
+      ]
+    }
+  ]
+}

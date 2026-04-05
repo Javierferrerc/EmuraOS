@@ -1,0 +1,159 @@
+{
+  "configFile": "Dolphin.ini",
+  "configFormat": "ini",
+  "configLocations": ["{appdata}/Dolphin Emulator/Config/Dolphin.ini"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "Core.ConfirmStop",
+          "label": "Confirm Stop",
+          "type": "boolean",
+          "default": "true",
+          "description": "Ask for confirmation when stopping emulation"
+        },
+        {
+          "key": "General.UsePanicHandlers",
+          "label": "Use Panic Handlers",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show panic alerts on errors"
+        },
+        {
+          "key": "General.AutoDiscChange",
+          "label": "Auto Disc Change",
+          "type": "boolean",
+          "default": "false",
+          "description": "Automatically change discs when prompted"
+        },
+        {
+          "key": "Core.RecursiveISOPaths",
+          "label": "Recursive ISO Paths",
+          "type": "boolean",
+          "default": "false",
+          "description": "Scan subdirectories for ISOs"
+        },
+        {
+          "key": "Interface.ShowActiveTitle",
+          "label": "Show Active Title",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the active game title in the title bar"
+        },
+        {
+          "key": "Interface.UseBuiltinTitleDatabase",
+          "label": "Use Built-in Title Database",
+          "type": "boolean",
+          "default": "true",
+          "description": "Use the built-in game title database"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "Settings.InternalResolution",
+          "label": "Internal Resolution",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2", "3", "4", "5", "6"],
+          "description": "0=Native, 1=2x, 2=3x, 3=4x, 4=5x, 5=6x, 6=7x"
+        },
+        {
+          "key": "Settings.VSync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "Settings.wideScreenHack",
+          "label": "Widescreen Hack",
+          "type": "boolean",
+          "default": "false",
+          "description": "Force widescreen rendering"
+        },
+        {
+          "key": "Settings.AspectRatio",
+          "label": "Aspect Ratio",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1", "2", "3"],
+          "description": "0=Auto, 1=Force 16:9, 2=Force 4:3, 3=Stretch"
+        },
+        {
+          "key": "Settings.ShaderCompilationMode",
+          "label": "Shader Compilation Mode",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1", "2", "3"],
+          "description": "Shader compilation strategy"
+        },
+        {
+          "key": "Settings.BackendMultithreading",
+          "label": "Backend Multithreading",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable multithreaded rendering backend"
+        },
+        {
+          "key": "Settings.MSAA",
+          "label": "Anti-Aliasing (MSAA)",
+          "type": "enum",
+          "default": "1",
+          "options": ["1", "2", "4", "8"],
+          "description": "Multisample anti-aliasing level"
+        },
+        {
+          "key": "Settings.AnisotropicFiltering",
+          "label": "Anisotropic Filtering",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1", "2", "3", "4"],
+          "description": "0=1x, 1=2x, 2=4x, 3=8x, 4=16x"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "DSP.Volume",
+          "label": "Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 100,
+          "description": "Audio output volume percentage"
+        },
+        {
+          "key": "DSP.Backend",
+          "label": "Audio Backend",
+          "type": "enum",
+          "default": "Cubeb",
+          "options": ["Cubeb", "XAudio2", "No Audio"],
+          "description": "Audio output backend"
+        },
+        {
+          "key": "DSP.EnableJIT",
+          "label": "DSP JIT Recompiler",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable DSP JIT recompiler for better performance"
+        },
+        {
+          "key": "DSP.DPL2Decoder",
+          "label": "Dolby Pro Logic II Decoder",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable Dolby Pro Logic II audio decoding"
+        }
+      ]
+    }
+  ]
+}

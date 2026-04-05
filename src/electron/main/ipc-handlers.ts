@@ -12,9 +12,23 @@ import { EmulatorReadiness } from "../../core/emulator-readiness.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
+import { SteamGridDb } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
+import { EmulatorConfigManager } from "../../core/emulator-config.js";
+import {
+  ensureCemuGamePath,
+  checkCemuKeys,
+  writeCemuKeys,
+} from "../../core/cemu-setup.js";
+import { ensurePpssppPortable } from "../../core/ppsspp-setup.js";
+import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
-import type { AppConfig, DiscoveredRom, EmulatorDefinition } from "../../core/types.js";
+import type {
+  AppConfig,
+  DiscoveredRom,
+  DriveEmulatorMapping,
+  EmulatorDefinition,
+} from "../../core/types.js";
 
 function getDataPath(): string {
   if (app.isPackaged) {
@@ -31,6 +45,10 @@ function getEmulatorsPath(): string {
   return path.join(getDataPath(), "emulators.json");
 }
 
+function getSchemasPath(): string {
+  return path.join(getDataPath(), "emulator-schemas");
+}
+
 function getProjectRoot(): string {
   if (app.isPackaged) {
     return path.dirname(app.getPath("exe"));
@@ -38,10 +56,59 @@ function getProjectRoot(): string {
   return app.getAppPath();
 }
 
+/**
+ * Run emulator-specific first-launch setup (e.g. write ROM folder into
+ * Cemu's settings.xml so users are not prompted for a game path).
+ */
+function runPerEmulatorSetup(
+  emulatorId: string,
+  systemId: string,
+  executablePath: string,
+  romsPath: string
+): void {
+  if (emulatorId === "cemu" && systemId === "wiiu") {
+    try {
+      const registry = new SystemsRegistry(getSystemsPath());
+      const wiiuSystem = registry.getById("wiiu");
+      if (!wiiuSystem) return;
+      const wiiuFolder = path.join(romsPath, wiiuSystem.romFolder);
+      if (!existsSync(wiiuFolder)) {
+        mkdirSync(wiiuFolder, { recursive: true });
+      }
+      const result = ensureCemuGamePath(executablePath, wiiuFolder);
+      if (result.updated) {
+        console.log(
+          "[cemu-setup] registered Wii U ROM folder in",
+          result.settingsPath
+        );
+      }
+    } catch (err) {
+      console.warn("[cemu-setup] failed:", err);
+    }
+  }
+
+  if (emulatorId === "ppsspp") {
+    try {
+      const result = ensurePpssppPortable(executablePath);
+      if (result.updated) {
+        console.log(
+          "[ppsspp-setup] enabled portable mode, memstick at",
+          result.memstickPath
+        );
+      }
+    } catch (err) {
+      console.warn("[ppsspp-setup] failed:", err);
+    }
+  }
+}
+
 export function registerIpcHandlers(
   getMainWindow: () => BrowserWindow | null
 ): void {
   let overlay: EmulatorOverlay | null = null;
+  // Cached Drive listing for the duration of the app session. Invalidated
+  // when the renderer passes forceRefresh=true to `list-drive-emulators`.
+  let cachedDriveListing: Record<string, DriveEmulatorMapping> | null = null;
 
   function getOrCreateOverlay(): EmulatorOverlay | null {
     const win = getMainWindow();
@@ -95,7 +162,17 @@ export function registerIpcHandlers(
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const launcher = new GameLauncher(mapper);
-    const result = launcher.launch(rom, configManager.getEmulatorsPath());
+    const emulatorsPath = configManager.getEmulatorsPath();
+    const resolved = mapper.resolve(rom.systemId, emulatorsPath);
+    if (resolved) {
+      runPerEmulatorSetup(
+        resolved.definition.id,
+        rom.systemId,
+        resolved.executablePath,
+        configManager.getRomsPath()
+      );
+    }
+    const result = launcher.launch(rom, emulatorsPath);
     if (result.success) {
       const lib = new UserLibrary(getProjectRoot());
       lib.recordPlay(rom.systemId, rom.fileName);
@@ -122,6 +199,24 @@ export function registerIpcHandlers(
       }
     }
 
+    // Run one-shot per-emulator setup for detected emulators that need a
+    // portable-mode marker so their config files land where we write them.
+    for (const detected of result.detected) {
+      if (detected.id === "ppsspp" && detected.executablePath) {
+        try {
+          const setup = ensurePpssppPortable(detected.executablePath);
+          if (setup.updated) {
+            console.log(
+              "[ppsspp-setup] enabled portable mode, memstick at",
+              setup.memstickPath
+            );
+          }
+        } catch (err) {
+          console.warn("[ppsspp-setup] failed:", err);
+        }
+      }
+    }
+
     // Validate emulator readiness and auto-download missing cores
     const emulatorDefs: EmulatorDefinition[] = JSON.parse(
       readFileSync(getEmulatorsPath(), "utf-8")
@@ -137,6 +232,47 @@ export function registerIpcHandlers(
 
     return { ...result, readiness: readinessReport };
   });
+
+  ipcMain.handle("get-emulator-defs", () => {
+    return JSON.parse(
+      readFileSync(getEmulatorsPath(), "utf-8")
+    ) as EmulatorDefinition[];
+  });
+
+  ipcMain.handle(
+    "list-drive-emulators",
+    async (_event, forceRefresh?: boolean) => {
+      if (cachedDriveListing && !forceRefresh) {
+        return cachedDriveListing;
+      }
+      try {
+        const emulatorDefs: EmulatorDefinition[] = JSON.parse(
+          readFileSync(getEmulatorsPath(), "utf-8")
+        );
+        const downloader = new EmulatorDownloader(getProjectRoot());
+        cachedDriveListing = await downloader.listAvailable(emulatorDefs);
+        return cachedDriveListing;
+      } catch (err) {
+        console.warn("[drive] list failed:", err);
+        return {};
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "download-emulator",
+    async (event, emulatorId: string) => {
+      const configManager = new ConfigManager(getProjectRoot());
+      const downloader = new EmulatorDownloader(getProjectRoot());
+      return await downloader.download(
+        emulatorId,
+        configManager.getEmulatorsPath(),
+        (progress) => {
+          event.sender.send("emulator-download-progress", progress);
+        }
+      );
+    }
+  );
 
   ipcMain.handle("get-all-metadata", () => {
     const cache = new MetadataCache(getProjectRoot());
@@ -227,6 +363,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle("fetch-covers", async (event: IpcMainInvokeEvent) => {
     const configManager = new ConfigManager(getProjectRoot());
+    const appConfig = configManager.get();
     const registry = new SystemsRegistry(getSystemsPath());
     const scanner = new RomScanner(registry);
     const scanResult = scanner.scan(configManager.getRomsPath());
@@ -238,9 +375,59 @@ export function registerIpcHandlers(
     );
     const thumbs = new LibretroThumbnails(cache, { systemMapPath });
 
-    return thumbs.fetchAllCovers(scanResult.systems, (progress) => {
-      event.sender.send("cover-fetch-progress", progress);
-    });
+    // Phase 1: Libretro (no credentials required).
+    const libretroResult = await thumbs.fetchAllCovers(
+      scanResult.systems,
+      (progress) => {
+        event.sender.send("cover-fetch-progress", {
+          ...progress,
+          phase: "libretro",
+        });
+      }
+    );
+
+    const sgdbKey = appConfig.steamGridDbApiKey;
+    if (!sgdbKey) {
+      return libretroResult;
+    }
+
+    // Phase 2: Build a filtered list of ROMs still missing covers.
+    const missingBySystem: { systemId: string; roms: DiscoveredRom[] }[] = [];
+    for (const system of scanResult.systems) {
+      const missing = system.roms.filter(
+        (r) => !cache.coverExists(r.systemId, r.fileName)
+      );
+      if (missing.length > 0) {
+        missingBySystem.push({ systemId: system.systemId, roms: missing });
+      }
+    }
+
+    if (missingBySystem.length === 0) {
+      return libretroResult;
+    }
+
+    const sgdb = new SteamGridDb(cache, { apiKey: sgdbKey });
+    const sgdbResult = await sgdb.fetchAllCovers(
+      missingBySystem,
+      (progress) => {
+        event.sender.send("cover-fetch-progress", progress);
+      }
+    );
+
+    // Merge both phases. Libretro already counted its ROMs; SGDB phase only
+    // processed the subset that was still missing, so the "found" delta from
+    // SGDB should reduce notFound from the libretro phase.
+    return {
+      totalProcessed: libretroResult.totalProcessed,
+      totalFound: libretroResult.totalFound + sgdbResult.totalFound,
+      totalNotFound: Math.max(
+        0,
+        libretroResult.totalNotFound -
+          sgdbResult.totalFound -
+          sgdbResult.totalErrors
+      ),
+      totalErrors: libretroResult.totalErrors + sgdbResult.totalErrors,
+    };
   });
 
   // --- Fullscreen handlers ---
@@ -368,6 +555,13 @@ export function registerIpcHandlers(
         };
       }
 
+      runPerEmulatorSetup(
+        resolved.definition.id,
+        rom.systemId,
+        resolved.executablePath,
+        configManager.getRomsPath()
+      );
+
       const result = await ov.launchEmbedded(
         rom,
         resolved,
@@ -405,6 +599,81 @@ export function registerIpcHandlers(
       if (overlay) {
         overlay.setGameAreaBounds(bounds);
       }
+    }
+  );
+
+  // --- Emulator Config handlers ---
+
+  ipcMain.handle(
+    "get-emulator-config",
+    (_event: IpcMainInvokeEvent, emulatorId: string, executablePath?: string) => {
+      const manager = new EmulatorConfigManager(getSchemasPath());
+      return manager.read(emulatorId, executablePath);
+    }
+  );
+
+  ipcMain.handle(
+    "update-emulator-config",
+    (
+      _event: IpcMainInvokeEvent,
+      emulatorId: string,
+      changes: Record<string, string>,
+      executablePath?: string
+    ) => {
+      const manager = new EmulatorConfigManager(getSchemasPath());
+      manager.write(emulatorId, changes, executablePath);
+    }
+  );
+
+  ipcMain.handle("get-emulator-schemas", () => {
+    const manager = new EmulatorConfigManager(getSchemasPath());
+    return manager.getAvailableSchemas();
+  });
+
+  ipcMain.handle(
+    "open-config-file",
+    async (_event: IpcMainInvokeEvent, emulatorId: string, executablePath?: string) => {
+      const { shell } = await import("electron");
+      const manager = new EmulatorConfigManager(getSchemasPath());
+      const configPath = manager.getConfigPath(emulatorId, executablePath);
+      if (configPath && existsSync(configPath)) {
+        shell.openPath(configPath);
+      }
+    }
+  );
+
+  // --- Cemu keys.txt handlers ---
+
+  ipcMain.handle("check-cemu-keys", () => {
+    const configManager = new ConfigManager(getProjectRoot());
+    const mapper = new EmulatorMapper(getEmulatorsPath());
+    const resolved = mapper.resolve("wiiu", configManager.getEmulatorsPath());
+    if (!resolved || resolved.definition.id !== "cemu") {
+      return {
+        emulatorFound: false,
+        exists: false,
+        path: null,
+        entryCount: 0,
+      };
+    }
+    const status = checkCemuKeys(resolved.executablePath);
+    return { emulatorFound: true, ...status };
+  });
+
+  ipcMain.handle(
+    "write-cemu-keys",
+    (_event: IpcMainInvokeEvent, content: string) => {
+      const configManager = new ConfigManager(getProjectRoot());
+      const mapper = new EmulatorMapper(getEmulatorsPath());
+      const resolved = mapper.resolve(
+        "wiiu",
+        configManager.getEmulatorsPath()
+      );
+      if (!resolved || resolved.definition.id !== "cemu") {
+        throw new Error("Cemu not detected");
+      }
+      const keysPath = writeCemuKeys(resolved.executablePath, content);
+      return { path: keysPath };
     }
   );
 }

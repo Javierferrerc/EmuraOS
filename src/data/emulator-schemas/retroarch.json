@@ -1,0 +1,521 @@
+{
+  "configFile": "retroarch.cfg",
+  "configFormat": "keyvalue",
+  "configLocations": ["{emuDir}/retroarch.cfg"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "libretro_directory",
+          "label": "Libretro Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to libretro core directory"
+        },
+        {
+          "key": "system_directory",
+          "label": "System Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to system/BIOS files"
+        },
+        {
+          "key": "savefile_directory",
+          "label": "Savefile Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to save file directory"
+        },
+        {
+          "key": "savestate_directory",
+          "label": "Savestate Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to save state directory"
+        },
+        {
+          "key": "config_save_on_exit",
+          "label": "Save Config on Exit",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically save configuration on exit"
+        },
+        {
+          "key": "pause_nonactive",
+          "label": "Pause When Inactive",
+          "type": "boolean",
+          "default": "true",
+          "description": "Pause emulation when window loses focus"
+        },
+        {
+          "key": "menu_driver",
+          "label": "Menu Driver",
+          "type": "enum",
+          "default": "ozone",
+          "options": ["ozone", "rgui", "xmb", "glui"],
+          "description": "Menu interface style"
+        },
+        {
+          "key": "rewind_enable",
+          "label": "Enable Rewind",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable rewind functionality"
+        },
+        {
+          "key": "rewind_buffer_size",
+          "label": "Rewind Buffer Size (MB)",
+          "type": "number",
+          "default": "20",
+          "min": 1,
+          "max": 1000,
+          "description": "Size of rewind buffer in megabytes"
+        },
+        {
+          "key": "fastforward_ratio",
+          "label": "Fast Forward Ratio",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 16,
+          "description": "0 = unlimited"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "video_driver",
+          "label": "Video Driver",
+          "type": "enum",
+          "default": "gl",
+          "options": ["gl", "glcore", "vulkan", "d3d11", "d3d12"],
+          "description": "Video rendering backend"
+        },
+        {
+          "key": "video_fullscreen",
+          "label": "Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Start in exclusive fullscreen mode"
+        },
+        {
+          "key": "video_windowed_fullscreen",
+          "label": "Windowed Fullscreen",
+          "type": "boolean",
+          "default": "true",
+          "description": "Use windowed fullscreen (borderless) instead of exclusive"
+        },
+        {
+          "key": "video_vsync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "video_smooth",
+          "label": "Bilinear Filtering",
+          "type": "boolean",
+          "default": "true",
+          "description": "Apply bilinear filtering to video output"
+        },
+        {
+          "key": "video_shader_enable",
+          "label": "Enable Shaders",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable GPU shader effects"
+        },
+        {
+          "key": "video_scale",
+          "label": "Window Scale",
+          "type": "number",
+          "default": "3",
+          "min": 1,
+          "max": 10,
+          "description": "Windowed mode scale multiplier"
+        },
+        {
+          "key": "video_aspect_ratio_auto",
+          "label": "Auto Aspect Ratio",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically determine aspect ratio"
+        },
+        {
+          "key": "video_filter",
+          "label": "Video Filter",
+          "type": "string",
+          "default": "",
+          "description": "Path to software video filter"
+        },
+        {
+          "key": "video_gpu_screenshot",
+          "label": "GPU Screenshots",
+          "type": "boolean",
+          "default": "true",
+          "description": "Take screenshots using GPU (includes shaders)"
+        },
+        {
+          "key": "video_max_swapchain_images",
+          "label": "Max Swapchain Images",
+          "type": "number",
+          "default": "3",
+          "min": 1,
+          "max": 4,
+          "description": "Maximum number of swapchain images"
+        },
+        {
+          "key": "video_frame_delay",
+          "label": "Frame Delay",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 15,
+          "description": "Delay in frames before running core (reduces latency)"
+        },
+        {
+          "key": "video_black_frame_insertion",
+          "label": "Black Frame Insertion",
+          "type": "boolean",
+          "default": "false",
+          "description": "Insert black frames between real frames (reduces blur)"
+        },
+        {
+          "key": "video_hard_sync",
+          "label": "Hard GPU Sync",
+          "type": "boolean",
+          "default": "false",
+          "description": "Force CPU-GPU synchronization"
+        },
+        {
+          "key": "video_monitor_index",
+          "label": "Monitor Index",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 4,
+          "description": "Which monitor to use for fullscreen (0 = auto)"
+        },
+        {
+          "key": "custom_viewport_width",
+          "label": "Custom Viewport Width",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 7680,
+          "description": "Custom viewport width in pixels (0 = auto)"
+        },
+        {
+          "key": "custom_viewport_height",
+          "label": "Custom Viewport Height",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 4320,
+          "description": "Custom viewport height in pixels (0 = auto)"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "audio_driver",
+          "label": "Audio Driver",
+          "type": "enum",
+          "default": "xaudio",
+          "options": ["xaudio", "dsound", "wasapi", "sdl2"],
+          "description": "Audio output driver"
+        },
+        {
+          "key": "audio_enable",
+          "label": "Enable Audio",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable audio output"
+        },
+        {
+          "key": "audio_volume",
+          "label": "Volume (dB)",
+          "type": "number",
+          "default": "0",
+          "min": -80,
+          "max": 12,
+          "description": "Volume in dB"
+        },
+        {
+          "key": "audio_sync",
+          "label": "Audio Sync",
+          "type": "boolean",
+          "default": "true",
+          "description": "Synchronize to audio output"
+        },
+        {
+          "key": "audio_latency",
+          "label": "Latency (ms)",
+          "type": "number",
+          "default": "64",
+          "min": 8,
+          "max": 512,
+          "description": "Audio latency in milliseconds"
+        },
+        {
+          "key": "audio_rate_control",
+          "label": "Dynamic Rate Control",
+          "type": "boolean",
+          "default": "true",
+          "description": "Enable dynamic audio rate control"
+        },
+        {
+          "key": "audio_rate_control_delta",
+          "label": "Rate Control Delta",
+          "type": "number",
+          "default": "0.005",
+          "min": 0,
+          "max": 1,
+          "description": "Dynamic rate control adjustment delta"
+        },
+        {
+          "key": "audio_max_timing_skew",
+          "label": "Max Timing Skew",
+          "type": "number",
+          "default": "0.05",
+          "min": 0,
+          "max": 1,
+          "description": "Maximum timing skew for audio synchronization"
+        },
+        {
+          "key": "audio_output_rate",
+          "label": "Output Rate (Hz)",
+          "type": "number",
+          "default": "48000",
+          "min": 22050,
+          "max": 192000,
+          "description": "Audio output sample rate in Hz"
+        }
+      ]
+    },
+    {
+      "id": "input",
+      "name": "Input",
+      "settings": [
+        {
+          "key": "input_autodetect_enable",
+          "label": "Autodetect Input",
+          "type": "boolean",
+          "default": "true",
+          "description": "Automatically configure connected gamepads"
+        },
+        {
+          "key": "input_max_users",
+          "label": "Max Users",
+          "type": "number",
+          "default": "5",
+          "min": 1,
+          "max": 16,
+          "description": "Maximum number of input users"
+        },
+        {
+          "key": "input_player1_joypad_index",
+          "label": "Player 1 Joypad Index",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 15,
+          "description": "Which joypad to assign to player 1"
+        },
+        {
+          "key": "input_player1_analog_dpad_mode",
+          "label": "Player 1 Analog to D-Pad Mode",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2", "3"],
+          "description": "0=None, 1=Left, 2=Right, 3=Both"
+        },
+        {
+          "key": "input_menu_toggle_gamepad_combo",
+          "label": "Menu Toggle Gamepad Combo",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "1", "2", "3", "4", "5", "6"],
+          "description": "0=None, 1=Down+Y+L1+R1, etc."
+        },
+        {
+          "key": "input_turbo_period",
+          "label": "Turbo Period",
+          "type": "number",
+          "default": "6",
+          "min": 1,
+          "max": 100,
+          "description": "Number of frames between turbo toggles"
+        },
+        {
+          "key": "input_turbo_duty_cycle",
+          "label": "Turbo Duty Cycle",
+          "type": "number",
+          "default": "3",
+          "min": 1,
+          "max": 100,
+          "description": "Number of frames turbo button is held per cycle"
+        },
+        {
+          "key": "input_poll_type_behavior",
+          "label": "Input Poll Type",
+          "type": "enum",
+          "default": "2",
+          "options": ["0", "1", "2"],
+          "description": "0=Early, 1=Normal, 2=Late"
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "name": "Network",
+      "settings": [
+        {
+          "key": "network_cmd_enable",
+          "label": "Network Commands",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable network command interface"
+        },
+        {
+          "key": "network_cmd_port",
+          "label": "Network Command Port",
+          "type": "number",
+          "default": "55355",
+          "min": 1,
+          "max": 65535,
+          "description": "Port for network command interface"
+        },
+        {
+          "key": "stdin_cmd_enable",
+          "label": "Stdin Commands",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable stdin command interface"
+        },
+        {
+          "key": "netplay_nickname",
+          "label": "Netplay Nickname",
+          "type": "string",
+          "default": "",
+          "description": "Your nickname for netplay sessions"
+        },
+        {
+          "key": "netplay_use_mitm_server",
+          "label": "Use MITM Server",
+          "type": "boolean",
+          "default": "false",
+          "description": "Use a relay server for netplay connections"
+        },
+        {
+          "key": "netplay_ip_port",
+          "label": "Netplay Port",
+          "type": "number",
+          "default": "55435",
+          "min": 1,
+          "max": 65535,
+          "description": "Port for netplay connections"
+        }
+      ]
+    },
+    {
+      "id": "paths",
+      "name": "Paths",
+      "settings": [
+        {
+          "key": "screenshot_directory",
+          "label": "Screenshot Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to screenshot output directory"
+        },
+        {
+          "key": "recording_output_directory",
+          "label": "Recording Output Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to recording output directory"
+        },
+        {
+          "key": "log_dir",
+          "label": "Log Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to log file directory"
+        },
+        {
+          "key": "content_database_path",
+          "label": "Content Database Path",
+          "type": "path",
+          "default": "",
+          "description": "Path to content database directory"
+        },
+        {
+          "key": "cheat_database_path",
+          "label": "Cheat Database Path",
+          "type": "path",
+          "default": "",
+          "description": "Path to cheat database directory"
+        },
+        {
+          "key": "cursor_directory",
+          "label": "Cursor Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to cursor directory"
+        },
+        {
+          "key": "overlay_directory",
+          "label": "Overlay Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to overlay directory"
+        },
+        {
+          "key": "assets_directory",
+          "label": "Assets Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to assets directory"
+        },
+        {
+          "key": "cache_directory",
+          "label": "Cache Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to cache directory"
+        },
+        {
+          "key": "playlist_directory",
+          "label": "Playlist Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to playlist directory"
+        },
+        {
+          "key": "content_history_dir",
+          "label": "Content History Directory",
+          "type": "path",
+          "default": "",
+          "description": "Path to content history directory"
+        },
+        {
+          "key": "rgui_browser_directory",
+          "label": "File Browser Directory",
+          "type": "path",
+          "default": "",
+          "description": "Starting directory for the file browser"
+        }
+      ]
+    }
+  ]
+}

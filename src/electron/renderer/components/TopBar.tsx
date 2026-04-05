@@ -2,10 +2,38 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp, type ActiveFilter } from "../context/AppContext";
 import "./TopBar.css";
 
-export function TopBar() {
+export const TOPBAR_ITEM_COUNT = 4;
+export const TOPBAR_INDEX_SEARCH = 0;
+export const TOPBAR_INDEX_FAVORITES = 1;
+export const TOPBAR_INDEX_PROFILE = 2;
+export const TOPBAR_INDEX_SETTINGS = 3;
+
+interface TopBarProps {
+  focusedIndex: number;
+  focusActive: boolean;
+  textInputMode: boolean;
+  onExitTextInput: () => void;
+}
+
+export function TopBar({
+  focusedIndex,
+  focusActive,
+  textInputMode,
+  onExitTextInput,
+}: TopBarProps) {
   const { searchQuery, setSearchQuery, setCurrentView, activeFilter, setActiveFilter } = useApp();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // When entering text input mode, focus the search input; when leaving, blur it.
+  useEffect(() => {
+    if (textInputMode) {
+      inputRef.current?.focus();
+    } else if (document.activeElement === inputRef.current) {
+      inputRef.current?.blur();
+    }
+  }, [textInputMode]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -40,8 +68,12 @@ export function TopBar() {
     }
   }, [isFavoritesActive, setActiveFilter]);
 
+  const isFocused = (idx: number) => focusActive && focusedIndex === idx;
+  const focusRingClass = (idx: number) =>
+    isFocused(idx) ? "ring-2 ring-blue-500" : "";
+
   return (
-    <header className="flex items-center gap-4 px-5 py-3">
+    <header className="flex items-center gap-4 px-5 py-5">
       {/* Shared SVG gradient definition */}
       <svg width="0" height="0" className="absolute">
         <defs>
@@ -58,12 +90,21 @@ export function TopBar() {
       </div>
 
       {/* Search */}
-      <div className="topbar-search relative flex-1 max-w-md mx-auto">
+      <div
+        data-topbar-index={TOPBAR_INDEX_SEARCH}
+        className={`topbar-search relative flex-1 max-w-md mx-auto rounded-full transition-all ${focusRingClass(
+          TOPBAR_INDEX_SEARCH
+        )}`}
+      >
         <input
+          ref={inputRef}
           type="text"
           value={localQuery}
           onChange={(e) => setLocalQuery(e.target.value)}
           onKeyDown={handleInputKeyDown}
+          onBlur={() => {
+            if (textInputMode) onExitTextInput();
+          }}
           placeholder="Search ROMs..."
           className="w-full bg-transparent px-4 py-2 pl-9 text-sm text-gray-100 placeholder-gray-500 outline-none"
         />
@@ -97,8 +138,11 @@ export function TopBar() {
       <div className="flex items-center gap-2">
         {/* Favorites toggle */}
         <button
+          data-topbar-index={TOPBAR_INDEX_FAVORITES}
           onClick={handleToggleFavorites}
-          className="topbar-icon-btn p-2.5"
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_FAVORITES
+          )}`}
           title={isFavoritesActive ? "Show all" : "Show favorites"}
         >
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
@@ -108,7 +152,10 @@ export function TopBar() {
 
         {/* User profile */}
         <button
-          className="topbar-icon-btn p-2.5"
+          data-topbar-index={TOPBAR_INDEX_PROFILE}
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_PROFILE
+          )}`}
           title="Profile"
         >
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
@@ -118,8 +165,11 @@ export function TopBar() {
 
         {/* Settings */}
         <button
+          data-topbar-index={TOPBAR_INDEX_SETTINGS}
           onClick={() => setCurrentView("settings")}
-          className="topbar-icon-btn p-2.5"
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_SETTINGS
+          )}`}
           title="Settings"
         >
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">

@@ -1,9 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TopBar } from "./TopBar";
+import {
+  TopBar,
+  TOPBAR_ITEM_COUNT,
+  TOPBAR_INDEX_SEARCH,
+  TOPBAR_INDEX_FAVORITES,
+  TOPBAR_INDEX_PROFILE,
+  TOPBAR_INDEX_SETTINGS,
+} from "./TopBar";
 import { SystemSlider } from "./SystemSlider";
 import { GameGrid } from "./GameGrid";
 import { BottomBar } from "./BottomBar";
 import { SettingsPage } from "./SettingsPage";
+import {
+  VirtualKeyboard,
+  getKeyboardRows,
+  type KeyboardCursor,
+} from "./VirtualKeyboard";
 import { useApp } from "../context/AppContext";
 import { useFocusManager, type FocusAction } from "../hooks/useFocusManager";
 import { useGamepad } from "../hooks/useGamepad";
@@ -26,7 +38,33 @@ export function Layout() {
     toggleFullscreen,
     isFullscreen,
     setGamepadConnected,
+    searchQuery,
+    setSearchQuery,
   } = useApp();
+
+  // Track the latest search query in a ref so the virtual keyboard handlers
+  // can read the current value without being re-created on every keystroke.
+  const searchQueryRef = useRef(searchQuery);
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
+  // Virtual keyboard state (only visible when focusState.textInputMode === true)
+  const [keyboardCursor, setKeyboardCursor] = useState<KeyboardCursor>({
+    row: 1,
+    col: 0,
+  });
+  const [keyboardShift, setKeyboardShift] = useState(false);
+  // Mirror keyboard state in refs so the stable handleAction callback can read
+  // the latest values without being re-created on every cursor move.
+  const keyboardCursorRef = useRef<KeyboardCursor>({ row: 1, col: 0 });
+  const keyboardShiftRef = useRef(false);
+  useEffect(() => {
+    keyboardCursorRef.current = keyboardCursor;
+  }, [keyboardCursor]);
+  useEffect(() => {
+    keyboardShiftRef.current = keyboardShift;
+  }, [keyboardShift]);
 
   const [gridColumnCount, setGridColumnCount] = useState(4);
   const [gridItemCount, setGridItemCount] = useState(0);
@@ -60,15 +98,150 @@ export function Layout() {
   }, [activeFilter, sliderItems]);
 
   const { focusState, focusDispatch } = useFocusManager({
+    topbarItemCount: TOPBAR_ITEM_COUNT,
     sliderItemCount: sliderItems.length,
     gridItemCount,
     gridColumnCount,
   });
 
-  const { playNavigate, playSelect } = useNavigationSounds();
+  const handleToggleFavoritesFilter = useCallback(() => {
+    if (activeFilter.type === "favorites") {
+      setActiveFilter({ type: "all" });
+    } else {
+      setActiveFilter({ type: "favorites" });
+    }
+  }, [activeFilter, setActiveFilter]);
+
+  const { playNavigate, playSelect, playKeyboardSound } = useNavigationSounds();
+
+  // --- Virtual keyboard helpers ------------------------------------------------
+  // Move the cursor within the on-screen keyboard. Between rows of different
+  // lengths (char row ↔ action row) we map the column proportionally so the
+  // visual position stays roughly aligned.
+  const moveKeyboardCursor = useCallback(
+    (direction: "up" | "down" | "left" | "right") => {
+      const rows = getKeyboardRows(keyboardShiftRef.current);
+      setKeyboardCursor((prev) => {
+        const row = rows[prev.row];
+        if (!row) return prev;
+
+        if (direction === "left") {
+          return { row: prev.row, col: Math.max(0, prev.col - 1) };
+        }
+        if (direction === "right") {
+          return { row: prev.row, col: Math.min(row.length - 1, prev.col + 1) };
+        }
+        const delta = direction === "up" ? -1 : 1;
+        const newRowIdx = prev.row + delta;
+        if (newRowIdx < 0 || newRowIdx >= rows.length) return prev;
+        const oldLen = row.length;
+        const newLen = rows[newRowIdx].length;
+        const newCol =
+          oldLen <= 1
+            ? 0
+            : Math.round((prev.col / (oldLen - 1)) * (newLen - 1));
+        return {
+          row: newRowIdx,
+          col: Math.max(0, Math.min(newLen - 1, newCol)),
+        };
+      });
+    },
+    []
+  );
+
+  // Apply the key at the given (row, col) position. Used by both gamepad
+  // ACTIVATE and mouse clicks on the keyboard.
+  const applyVirtualKey = useCallback(
+    (row: number, col: number) => {
+      const rows = getKeyboardRows(keyboardShiftRef.current);
+      const key = rows[row]?.[col];
+      if (!key) return;
+
+      switch (key.action.type) {
+        case "char": {
+          const next = searchQueryRef.current + key.action.value;
+          searchQueryRef.current = next;
+          setSearchQuery(next);
+          // Auto-unshift after typing a single uppercase/symbol character,
+          // matching mobile keyboard conventions.
+          if (keyboardShiftRef.current) setKeyboardShift(false);
+          playKeyboardSound("press");
+          break;
+        }
+        case "space": {
+          const next = searchQueryRef.current + " ";
+          searchQueryRef.current = next;
+          setSearchQuery(next);
+          playKeyboardSound("press");
+          break;
+        }
+        case "backspace": {
+          const next = searchQueryRef.current.slice(0, -1);
+          searchQueryRef.current = next;
+          setSearchQuery(next);
+          playKeyboardSound("press");
+          break;
+        }
+        case "shift":
+          setKeyboardShift((s) => !s);
+          playKeyboardSound("shift");
+          break;
+        case "done":
+          focusDispatch({ type: "EXIT_TEXT_INPUT" });
+          playKeyboardSound("confirm");
+          break;
+      }
+    },
+    [setSearchQuery, focusDispatch, playKeyboardSound]
+  );
+
+  // Reset keyboard state each time we enter text-input mode so the cursor
+  // always starts at a predictable position.
+  useEffect(() => {
+    if (focusState.textInputMode) {
+      setKeyboardCursor({ row: 1, col: 0 });
+      setKeyboardShift(false);
+    }
+  }, [focusState.textInputMode]);
 
   const handleAction = useCallback(
     (action: FocusAction) => {
+      // While the on-screen keyboard is open, all directional navigation and
+      // the ACTIVATE button drive the virtual keyboard instead of the normal
+      // layout regions. Keyboard interactions use their own click sounds so
+      // the rest of the app's audio feedback stays untouched. BACK closes the
+      // keyboard.
+      if (focusState.textInputMode) {
+        switch (action.type) {
+          case "BACK":
+            focusDispatch({ type: "EXIT_TEXT_INPUT" });
+            playKeyboardSound("confirm");
+            break;
+          case "MOVE_UP":
+            moveKeyboardCursor("up");
+            playKeyboardSound("nav");
+            break;
+          case "MOVE_DOWN":
+            moveKeyboardCursor("down");
+            playKeyboardSound("nav");
+            break;
+          case "MOVE_LEFT":
+            moveKeyboardCursor("left");
+            playKeyboardSound("nav");
+            break;
+          case "MOVE_RIGHT":
+            moveKeyboardCursor("right");
+            playKeyboardSound("nav");
+            break;
+          case "ACTIVATE": {
+            const { row, col } = keyboardCursorRef.current;
+            applyVirtualKey(row, col);
+            break;
+          }
+        }
+        return;
+      }
+
       switch (action.type) {
         case "MOVE_UP":
         case "MOVE_DOWN":
@@ -85,6 +258,21 @@ export function Layout() {
           if (focusState.region === "grid") {
             const rom = filteredRomsRef.current[focusState.gridIndex];
             if (rom) launchGame(rom);
+          } else if (focusState.region === "topbar") {
+            switch (focusState.topbarIndex) {
+              case TOPBAR_INDEX_SEARCH:
+                focusDispatch({ type: "ENTER_TEXT_INPUT" });
+                break;
+              case TOPBAR_INDEX_FAVORITES:
+                handleToggleFavoritesFilter();
+                break;
+              case TOPBAR_INDEX_PROFILE:
+                // Placeholder — profile action not yet implemented
+                break;
+              case TOPBAR_INDEX_SETTINGS:
+                setCurrentView("settings");
+                break;
+            }
           } else {
             const item = sliderItems[focusState.sliderIndex];
             if (item) {
@@ -170,6 +358,8 @@ export function Layout() {
       focusState.region,
       focusState.gridIndex,
       focusState.sliderIndex,
+      focusState.topbarIndex,
+      focusState.textInputMode,
       sliderItems,
       currentView,
       isFullscreen,
@@ -178,8 +368,12 @@ export function Layout() {
       setCurrentView,
       toggleFavorite,
       toggleFullscreen,
+      handleToggleFavoritesFilter,
       playNavigate,
       playSelect,
+      playKeyboardSound,
+      moveKeyboardCursor,
+      applyVirtualKey,
     ]
   );
 
@@ -268,7 +462,14 @@ export function Layout() {
 
   return (
     <div className="flex h-screen flex-col">
-      <TopBar />
+      <TopBar
+        focusedIndex={
+          focusState.region === "topbar" ? focusState.topbarIndex : -1
+        }
+        focusActive={focusState.active}
+        textInputMode={focusState.textInputMode}
+        onExitTextInput={() => focusDispatch({ type: "EXIT_TEXT_INPUT" })}
+      />
       <SystemSlider
         items={sliderItems}
         activeIndex={activeSliderIndex}
@@ -290,6 +491,13 @@ export function Layout() {
         />
       </main>
       {gamepadConnected && <BottomBar />}
+      {focusState.textInputMode && (
+        <VirtualKeyboard
+          cursor={keyboardCursor}
+          shift={keyboardShift}
+          onKeyClick={applyVirtualKey}
+        />
+      )}
     </div>
   );
 }

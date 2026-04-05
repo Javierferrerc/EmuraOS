@@ -1,0 +1,126 @@
+{
+  "configFile": "settings.xml",
+  "configFormat": "xml",
+  "configLocations": ["{emuDir}/settings.xml"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "check_update",
+          "label": "Check for Updates",
+          "type": "boolean",
+          "default": "true",
+          "description": "Check for emulator updates on startup"
+        },
+        {
+          "key": "console_language",
+          "label": "Console Language",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+          "description": "0=Japanese, 1=English, 2=French, 3=German, 4=Italian, 5=Spanish, 6=Chinese, 7=Korean, 8=Dutch, 9=Portuguese, 10=Russian, 11=Taiwanese"
+        },
+        {
+          "key": "fullscreen",
+          "label": "Fullscreen",
+          "type": "boolean",
+          "default": "false",
+          "description": "Start in fullscreen mode"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "graphic_api",
+          "label": "Graphics API",
+          "type": "enum",
+          "default": "Vulkan",
+          "options": ["Vulkan", "OpenGL"],
+          "description": "Graphics rendering API"
+        },
+        {
+          "key": "vsync",
+          "label": "VSync",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1"],
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "upscale_filter",
+          "label": "Upscale Filter",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2"],
+          "description": "0=Nearest, 1=Bilinear, 2=Bicubic"
+        },
+        {
+          "key": "downscale_filter",
+          "label": "Downscale Filter",
+          "type": "enum",
+          "default": "1",
+          "options": ["0", "1", "2"],
+          "description": "Downscale filtering mode"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "tv_channels",
+          "label": "TV Channels",
+          "type": "enum",
+          "default": "2",
+          "options": ["1", "2", "6"],
+          "description": "1=Mono, 2=Stereo, 6=Surround"
+        },
+        {
+          "key": "tv_volume",
+          "label": "TV Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 100,
+          "description": "TV audio output volume"
+        },
+        {
+          "key": "pad_channels",
+          "label": "GamePad Channels",
+          "type": "enum",
+          "default": "2",
+          "options": ["1", "2"],
+          "description": "GamePad audio channel configuration"
+        },
+        {
+          "key": "pad_volume",
+          "label": "GamePad Volume",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 100,
+          "description": "GamePad audio output volume"
+        }
+      ]
+    },
+    {
+      "id": "paths",
+      "name": "Paths",
+      "settings": [
+        {
+          "key": "mlc_path",
+          "label": "MLC01 Path",
+          "type": "path",
+          "default": "",
+          "description": "MLC01 path for game data"
+        }
+      ]
+    }
+  ]
+}

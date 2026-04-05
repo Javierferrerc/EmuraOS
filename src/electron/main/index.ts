@@ -2,7 +2,7 @@ import { app, BrowserWindow, globalShortcut, Menu } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
-import { isGameActive } from "./game-state.js";
+import { isGameActive, claimF10Fire } from "./game-state.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +13,10 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
+  // Remove the native application menu bar entirely (View/Edit/etc).
+  // Called before BrowserWindow creation to avoid a flash of the menu.
+  Menu.setApplicationMenu(null);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -49,22 +53,17 @@ function createWindow(): void {
     mainWindow?.webContents.send("fullscreen-changed", false)
   );
 
-  // Keep dev-friendly menu items
-  const menu = Menu.buildFromTemplate([
-    {
-      label: "View",
-      submenu: [
-        { role: "reload" },
-        { role: "toggleDevTools" },
-      ],
-    },
-  ]);
-  Menu.setApplicationMenu(menu);
-
-  // F10 toggles fullscreen — register once, re-register on focus only if needed
+  // F10 toggles fullscreen — register once, re-register on focus only if needed.
+  // The emulator-overlay sync loop has a GetAsyncKeyState-based polling fallback
+  // for F10 during game sessions (because globalShortcut stops delivering
+  // WM_HOTKEY reliably once an embedded emulator owns fullscreen foreground).
+  // Both paths claim the fire through `claimF10Fire()` to avoid double-toggles.
   const f10Handler = () => {
+    if (!claimF10Fire()) return;
     if (mainWindow) {
-      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      const next = !mainWindow.isFullScreen();
+      console.log("[F10] toggling fullscreen →", next);
+      mainWindow.setFullScreen(next);
     }
   };
   globalShortcut.register("F10", f10Handler);

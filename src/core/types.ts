@@ -32,6 +32,7 @@ export interface AppConfig {
   screenScraperDevPassword?: string;
   screenScraperUserId?: string;
   screenScraperUserPassword?: string;
+  steamGridDbApiKey?: string;
 }
 
 export interface EmulatorDefinition {
@@ -85,7 +86,7 @@ export interface GameMetadata {
   players: string;
   rating: string;
   coverPath: string;
-  coverSource?: "libretro" | "screenscraper";
+  coverSource?: "libretro" | "screenscraper" | "steamgriddb";
   screenshotPath: string;
   screenScraperId: string;
   lastScraped: string;
@@ -133,6 +134,7 @@ export interface CoverFetchProgress {
   romFileName: string;
   systemId: string;
   status: "downloading" | "found" | "not_found" | "error" | "already_cached";
+  phase?: "libretro" | "steamgriddb";
 }
 
 export interface CoverFetchResult {
@@ -181,6 +183,24 @@ export interface CoreDownloadProgress {
   status: "downloading" | "extracting" | "installed" | "already_installed" | "error";
 }
 
+export interface DriveEmulatorMapping {
+  emulatorId: string;
+  folderId: string;
+  fileCount: number;
+  totalBytes: number;
+}
+
+export interface EmulatorDownloadProgress {
+  emulatorId: string;
+  phase: "listing" | "downloading" | "finalizing" | "done" | "error";
+  filesCompleted: number;
+  filesTotal: number;
+  bytesReceived: number;
+  bytesTotal: number;
+  currentFile?: string;
+  message?: string;
+}
+
 export interface EmulatorReadinessResult {
   emulatorId: string;
   isReady: boolean;
@@ -201,4 +221,39 @@ export interface UserLibraryFile {
   collections: Collection[];
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
+}
+
+// ── Emulator Configuration System ──────────────────────────────────
+
+export interface EmulatorSettingDefinition {
+  key: string;
+  label: string;
+  type: "boolean" | "enum" | "number" | "string" | "path";
+  category: string;
+  default?: string;
+  // Labeled options let schemas show human-readable dropdowns
+  // (e.g. {value: "0", label: "Default"}) while still storing the raw value.
+  // Plain strings remain supported for backward compatibility.
+  options?: (string | { value: string; label: string })[];
+  min?: number;
+  max?: number;
+  description?: string;
+}
+
+export interface EmulatorConfigSchema {
+  configFile: string;
+  configFormat: "ini" | "keyvalue" | "json" | "yaml" | "xml";
+  configLocations: string[];
+  categories: {
+    id: string;
+    name: string;
+    settings: Omit<EmulatorSettingDefinition, "category">[];
+  }[];
+}
+
+export interface EmulatorConfigData {
+  emulatorId: string;
+  configPath: string | null;
+  settings: Record<string, string>;
+  schema: EmulatorConfigSchema;
 }

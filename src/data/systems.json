@@ -87,7 +87,7 @@
     "id": "psx",
     "name": "PlayStation",
     "manufacturer": "Sony",
-    "extensions": [".bin", ".cue", ".img", ".iso", ".pbp", ".chd"],
+    "extensions": [".cue", ".m3u", ".chd", ".pbp", ".iso", ".bin", ".img"],
     "romFolder": "psx"
   },
   {

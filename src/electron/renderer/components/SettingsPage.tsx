@@ -1,5 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
+import type { EmulatorDownloadProgress } from "../../../core/types.js";
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function DownloadProgressBar({
+  progress,
+}: {
+  progress: EmulatorDownloadProgress;
+}) {
+  const pct =
+    progress.bytesTotal > 0
+      ? (progress.bytesReceived / progress.bytesTotal) * 100
+      : 0;
+  return (
+    <div className="mt-2">
+      <div className="mb-1 flex justify-between gap-2 text-xs text-gray-400">
+        <span>
+          {progress.filesCompleted} / {progress.filesTotal} files ·{" "}
+          {formatBytes(progress.bytesReceived)} /{" "}
+          {formatBytes(progress.bytesTotal)}
+        </span>
+        <span className="ml-2 max-w-[200px] truncate">
+          {progress.currentFile ?? progress.phase}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
+        <div
+          className="h-full bg-green-500 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface CemuKeysInfo {
+  emulatorFound: boolean;
+  exists: boolean;
+  path: string | null;
+  entryCount: number;
+}
 
 export function SettingsPage() {
   const {
@@ -21,7 +67,47 @@ export function SettingsPage() {
     isDetectingEmulators,
     coreDownloadProgress,
     readinessReport,
+    openCemuKeysModal,
+    isCemuKeysModalOpen,
+    pendingCemuKeysLaunch,
+    emulatorDefs,
+    driveEmulators,
+    isLoadingDrive,
+    refreshDriveEmulators,
+    downloadingEmulatorId,
+    emulatorDownloadProgress,
+    downloadEmulator,
   } = useApp();
+
+  // Kick off a Drive listing on first mount; subsequent opens reuse the
+  // cached map until the user hits "Refresh Drive".
+  useEffect(() => {
+    if (Object.keys(driveEmulators).length === 0 && !isLoadingDrive) {
+      refreshDriveEmulators(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [cemuKeysInfo, setCemuKeysInfo] = useState<CemuKeysInfo | null>(null);
+
+  // Refresh Cemu keys status whenever the modal closes (so after the user
+  // pastes keys, the count updates here) and on initial mount.
+  useEffect(() => {
+    const modalOpen = isCemuKeysModalOpen || pendingCemuKeysLaunch !== null;
+    if (modalOpen) return;
+    let cancelled = false;
+    window.electronAPI
+      .checkCemuKeys()
+      .then((info) => {
+        if (!cancelled) setCemuKeysInfo(info);
+      })
+      .catch((err) => {
+        console.warn("Failed to check Cemu keys:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCemuKeysModalOpen, pendingCemuKeysLaunch]);
 
   const [romsPath, setRomsPath] = useState(config?.romsPath ?? "./roms");
   const [emulatorsPath, setEmulatorsPath] = useState(
@@ -39,8 +125,12 @@ export function SettingsPage() {
   const [ssUserPassword, setSsUserPassword] = useState(
     config?.screenScraperUserPassword ?? ""
   );
+  const [sgdbApiKey, setSgdbApiKey] = useState(
+    config?.steamGridDbApiKey ?? ""
+  );
   const [saved, setSaved] = useState(false);
   const [credsSaved, setCredsSaved] = useState(false);
+  const [sgdbSaved, setSgdbSaved] = useState(false);
 
   async function handleSave() {
     await updateConfig({ romsPath, emulatorsPath });
@@ -57,6 +147,14 @@ export function SettingsPage() {
     });
     setCredsSaved(true);
     setTimeout(() => setCredsSaved(false), 2000);
+  }
+
+  async function handleSaveSgdb() {
+    await updateConfig({
+      steamGridDbApiKey: sgdbApiKey || undefined,
+    });
+    setSgdbSaved(true);
+    setTimeout(() => setSgdbSaved(false), 2000);
   }
 
   async function handleDetect() {
@@ -146,20 +244,25 @@ export function SettingsPage() {
               Emulator Detection
             </h2>
             <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
-              <button
-                onClick={handleDetect}
-                disabled={isDetectingEmulators}
-                className="mb-4 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:opacity-50"
-              >
-                {isDetectingEmulators ? "Setting up..." : "Detect Emulators"}
-              </button>
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  onClick={handleDetect}
+                  disabled={isDetectingEmulators || isLoadingDrive}
+                  className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:opacity-50"
+                >
+                  {isDetectingEmulators || isLoadingDrive
+                    ? "Detecting..."
+                    : "Detect Emulators"}
+                </button>
+              </div>
 
-              {/* Core download progress */}
+              {/* Core download progress (during detect-emulators) */}
               {isDetectingEmulators && coreDownloadProgress && (
                 <div className="mb-4">
                   <div className="mb-1 flex justify-between text-xs text-gray-400">
                     <span>
-                      {coreDownloadProgress.current} / {coreDownloadProgress.total}
+                      {coreDownloadProgress.current} /{" "}
+                      {coreDownloadProgress.total}
                     </span>
                     <span className="ml-2 truncate">
                       {coreDownloadProgress.status === "downloading"
@@ -184,71 +287,187 @@ export function SettingsPage() {
                 </div>
               )}
 
-              {lastDetection && !isDetectingEmulators && (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-400">
-                    Checked {lastDetection.totalChecked} emulators
-                  </p>
+              {/* Unified emulator list: 3 row variants */}
+              <div className="space-y-2">
+                {emulatorDefs.map((def) => {
+                  const detected = lastDetection?.detected.find(
+                    (d) => d.id === def.id
+                  );
+                  const readiness = readinessReport?.results.find(
+                    (r) => r.emulatorId === def.id
+                  );
+                  const driveEntry = driveEmulators[def.id.toLowerCase()];
+                  const isDownloading = downloadingEmulatorId === def.id;
 
-                  {lastDetection.detected.length > 0 && (
-                    <div>
-                      <h3 className="mb-2 text-sm font-medium text-green-400">
-                        Found ({lastDetection.detected.length})
-                      </h3>
-                      <div className="space-y-1">
-                        {lastDetection.detected.map((emu) => {
-                          const readiness = readinessReport?.results.find(
-                            (r) => r.emulatorId === emu.id
-                          );
-                          return (
-                            <div
-                              key={emu.id}
-                              className="flex items-center justify-between rounded bg-gray-700/50 px-3 py-1.5 text-sm"
+                  // Variant 1: Installed
+                  if (detected) {
+                    return (
+                      <div
+                        key={def.id}
+                        className="flex items-center justify-between rounded bg-gray-700/50 px-3 py-1.5 text-sm"
+                      >
+                        <span className="text-gray-200">{def.name}</span>
+                        <div className="flex items-center gap-2">
+                          {readiness && (
+                            <span
+                              className={`text-xs font-medium ${
+                                readiness.errors.length > 0
+                                  ? "text-red-400"
+                                  : readiness.fixed.length > 0
+                                    ? "text-blue-400"
+                                    : "text-green-400"
+                              }`}
                             >
-                              <span className="text-gray-200">{emu.name}</span>
-                              <div className="flex items-center gap-2">
-                                {readiness && (
-                                  <span
-                                    className={`text-xs font-medium ${
-                                      readiness.errors.length > 0
-                                        ? "text-red-400"
-                                        : readiness.fixed.length > 0
-                                          ? "text-blue-400"
-                                          : "text-green-400"
-                                    }`}
-                                  >
-                                    {readiness.errors.length > 0
-                                      ? `${readiness.errors.length} error(s)`
-                                      : readiness.fixed.length > 0
-                                        ? `${readiness.fixed.length} core(s) installed`
-                                        : "Ready"}
-                                  </span>
-                                )}
-                                <span className="text-xs text-gray-400">
-                                  {emu.source === "emulatorsPath"
-                                    ? "Custom path"
-                                    : "Default path"}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
+                              {readiness.errors.length > 0
+                                ? `${readiness.errors.length} error(s)`
+                                : readiness.fixed.length > 0
+                                  ? `${readiness.fixed.length} core(s) installed`
+                                  : "Ready"}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-400">
+                            {detected.source === "emulatorsPath"
+                              ? "Custom path"
+                              : "Default path"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Variant 2: Available to download from Drive
+                  if (driveEntry) {
+                    return (
+                      <div
+                        key={def.id}
+                        className="rounded bg-gray-700/30 p-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium text-gray-200">
+                              {def.name}
+                            </span>
+                            <span className="ml-2 text-xs text-gray-500">
+                              {driveEntry.fileCount > 0
+                                ? `${driveEntry.fileCount} files · ${formatBytes(driveEntry.totalBytes)}`
+                                : "Available on Drive"}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => downloadEmulator(def.id)}
+                            disabled={isDownloading || downloadingEmulatorId !== null}
+                            className="rounded bg-green-700 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-green-600 disabled:opacity-50"
+                          >
+                            {isDownloading ? "Downloading..." : "Download"}
+                          </button>
+                        </div>
+                        {isDownloading && emulatorDownloadProgress && (
+                          <DownloadProgressBar
+                            progress={emulatorDownloadProgress}
+                          />
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Variant 3: Not available yet
+                  return (
+                    <div
+                      key={def.id}
+                      className="flex items-center justify-between rounded bg-gray-700/20 px-3 py-2"
+                    >
+                      <span className="text-sm text-gray-400">{def.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          Not available yet
+                        </span>
+                        <button
+                          disabled
+                          className="cursor-not-allowed rounded bg-gray-700 px-3 py-1 text-xs font-medium text-gray-500"
+                        >
+                          Download
+                        </button>
                       </div>
                     </div>
-                  )}
+                  );
+                })}
+              </div>
+            </div>
+          </section>
 
-                  {lastDetection.notFound.length > 0 && (
-                    <div>
-                      <h3 className="mb-2 text-sm font-medium text-gray-500">
-                        Not Found ({lastDetection.notFound.length})
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {lastDetection.notFound.join(", ")}
-                      </p>
-                    </div>
+          {/* Emulator Configuration Section */}
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Emulator Configuration
+            </h2>
+            <div className="rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <p className="mb-3 text-sm text-gray-400">
+                Tweak emulator settings (graphics, audio, input, paths) directly
+                from Retro Launcher without opening each emulator separately.
+              </p>
+              <button
+                onClick={() => setCurrentView("emulator-config")}
+                disabled={!lastDetection || lastDetection.detected.length === 0}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              >
+                Configure Emulators
+              </button>
+              {(!lastDetection || lastDetection.detected.length === 0) && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Detect emulators first to enable configuration.
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Cemu (Wii U) Keys Section */}
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Cemu (Wii U) Disc Keys
+            </h2>
+            <div className="space-y-3 rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <p className="text-sm text-gray-400">
+                Cemu needs a <code className="rounded bg-gray-900 px-1.5 py-0.5 text-xs text-blue-300">keys.txt</code> file
+                to decrypt encrypted Wii U games (.wud/.wux). Paste your keys
+                here to save them in Cemu's config directory.
+              </p>
+
+              {cemuKeysInfo && !cemuKeysInfo.emulatorFound && (
+                <p className="rounded bg-yellow-950/40 px-3 py-2 text-xs text-yellow-300">
+                  Cemu not detected. Run "Detect Emulators" first.
+                </p>
+              )}
+
+              {cemuKeysInfo && cemuKeysInfo.emulatorFound && (
+                <div className="rounded bg-gray-700/50 px-3 py-2 text-xs text-gray-300">
+                  <p>
+                    Status:{" "}
+                    {cemuKeysInfo.exists ? (
+                      <span className="font-semibold text-green-400">
+                        {cemuKeysInfo.entryCount}{" "}
+                        {cemuKeysInfo.entryCount === 1 ? "key" : "keys"} found
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-red-400">
+                        No keys found
+                      </span>
+                    )}
+                  </p>
+                  {cemuKeysInfo.path && (
+                    <p className="mt-1 break-all text-gray-500">
+                      {cemuKeysInfo.path}
+                    </p>
                   )}
                 </div>
               )}
+
+              <button
+                onClick={openCemuKeysModal}
+                disabled={!!cemuKeysInfo && !cemuKeysInfo.emulatorFound}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {cemuKeysInfo?.exists ? "Edit Keys" : "Paste Keys"}
+              </button>
             </div>
           </section>
 
@@ -261,6 +480,9 @@ export function SettingsPage() {
               <p className="text-sm text-gray-400">
                 Download box art from Libretro Thumbnails. No credentials
                 needed — covers are fetched automatically when ROMs are scanned.
+                When a SteamGridDB API key is configured below, remaining
+                covers are fetched from SteamGridDB as a fallback (fixes Switch
+                and other modern systems).
               </p>
               <button
                 onClick={startFetchingCovers}
@@ -313,6 +535,42 @@ export function SettingsPage() {
                   )}
                 </div>
               )}
+            </div>
+          </section>
+
+          {/* SteamGridDB (Boxart Fallback) Section */}
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+              SteamGridDB (Boxart Fallback)
+            </h2>
+            <div className="space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-4">
+              <p className="text-sm text-gray-400">
+                Optional fallback source that fixes Switch and other modern
+                systems Libretro doesn't cover. Requires a free API key from{" "}
+                <span className="font-mono text-gray-300">
+                  steamgriddb.com/profile/preferences/api
+                </span>
+                . When a key is set, remaining covers are automatically fetched
+                from SteamGridDB after Libretro.
+              </p>
+              <div>
+                <label className="mb-1 block text-sm text-gray-300">
+                  SteamGridDB API Key
+                </label>
+                <input
+                  type="password"
+                  value={sgdbApiKey}
+                  onChange={(e) => setSgdbApiKey(e.target.value)}
+                  className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  placeholder="Paste your SteamGridDB API key"
+                />
+              </div>
+              <button
+                onClick={handleSaveSgdb}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+              >
+                {sgdbSaved ? "Saved!" : "Save API Key"}
+              </button>
             </div>
           </section>
 

@@ -1,15 +1,28 @@
 import type { SystemDefinition } from "../../../core/types";
+import { SYSTEM_GROUPS, getGroupForSystem } from "./systemGroups";
 
 import nesIcon from "../assets/icons/consoles/nes.svg";
 import snesIcon from "../assets/icons/consoles/snes.svg";
 import n64Icon from "../assets/icons/consoles/n64.svg";
 import gbaIcon from "../assets/icons/consoles/gba.svg";
 import wiiIcon from "../assets/icons/consoles/wii.svg";
+import wiiuIcon from "../assets/icons/consoles/wiiu.svg";
+import gamecubeIcon from "../assets/icons/consoles/gamecube.svg";
+import ndsIcon from "../assets/icons/consoles/nds.svg";
+// JS identifiers can't start with a digit, so the "3ds" icon is imported
+// under the name `threedsIcon` even though the file and system id are "3ds".
+import threedsIcon from "../assets/icons/consoles/3ds.svg";
+import switchIcon from "../assets/icons/consoles/switch.svg";
+import playstationIcon from "../assets/icons/consoles/playstation.svg";
+import pspIcon from "../assets/icons/consoles/psp.svg";
+import mastersystemIcon from "../assets/icons/consoles/mastersystem.svg";
 import libraryIcon from "../assets/icons/consoles/library.svg";
 
 export interface SliderItem {
   key: string;
-  systemId: string | null; // null = "All"
+  // May be a real systemId (e.g. "nes") or a virtual group id (e.g. "gameboy").
+  // null = "All".
+  systemId: string | null;
   label: string;
   shortLabel: string;
   color: string;     // bright hex
@@ -42,6 +55,16 @@ const SYSTEM_ICONS: Record<string, string> = {
   n64: n64Icon,
   gba: gbaIcon,
   wii: wiiIcon,
+  wiiu: wiiuIcon,
+  gamecube: gamecubeIcon,
+  nds: ndsIcon,
+  "3ds": threedsIcon,
+  switch: switchIcon,
+  // Both PlayStation generations share the same PS logo.
+  psx: playstationIcon,
+  ps2: playstationIcon,
+  psp: pspIcon,
+  mastersystem: mastersystemIcon,
 };
 
 const SHORT_LABELS: Record<string, string> = {
@@ -78,7 +101,37 @@ export function buildSliderItems(
     },
   ];
 
+  // Track which groups we've already emitted so we only add one chip per group
+  // even if multiple members are present.
+  const emittedGroups = new Set<string>();
+
   for (const sys of systemsWithRoms) {
+    const group = getGroupForSystem(sys.id);
+
+    if (group) {
+      if (emittedGroups.has(group.id)) continue;
+      emittedGroups.add(group.id);
+
+      // Reuse the primary member's colors/icon as the group's visual identity.
+      // Falls back to sys.id if the primary isn't in the SYSTEM_COLORS table.
+      const colors =
+        SYSTEM_COLORS[group.primaryMember] ??
+        SYSTEM_COLORS[sys.id] ?? { color: "#718096", darkColor: "#4a5568", iconColor: "#cbd5e1" };
+      const icon = SYSTEM_ICONS[group.primaryMember] ?? SYSTEM_ICONS[sys.id] ?? null;
+
+      items.push({
+        key: `group-${group.id}`,
+        systemId: group.id,
+        label: group.name,
+        shortLabel: group.shortLabel,
+        color: colors.color,
+        darkColor: colors.darkColor,
+        iconColor: colors.iconColor,
+        icon,
+      });
+      continue;
+    }
+
     const colors = SYSTEM_COLORS[sys.id] ?? { color: "#718096", darkColor: "#4a5568", iconColor: "#cbd5e1" };
     items.push({
       key: `sys-${sys.id}`,
@@ -94,3 +147,6 @@ export function buildSliderItems(
 
   return items;
 }
+
+// Re-export so consumers can import from a single place.
+export { SYSTEM_GROUPS };

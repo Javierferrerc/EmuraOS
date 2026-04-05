@@ -81,4 +81,50 @@ describe("RomScanner", () => {
     expect(mario!.sizeBytes).toBeGreaterThan(0);
     expect(mario!.filePath).toContain("Super Mario Bros.nes");
   });
+
+  it("should scan subdirectories recursively (psx/<game>/<files>)", () => {
+    const gameDir = resolve(TEST_ROMS_DIR, "psx", "Silent Hill (USA)");
+    mkdirSync(gameDir, { recursive: true });
+    writeFileSync(resolve(gameDir, "Silent Hill (USA).cue"), "cue-data");
+    writeFileSync(resolve(gameDir, "Silent Hill (USA).bin"), "bin-data");
+
+    const result = scanner.scan(TEST_ROMS_DIR);
+    const psx = result.systems.find((s) => s.systemId === "psx");
+
+    expect(psx).toBeDefined();
+    // .bin should be hidden because .cue is present in the same folder
+    const filenames = psx!.roms.map((r) => r.fileName);
+    expect(filenames).toContain("Silent Hill (USA).cue");
+    expect(filenames).not.toContain("Silent Hill (USA).bin");
+  });
+
+  it("should keep .bin when no .cue exists alongside", () => {
+    mkdirSync(resolve(TEST_ROMS_DIR, "psx"), { recursive: true });
+    writeFileSync(resolve(TEST_ROMS_DIR, "psx", "Crash Bandicoot.bin"), "bin");
+
+    const result = scanner.scan(TEST_ROMS_DIR);
+    const psx = result.systems.find((s) => s.systemId === "psx");
+
+    expect(psx!.roms.map((r) => r.fileName)).toContain("Crash Bandicoot.bin");
+  });
+
+  it("should prefer .m3u over .cue/.bin for multi-disc games", () => {
+    const gameDir = resolve(TEST_ROMS_DIR, "psx", "Final Fantasy VII");
+    mkdirSync(gameDir, { recursive: true });
+    writeFileSync(resolve(gameDir, "FFVII.m3u"), "disc1.cue\ndisc2.cue\ndisc3.cue");
+    writeFileSync(resolve(gameDir, "disc1.cue"), "cue1");
+    writeFileSync(resolve(gameDir, "disc1.bin"), "bin1");
+    writeFileSync(resolve(gameDir, "disc2.cue"), "cue2");
+    writeFileSync(resolve(gameDir, "disc2.bin"), "bin2");
+
+    const result = scanner.scan(TEST_ROMS_DIR);
+    const psx = result.systems.find((s) => s.systemId === "psx");
+    const filenames = psx!.roms.map((r) => r.fileName);
+
+    expect(filenames).toContain("FFVII.m3u");
+    expect(filenames).not.toContain("disc1.cue");
+    expect(filenames).not.toContain("disc2.cue");
+    expect(filenames).not.toContain("disc1.bin");
+    expect(filenames).not.toContain("disc2.bin");
+  });
 });

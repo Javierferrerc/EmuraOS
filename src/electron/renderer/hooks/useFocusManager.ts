@@ -1,12 +1,14 @@
 import { useReducer, useCallback } from "react";
 
-export type FocusRegion = "slider" | "grid";
+export type FocusRegion = "topbar" | "slider" | "grid";
 
 export interface FocusState {
   region: FocusRegion;
+  topbarIndex: number;
   sliderIndex: number;
   gridIndex: number;
   active: boolean;
+  textInputMode: boolean;
 }
 
 export type FocusAction =
@@ -23,10 +25,14 @@ export type FocusAction =
   | { type: "SET_REGION"; region: FocusRegion }
   | { type: "SET_GRID_INDEX"; index: number }
   | { type: "SET_SLIDER_INDEX"; index: number }
+  | { type: "SET_TOPBAR_INDEX"; index: number }
+  | { type: "ENTER_TEXT_INPUT" }
+  | { type: "EXIT_TEXT_INPUT" }
   | { type: "DEACTIVATE" }
   | { type: "RESET_GRID" };
 
 interface FocusCounts {
+  topbarItemCount: number;
   sliderItemCount: number;
   gridItemCount: number;
   gridColumnCount: number;
@@ -34,9 +40,11 @@ interface FocusCounts {
 
 const initialState: FocusState = {
   region: "grid",
+  topbarIndex: 0,
   sliderIndex: 0,
   gridIndex: 0,
   active: false,
+  textInputMode: false,
 };
 
 function createReducer(counts: FocusCounts) {
@@ -44,14 +52,21 @@ function createReducer(counts: FocusCounts) {
     state: FocusState,
     action: FocusAction
   ): FocusState {
-    const { sliderItemCount, gridItemCount, gridColumnCount } = counts;
+    const {
+      topbarItemCount,
+      sliderItemCount,
+      gridItemCount,
+      gridColumnCount,
+    } = counts;
 
     switch (action.type) {
       case "MOVE_UP": {
         if (!state.active) return { ...state, active: true };
-        if (state.region === "slider") {
-          // Already at top — do nothing
+        if (state.region === "topbar") {
           return state;
+        }
+        if (state.region === "slider") {
+          return { ...state, region: "topbar" };
         }
         // Grid: if in first row, move to slider
         const row = Math.floor(state.gridIndex / gridColumnCount);
@@ -64,11 +79,12 @@ function createReducer(counts: FocusCounts) {
 
       case "MOVE_DOWN": {
         if (!state.active) return { ...state, active: true };
+        if (state.region === "topbar") {
+          return { ...state, region: "slider" };
+        }
         if (state.region === "slider") {
-          // Move from slider into grid
           return { ...state, region: "grid" };
         }
-        // Grid: move down one row
         const next = state.gridIndex + gridColumnCount;
         if (next >= gridItemCount) return state;
         return { ...state, gridIndex: next };
@@ -76,11 +92,14 @@ function createReducer(counts: FocusCounts) {
 
       case "MOVE_LEFT": {
         if (!state.active) return { ...state, active: true };
+        if (state.region === "topbar") {
+          const next = Math.max(0, state.topbarIndex - 1);
+          return { ...state, topbarIndex: next };
+        }
         if (state.region === "slider") {
           const next = Math.max(0, state.sliderIndex - 1);
           return { ...state, sliderIndex: next };
         }
-        // Grid: at column 0 → wrap to last item of previous row
         const colL = state.gridIndex % gridColumnCount;
         if (colL === 0) {
           const prevRowEnd = state.gridIndex - 1;
@@ -92,11 +111,17 @@ function createReducer(counts: FocusCounts) {
 
       case "MOVE_RIGHT": {
         if (!state.active) return { ...state, active: true };
+        if (state.region === "topbar") {
+          const next = Math.min(
+            Math.max(0, topbarItemCount - 1),
+            state.topbarIndex + 1
+          );
+          return { ...state, topbarIndex: next };
+        }
         if (state.region === "slider") {
           const next = Math.min(sliderItemCount - 1, state.sliderIndex + 1);
           return { ...state, sliderIndex: next };
         }
-        // Grid: at last column → wrap to first item of next row
         const colR = state.gridIndex % gridColumnCount;
         if (colR >= gridColumnCount - 1) {
           const nextRowStart = state.gridIndex + 1;
@@ -127,8 +152,17 @@ function createReducer(counts: FocusCounts) {
       case "SET_SLIDER_INDEX":
         return { ...state, sliderIndex: action.index };
 
+      case "SET_TOPBAR_INDEX":
+        return { ...state, topbarIndex: action.index };
+
+      case "ENTER_TEXT_INPUT":
+        return { ...state, textInputMode: true };
+
+      case "EXIT_TEXT_INPUT":
+        return { ...state, textInputMode: false };
+
       case "DEACTIVATE":
-        return { ...state, active: false };
+        return { ...state, active: false, textInputMode: false };
 
       case "RESET_GRID":
         return { ...state, gridIndex: 0 };
@@ -143,7 +177,12 @@ export function useFocusManager(counts: FocusCounts) {
   const reducer = useCallback(
     (state: FocusState, action: FocusAction) =>
       createReducer(counts)(state, action),
-    [counts.sliderItemCount, counts.gridItemCount, counts.gridColumnCount]
+    [
+      counts.topbarItemCount,
+      counts.sliderItemCount,
+      counts.gridItemCount,
+      counts.gridColumnCount,
+    ]
   );
 
   const [state, dispatch] = useReducer(reducer, initialState);

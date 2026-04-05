@@ -165,3 +165,12 @@ planning/
 # Electron Forge / Vite
 .vite/
 out/
+
+# Google Drive API key (baked locally, never committed)
+config/gdrive-config.json
+
+# User library (favorites, recently played, play history)
+config/user-library.json
+
+# Stray Windows 'nul' redirect artifacts
+nul

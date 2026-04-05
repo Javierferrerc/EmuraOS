@@ -1,0 +1,121 @@
+{
+  "configFile": "config.yml",
+  "configFormat": "yaml",
+  "configLocations": ["{emuDir}/config.yml"],
+  "categories": [
+    {
+      "id": "general",
+      "name": "General",
+      "settings": [
+        {
+          "key": "Core.PPU Decoder",
+          "label": "PPU Decoder",
+          "type": "enum",
+          "default": "Recompiler (LLVM)",
+          "options": ["Interpreter", "Recompiler (LLVM)"],
+          "description": "PPU (main CPU) execution mode"
+        },
+        {
+          "key": "Core.SPU Decoder",
+          "label": "SPU Decoder",
+          "type": "enum",
+          "default": "Recompiler (ASMJIT)",
+          "options": ["Interpreter", "Recompiler (ASMJIT)", "Recompiler (LLVM)"],
+          "description": "SPU (co-processor) execution mode"
+        },
+        {
+          "key": "Core.SPU Block Size",
+          "label": "SPU Block Size",
+          "type": "enum",
+          "default": "Safe",
+          "options": ["Safe", "Mega", "Giga"],
+          "description": "SPU recompiler block size"
+        }
+      ]
+    },
+    {
+      "id": "graphics",
+      "name": "Graphics",
+      "settings": [
+        {
+          "key": "Video.Renderer",
+          "label": "Renderer",
+          "type": "enum",
+          "default": "Vulkan",
+          "options": ["Vulkan", "OpenGL", "Null"],
+          "description": "Graphics rendering backend"
+        },
+        {
+          "key": "Video.Resolution",
+          "label": "Resolution",
+          "type": "enum",
+          "default": "1280x720",
+          "options": ["1280x720", "1920x1080", "3840x2160"],
+          "description": "Rendering resolution"
+        },
+        {
+          "key": "Video.Frame limit",
+          "label": "Frame Limit",
+          "type": "enum",
+          "default": "Auto",
+          "options": ["Auto", "Off", "30", "50", "59.94", "60"],
+          "description": "Frame rate limit"
+        },
+        {
+          "key": "Video.Aspect ratio",
+          "label": "Aspect Ratio",
+          "type": "enum",
+          "default": "16:9",
+          "options": ["16:9", "4:3", "Auto"],
+          "description": "Display aspect ratio"
+        },
+        {
+          "key": "Video.VSync",
+          "label": "VSync",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable vertical sync"
+        },
+        {
+          "key": "Video.Anisotropic Filter Override",
+          "label": "Anisotropic Filter Override",
+          "type": "enum",
+          "default": "0",
+          "options": ["0", "2", "4", "8", "16"],
+          "description": "Override anisotropic filtering level"
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "settings": [
+        {
+          "key": "Audio.Renderer",
+          "label": "Audio Renderer",
+          "type": "enum",
+          "default": "Cubeb",
+          "options": ["Cubeb", "XAudio2", "Null"],
+          "description": "Audio output backend"
+        },
+        {
+          "key": "Audio.Audio Format",
+          "label": "Audio Format",
+          "type": "enum",
+          "default": "Stereo",
+          "options": ["Stereo", "Surround 5.1", "Surround 7.1", "Auto"],
+          "description": "Audio channel configuration"
+        },
+        {
+          "key": "Audio.Master Volume",
+          "label": "Master Volume",
+          "type": "number",
+          "default": "100",
+          "min": 0,
+          "max": 100,
+          "description": "Master audio volume percentage"
+        }
+      ]
+    }
+  ]
+}

@@ -94,4 +94,41 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeGameSessionEndedListener: () => {
     ipcRenderer.removeAllListeners("game-session-ended");
   },
+
+  // Emulator config
+  getEmulatorConfig: (emulatorId: string, executablePath?: string) =>
+    ipcRenderer.invoke("get-emulator-config", emulatorId, executablePath),
+  updateEmulatorConfig: (
+    emulatorId: string,
+    changes: Record<string, string>,
+    executablePath?: string
+  ) =>
+    ipcRenderer.invoke(
+      "update-emulator-config",
+      emulatorId,
+      changes,
+      executablePath
+    ),
+  getEmulatorSchemas: () => ipcRenderer.invoke("get-emulator-schemas"),
+  openConfigFile: (emulatorId: string, executablePath?: string) =>
+    ipcRenderer.invoke("open-config-file", emulatorId, executablePath),
+
+  // Cemu keys.txt
+  checkCemuKeys: () => ipcRenderer.invoke("check-cemu-keys"),
+  writeCemuKeys: (content: string) =>
+    ipcRenderer.invoke("write-cemu-keys", content),
+
+  // Emulator downloads (Google Drive)
+  getEmulatorDefs: () => ipcRenderer.invoke("get-emulator-defs"),
+  listDriveEmulators: (forceRefresh?: boolean) =>
+    ipcRenderer.invoke("list-drive-emulators", forceRefresh),
+  downloadEmulator: (emulatorId: string) =>
+    ipcRenderer.invoke("download-emulator", emulatorId),
+  onEmulatorDownloadProgress: (callback: (progress: unknown) => void) => {
+    const listener = (_: unknown, progress: unknown) => callback(progress);
+    ipcRenderer.on("emulator-download-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("emulator-download-progress", listener);
+    };
+  },
 });
