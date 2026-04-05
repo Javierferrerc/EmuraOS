@@ -10,7 +10,23 @@ import type {
   SettingsGroup,
   SettingsSection,
 } from "../../schemas/settings-schema-types";
-import { PLACEHOLDER_SECTIONS } from "./sections/placeholders";
+import { generalSection } from "./sections/general";
+import { rutasSection } from "./sections/rutas";
+import { emuladoresSection } from "./sections/emuladores/index";
+import { bibliotecaSection } from "./sections/biblioteca";
+import { coverArtSection } from "./sections/cover-art";
+import { controlesSection } from "./sections/controles";
+import { avanzadoSection } from "./sections/avanzado";
+
+const SECTIONS: SettingsSection[] = [
+  generalSection,
+  rutasSection,
+  emuladoresSection,
+  bibliotecaSection,
+  coverArtSection,
+  controlesSection,
+  avanzadoSection,
+];
 import { SettingsLayout } from "./shell/SettingsLayout";
 import { SettingsSidebar } from "./shell/SettingsSidebar";
 import { SettingsHeader } from "./shell/SettingsHeader";
@@ -21,28 +37,115 @@ import {
 } from "./shell/SettingsListView";
 
 /**
- * Mount point for the new Settings shell (PR1).
+ * Mount point for the schema-driven Settings shell.
  *
- * PR1 responsibilities:
- *   - pick the active section from the nav path
- *   - expose an `ISettingsContext` backed by AppContext's config/updateConfig
- *   - wire keyboard / mouse focus via `useSettingsFocus`
- *   - translate Escape → `navigation.goBack()`
- *
- * PR2 extends this with: custom component escape hatch for Emuladores,
- * deeper focus restore via navigation memos, extended SettingsContext,
- * and prerequisite cards.
+ * Picks the active section from the nav path, exposes a full
+ * `SettingsContext` backed by AppContext, and wires keyboard focus.
+ * Sections with `customComponent` (Emuladores) skip SettingsListView
+ * and render their own tree.
  */
 export function SettingsRoot() {
-  const { config, updateConfig } = useApp();
+  const app = useApp();
   const navigation = useNavigation();
 
   const ctx: ISettingsContext = useMemo(
-    () => ({ config, updateConfig }),
-    [config, updateConfig]
+    () => ({
+      // Config + persistence
+      config: app.config,
+      updateConfig: app.updateConfig,
+
+      // Navigation
+      navigation,
+
+      // Library state
+      favorites: app.favorites,
+      recentlyPlayed: app.recentlyPlayed,
+      playHistory: app.playHistory,
+      collections: app.collections,
+      metadataMap: app.metadataMap,
+
+      // Scan / scrape / cover fetch
+      isLoading: app.isLoading,
+      refreshScan: app.refreshScan,
+      isScraping: app.isScraping,
+      scrapeProgress: app.scrapeProgress,
+      lastScrapeResult: app.lastScrapeResult,
+      startScraping: app.startScraping,
+      isFetchingCovers: app.isFetchingCovers,
+      coverFetchProgress: app.coverFetchProgress,
+      lastCoverFetchResult: app.lastCoverFetchResult,
+      startFetchingCovers: app.startFetchingCovers,
+
+      // Emulators
+      emulatorDefs: app.emulatorDefs,
+      lastDetection: app.lastDetection,
+      readinessReport: app.readinessReport,
+      isDetectingEmulators: app.isDetectingEmulators,
+      detectEmulators: app.detectEmulators,
+      driveEmulators: app.driveEmulators,
+      isLoadingDrive: app.isLoadingDrive,
+      refreshDriveEmulators: app.refreshDriveEmulators,
+      downloadingEmulatorId: app.downloadingEmulatorId,
+      emulatorDownloadProgress: app.emulatorDownloadProgress,
+      downloadEmulator: app.downloadEmulator,
+
+      // Cemu keys flow
+      pendingCemuKeysLaunch: app.pendingCemuKeysLaunch,
+      isCemuKeysModalOpen: app.isCemuKeysModalOpen,
+      openCemuKeysModal: app.openCemuKeysModal,
+
+      // Gamepad / fullscreen
+      gamepadConnected: app.gamepadConnected,
+      isFullscreen: app.isFullscreen,
+      toggleFullscreen: app.toggleFullscreen,
+
+      // Game session
+      isGameRunning: app.isGameRunning,
+      currentGameFileName: app.currentGame?.rom?.fileName ?? null,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      app.config,
+      app.updateConfig,
+      navigation,
+      app.favorites,
+      app.recentlyPlayed,
+      app.playHistory,
+      app.collections,
+      app.metadataMap,
+      app.isLoading,
+      app.refreshScan,
+      app.isScraping,
+      app.scrapeProgress,
+      app.lastScrapeResult,
+      app.startScraping,
+      app.isFetchingCovers,
+      app.coverFetchProgress,
+      app.lastCoverFetchResult,
+      app.startFetchingCovers,
+      app.emulatorDefs,
+      app.lastDetection,
+      app.readinessReport,
+      app.isDetectingEmulators,
+      app.detectEmulators,
+      app.driveEmulators,
+      app.isLoadingDrive,
+      app.refreshDriveEmulators,
+      app.downloadingEmulatorId,
+      app.emulatorDownloadProgress,
+      app.downloadEmulator,
+      app.pendingCemuKeysLaunch,
+      app.isCemuKeysModalOpen,
+      app.openCemuKeysModal,
+      app.gamepadConnected,
+      app.isFullscreen,
+      app.toggleFullscreen,
+      app.isGameRunning,
+      app.currentGame,
+    ]
   );
 
-  const sections = PLACEHOLDER_SECTIONS;
+  const sections = SECTIONS;
 
   // Find the active section by the longest matching prefix in the nav path.
   const activeSection: SettingsSection = useMemo(() => {
@@ -209,13 +312,17 @@ export function SettingsRoot() {
         ) : undefined
       }
     >
-      <SettingsListView
-        groups={activeGroups}
-        ctx={ctx}
-        focusedRowIndex={focus.listIndex}
-        regionFocused={focus.region === "list"}
-        onRowActivate={(index) => dispatch({ type: "SET_LIST", index })}
-      />
+      {activeSection.customComponent ? (
+        <activeSection.customComponent ctx={ctx} />
+      ) : (
+        <SettingsListView
+          groups={activeGroups}
+          ctx={ctx}
+          focusedRowIndex={focus.listIndex}
+          regionFocused={focus.region === "list"}
+          onRowActivate={(index) => dispatch({ type: "SET_LIST", index })}
+        />
+      )}
     </SettingsLayout>
   );
 }

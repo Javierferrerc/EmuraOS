@@ -128,6 +128,40 @@ export interface ElectronAPI {
   pickFile(
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null>;
+
+  // Phase 13 PR2: Library / diagnostics / reset
+  clearMetadataCache(): Promise<{ success: boolean; error?: string }>;
+  resetPlayHistory(): Promise<{ success: boolean; error?: string }>;
+  exportUserLibrary(): Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  } | null>;
+  openLogsFolder(): Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  }>;
+  exportDiagnosticBundle(): Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  } | null>;
+  resetConfig(): Promise<{ success: boolean; error?: string }>;
+  getAppVersion(): Promise<{
+    app: string;
+    electron: string;
+    node: string;
+    chrome: string;
+    platform: string;
+    arch: string;
+  }>;
+  openAppConfigFile(): Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  }>;
+  openExternal(url: string): Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

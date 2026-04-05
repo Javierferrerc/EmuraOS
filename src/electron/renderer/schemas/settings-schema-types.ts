@@ -1,5 +1,21 @@
 import type { ComponentType } from "react";
-import type { AppConfig } from "../../../core/types";
+import type {
+  AppConfig,
+  Collection,
+  CoverFetchProgress,
+  CoverFetchResult,
+  DetectionResult,
+  DiscoveredRom,
+  DriveEmulatorMapping,
+  EmulatorDefinition,
+  EmulatorDownloadProgress,
+  GameMetadata,
+  PlayRecord,
+  ReadinessReport,
+  ScrapeProgress,
+  ScrapeResult,
+} from "../../../core/types";
+import type { NavigationApi } from "../navigation/navigation-types";
 
 /**
  * Phase 13 schema-driven settings types.
@@ -9,18 +25,75 @@ import type { AppConfig } from "../../../core/types";
  * eventual prerequisite cards without duplication.
  *
  * `SettingsContext` is the host environment passed to every row's `get` /
- * `set` / `run` closure. PR1 exposes only `config` + `updateConfig`; PR2
- * extends it with readiness, downloads, virtual keyboard, etc.
+ * `set` / `run` closure. PR2 extends it with readiness, downloads, virtual
+ * keyboard, library actions, etc.
  */
 
 export type SettingValue = string | number | boolean;
 
+/**
+ * Everything a settings row closure might need in order to read state,
+ * mutate config, run an action, or route elsewhere. All fields are
+ * supplied from `SettingsRoot` by pulling the values from `useApp()` +
+ * `useNavigation()` and forwarding them here.
+ *
+ * Keep this interface additive — rows depend on it structurally.
+ */
 export interface SettingsContext {
+  // --- Config + persistence ---
   config: AppConfig | null;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
-  // PR2 will extend this with: readinessReport, driveEmulators,
-  // downloadEmulator, detectEmulators, openCemuKeysModal, virtualKeyboard,
-  // refreshScan, startFetchingCovers, startScraping, etc.
+
+  // --- Navigation (for buttons that jump to sub-sections) ---
+  navigation: NavigationApi;
+
+  // --- Library state ---
+  favorites: Set<string>;
+  recentlyPlayed: string[];
+  playHistory: Record<string, PlayRecord>;
+  collections: Collection[];
+  metadataMap: Record<string, Record<string, GameMetadata>>;
+
+  // --- Scan / scrape / cover fetch ---
+  isLoading: boolean;
+  refreshScan: () => Promise<void>;
+  isScraping: boolean;
+  scrapeProgress: ScrapeProgress | null;
+  lastScrapeResult: ScrapeResult | null;
+  startScraping: () => Promise<void>;
+  isFetchingCovers: boolean;
+  coverFetchProgress: CoverFetchProgress | null;
+  lastCoverFetchResult: CoverFetchResult | null;
+  startFetchingCovers: () => Promise<void>;
+
+  // --- Emulators ---
+  emulatorDefs: EmulatorDefinition[];
+  lastDetection: DetectionResult | null;
+  readinessReport: ReadinessReport | null;
+  isDetectingEmulators: boolean;
+  detectEmulators: () => Promise<void>;
+  driveEmulators: Record<string, DriveEmulatorMapping>;
+  isLoadingDrive: boolean;
+  refreshDriveEmulators: (forceRefresh?: boolean) => Promise<void>;
+  downloadingEmulatorId: string | null;
+  emulatorDownloadProgress: EmulatorDownloadProgress | null;
+  downloadEmulator: (
+    emulatorId: string
+  ) => Promise<{ success: boolean; installPath: string; error?: string }>;
+
+  // --- Cemu keys flow ---
+  pendingCemuKeysLaunch: DiscoveredRom | null;
+  isCemuKeysModalOpen: boolean;
+  openCemuKeysModal: () => void;
+
+  // --- Gamepad / fullscreen ---
+  gamepadConnected: boolean;
+  isFullscreen: boolean;
+  toggleFullscreen: () => void;
+
+  // --- Game session (for StatusBar + Estado tab) ---
+  isGameRunning: boolean;
+  currentGameFileName: string | null;
 }
 
 interface BaseSetting {

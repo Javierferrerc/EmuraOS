@@ -10,6 +10,15 @@ const DEFAULT_CONFIG: AppConfig = {
   emulatorsPath: "./emulators",
   configPath: "./config",
   systems: [],
+  language: "es",
+  fullscreenOnStart: false,
+  autoScanOnStartup: true,
+  libretroCoversEnabled: true,
+  coverSourcePriority: "libretro-first",
+  firstRunCompleted: false,
+  navSoundEnabled: true,
+  navSoundVolume: 70,
+  devMode: false,
 };
 
 export class ConfigManager {
