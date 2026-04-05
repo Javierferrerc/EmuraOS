@@ -1,8 +1,8 @@
 /**
  * Phase 13 feature flag.
  *
- * PR1 keeps this `false` — the app ships identical to `main` for users.
- * Devs can flip it to preview the new Settings shell. PR2's final commit
- * sets it to `true` and then removes the file entirely.
+ * PR2 flips this to `true` — the new schema-driven Settings shell is
+ * the default UI. The legacy SettingsPage and EmulatorConfigPage are
+ * kept as imports for backwards compatibility during the transition.
  */
-export const NEW_SETTINGS_ENABLED = false;
+export const NEW_SETTINGS_ENABLED = true;

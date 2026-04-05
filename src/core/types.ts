@@ -33,6 +33,19 @@ export interface AppConfig {
   screenScraperUserId?: string;
   screenScraperUserPassword?: string;
   steamGridDbApiKey?: string;
+
+  // Phase 13 — UI-managed app preferences
+  language?: "es" | "en";
+  fullscreenOnStart?: boolean;
+  autoScanOnStartup?: boolean;
+  metadataPath?: string;
+  savesPath?: string;
+  libretroCoversEnabled?: boolean;
+  coverSourcePriority?: "libretro-first" | "sgdb-first" | "libretro-only" | "sgdb-only";
+  firstRunCompleted?: boolean;
+  navSoundEnabled?: boolean;
+  navSoundVolume?: number;
+  devMode?: boolean;
 }
 
 export interface EmulatorDefinition {

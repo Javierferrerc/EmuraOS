@@ -1,7 +1,15 @@
-import { ipcMain, app, BrowserWindow, dialog } from "electron";
+import { ipcMain, app, BrowserWindow, dialog, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
@@ -707,6 +715,188 @@ export function registerIpcHandlers(
         : dialog.showOpenDialog(options));
       if (result.canceled || result.filePaths.length === 0) return null;
       return result.filePaths[0];
+    }
+  );
+
+  // ── Phase 13 PR2: Library / diagnostics / reset handlers ──────────
+  // These power the Biblioteca and Avanzado Settings sections. Every
+  // destructive handler is wrapped in a try/catch so the renderer can
+  // surface errors without the whole IPC invocation crashing.
+
+  /**
+   * Walks a directory recursively and removes every file matching the
+   * metadata cache shape (JSON files under `metadata/<systemId>/*.json`
+   * and covers under `metadata/covers/<systemId>/*`).
+   */
+  ipcMain.handle("clear-metadata-cache", () => {
+    try {
+      const root = getProjectRoot();
+      const metaDir = path.join(root, "metadata");
+      if (existsSync(metaDir)) {
+        rmSync(metaDir, { recursive: true, force: true });
+      }
+      const coverDir = path.join(root, "covers");
+      if (existsSync(coverDir)) {
+        rmSync(coverDir, { recursive: true, force: true });
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle("reset-play-history", () => {
+    try {
+      const lib = new UserLibrary(getProjectRoot());
+      lib.resetPlayHistory();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  /**
+   * Dumps the user library JSON to a user-chosen file. Pops a save
+   * dialog so the target location stays under user control.
+   */
+  ipcMain.handle("export-user-library", async () => {
+    const win = getMainWindow();
+    const saveOptions: Electron.SaveDialogOptions = {
+      defaultPath: "retro-launcher-library.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    };
+    const result = await (win
+      ? dialog.showSaveDialog(win, saveOptions)
+      : dialog.showSaveDialog(saveOptions));
+    if (result.canceled || !result.filePath) return null;
+    try {
+      const lib = new UserLibrary(getProjectRoot());
+      const data = lib.getAll();
+      writeFileSync(result.filePath, JSON.stringify(data, null, 2), "utf-8");
+      return { success: true, path: result.filePath };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle("open-logs-folder", async () => {
+    try {
+      const logsDir = app.getPath("logs");
+      if (!existsSync(logsDir)) {
+        mkdirSync(logsDir, { recursive: true });
+      }
+      await shell.openPath(logsDir);
+      return { success: true, path: logsDir };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  /**
+   * Bundles config + user library + a directory listing of metadata into
+   * a single JSON "diagnostic" payload written to the user's chosen
+   * location. Intentionally lightweight — no actual ZIP dependency.
+   */
+  ipcMain.handle("export-diagnostic-bundle", async () => {
+    const win = getMainWindow();
+    const saveOptions: Electron.SaveDialogOptions = {
+      defaultPath: `retro-launcher-diagnostic-${Date.now()}.json`,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    };
+    const result = await (win
+      ? dialog.showSaveDialog(win, saveOptions)
+      : dialog.showSaveDialog(saveOptions));
+    if (result.canceled || !result.filePath) return null;
+    try {
+      const configManager = new ConfigManager(getProjectRoot());
+      const lib = new UserLibrary(getProjectRoot());
+      const metaDir = path.join(getProjectRoot(), "metadata");
+      let metadataListing: string[] = [];
+      if (existsSync(metaDir)) {
+        try {
+          metadataListing = readdirSync(metaDir).map((name) => {
+            const full = path.join(metaDir, name);
+            try {
+              const s = statSync(full);
+              return s.isDirectory() ? `${name}/` : name;
+            } catch {
+              return name;
+            }
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      const bundle = {
+        generatedAt: new Date().toISOString(),
+        appVersion: app.getVersion(),
+        electronVersion: process.versions.electron,
+        nodeVersion: process.versions.node,
+        platform: process.platform,
+        arch: process.arch,
+        config: configManager.get(),
+        library: lib.getAll(),
+        metadataListing,
+      };
+      writeFileSync(
+        result.filePath,
+        JSON.stringify(bundle, null, 2),
+        "utf-8"
+      );
+      return { success: true, path: result.filePath };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle("reset-config", () => {
+    try {
+      const configManager = new ConfigManager(getProjectRoot());
+      const configPath = configManager.getConfigFilePath();
+      if (existsSync(configPath)) {
+        rmSync(configPath, { force: true });
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle("get-app-version", () => {
+    return {
+      app: app.getVersion(),
+      electron: process.versions.electron,
+      node: process.versions.node,
+      chrome: process.versions.chrome,
+      platform: process.platform,
+      arch: process.arch,
+    };
+  });
+
+  ipcMain.handle("open-app-config-file", async () => {
+    try {
+      const configManager = new ConfigManager(getProjectRoot());
+      const configPath = configManager.getConfigFilePath();
+      if (!existsSync(configPath)) {
+        // Ensure the file exists so shell.openPath can open it.
+        configManager.save();
+      }
+      await shell.openPath(configPath);
+      return { success: true, path: configPath };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  ipcMain.handle(
+    "open-external",
+    async (_event: IpcMainInvokeEvent, url: string) => {
+      try {
+        await shell.openExternal(url);
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
     }
   );
 }

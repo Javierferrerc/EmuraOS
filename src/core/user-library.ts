@@ -192,4 +192,15 @@ export class UserLibrary {
   getAll(): UserLibraryFile {
     return this.load();
   }
+
+  /**
+   * Clear recently-played list and play history counters without
+   * touching favorites or collections. Used by Settings → Biblioteca.
+   */
+  resetPlayHistory(): void {
+    const data = this.load();
+    data.recentlyPlayed = [];
+    data.playHistory = {};
+    this.save(data);
+  }
 }

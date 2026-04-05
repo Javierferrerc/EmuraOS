@@ -138,4 +138,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   pickFile: (
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null> => ipcRenderer.invoke("dialog:pick-file", filters),
+
+  // Phase 13 PR2: Library / diagnostics / reset
+  clearMetadataCache: () => ipcRenderer.invoke("clear-metadata-cache"),
+  resetPlayHistory: () => ipcRenderer.invoke("reset-play-history"),
+  exportUserLibrary: () => ipcRenderer.invoke("export-user-library"),
+  openLogsFolder: () => ipcRenderer.invoke("open-logs-folder"),
+  exportDiagnosticBundle: () =>
+    ipcRenderer.invoke("export-diagnostic-bundle"),
+  resetConfig: () => ipcRenderer.invoke("reset-config"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  openAppConfigFile: () => ipcRenderer.invoke("open-app-config-file"),
+  openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
 });

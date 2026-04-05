@@ -5,9 +5,9 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: linear-gradient(135deg, #111238 0%, #070816 100%);
+  background: var(--color-bg-gradient);
   background-attachment: fixed;
-  color: #f3f4f6;
+  color: var(--color-text-primary);
   font-family: "Poppins", sans-serif;
 }
 
