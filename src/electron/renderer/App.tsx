@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useApp } from "./context/AppContext";
+import { useNavigation } from "./navigation/NavigationContext";
 import { Layout } from "./components/Layout";
 import { SettingsPage } from "./components/SettingsPage";
 import { GameModeView } from "./components/GameModeView";
@@ -17,6 +19,31 @@ export default function App() {
     goToCemuKeysSettings,
     dismissCemuKeysError,
   } = useApp();
+
+  const navigation = useNavigation();
+
+  // PR1 bridge: mirror `currentView` → navigation stack so the new nav
+  // provider always reflects the current view. Existing callers of
+  // `setCurrentView("settings")` keep working and the new stack stays in
+  // sync. PR2 flips the direction (nav becomes source of truth and
+  // `currentView` becomes a computed getter).
+  useEffect(() => {
+    const target =
+      currentView === "settings"
+        ? "/settings"
+        : currentView === "emulator-config"
+          ? "/settings/emuladores"
+          : currentView === "game"
+            ? "/game"
+            : "/library";
+    if (navigation.currentPath !== target) {
+      navigation.reset(target);
+    }
+    // We intentionally do not list `navigation` — the nav api is stable but
+    // its `currentPath` reference changes on every tick which would re-fire
+    // this bridge unnecessarily. We only want to react to `currentView`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView]);
 
   let page;
   switch (currentView) {

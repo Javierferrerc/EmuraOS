@@ -1,0 +1,82 @@
+/**
+ * Phase 13 theme variables.
+ *
+ * PR1 defines every token used by the new Settings shell. Only new
+ * components consume these variables — Layout/TopBar/SystemSlider/GameGrid
+ * still use Tailwind classes until the PR2 mechanical sweep.
+ *
+ * PR3+ (Phase 14) introduces theme switching by swapping the values of
+ * these variables on a `[data-theme]` attribute.
+ */
+
+:root {
+  /* Base background */
+  --color-bg: #070816;
+  --color-bg-gradient: linear-gradient(135deg, #111238 0%, #070816 100%);
+
+  /* Surfaces (layered cards / panels) */
+  --color-surface-0: rgba(17, 18, 56, 0.45);
+  --color-surface-1: rgba(30, 32, 74, 0.7);
+  --color-surface-2: rgba(44, 46, 96, 0.8);
+
+  /* Text */
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+
+  /* Accent */
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+  --color-focus-ring: #60a5fa;
+
+  /* Semantic tones */
+  --color-good: #22c55e;
+  --color-warn: #eab308;
+  --color-bad: #ef4444;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Spacing (settings layout) */
+  --spacing-row: 14px;
+  --spacing-group: 22px;
+  --sidebar-width: 260px;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Focus ring */
+  --focus-ring-width: 2px;
+}
+
+@layer utilities {
+  .bg-app {
+    background: var(--color-bg-gradient);
+  }
+  .bg-surface-0 {
+    background: var(--color-surface-0);
+  }
+  .bg-surface-1 {
+    background: var(--color-surface-1);
+  }
+  .bg-surface-2 {
+    background: var(--color-surface-2);
+  }
+  .text-primary {
+    color: var(--color-text-primary);
+  }
+  .text-secondary {
+    color: var(--color-text-secondary);
+  }
+  .text-muted {
+    color: var(--color-text-muted);
+  }
+  .ring-focus {
+    box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring);
+  }
+}

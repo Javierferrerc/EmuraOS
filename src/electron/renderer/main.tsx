@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { AppProvider } from "./context/AppContext";
+import { NavigationProvider } from "./navigation/NavigationContext";
 import App from "./App";
 import "@fontsource/poppins/400.css";
 import "@fontsource/poppins/500.css";
@@ -12,7 +13,9 @@ const root = document.getElementById("root")!;
 createRoot(root).render(
   <StrictMode>
     <AppProvider>
-      <App />
+      <NavigationProvider>
+        <App />
+      </NavigationProvider>
     </AppProvider>
   </StrictMode>
 );

@@ -131,4 +131,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener("emulator-download-progress", listener);
     };
   },
+
+  // Phase 13: File system pickers (Settings widgets)
+  pickFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke("dialog:pick-folder"),
+  pickFile: (
+    filters?: Array<{ name: string; extensions: string[] }>
+  ): Promise<string | null> => ipcRenderer.invoke("dialog:pick-file", filters),
 });
