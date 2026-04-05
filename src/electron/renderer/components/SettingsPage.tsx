@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { EmulatorDownloadProgress } from "../../../core/types.js";
+import { NEW_SETTINGS_ENABLED } from "./settings/feature-flags";
+import { SettingsRoot } from "./settings/SettingsRoot";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -48,6 +50,18 @@ interface CemuKeysInfo {
 }
 
 export function SettingsPage() {
+  // PR1 feature flag: when enabled, render the new schema-driven shell
+  // instead of the legacy inline page. Flag is `false` on main so users
+  // see no change. PR2's final commit flips it to `true` and removes the
+  // legacy body below.
+  if (NEW_SETTINGS_ENABLED) {
+    return <SettingsRoot />;
+  }
+
+  return <LegacySettingsPage />;
+}
+
+function LegacySettingsPage() {
   const {
     config,
     updateConfig,

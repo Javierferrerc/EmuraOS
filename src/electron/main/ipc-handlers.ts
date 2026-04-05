@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow } from "electron";
+import { ipcMain, app, BrowserWindow, dialog } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
@@ -674,6 +674,39 @@ export function registerIpcHandlers(
       }
       const keysPath = writeCemuKeys(resolved.executablePath, content);
       return { path: keysPath };
+    }
+  );
+
+  // ── Phase 13: File system pickers ────────────────────────────────
+  // Generic folder/file picker dialogs used by the new Settings widgets
+  // (FolderRow, PathRow). The renderer invokes these instead of rolling
+  // its own HTML file inputs so the UX stays consistent and gamepad-
+  // friendly.
+  ipcMain.handle("dialog:pick-folder", async () => {
+    const win = getMainWindow();
+    const result = await (win
+      ? dialog.showOpenDialog(win, { properties: ["openDirectory"] })
+      : dialog.showOpenDialog({ properties: ["openDirectory"] }));
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle(
+    "dialog:pick-file",
+    async (
+      _event: IpcMainInvokeEvent,
+      filters?: Electron.FileFilter[]
+    ) => {
+      const win = getMainWindow();
+      const options: Electron.OpenDialogOptions = {
+        properties: ["openFile"],
+        filters: filters ?? [],
+      };
+      const result = await (win
+        ? dialog.showOpenDialog(win, options)
+        : dialog.showOpenDialog(options));
+      if (result.canceled || result.filePaths.length === 0) return null;
+      return result.filePaths[0];
     }
   );
 }

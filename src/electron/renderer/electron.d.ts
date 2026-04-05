@@ -122,6 +122,12 @@ export interface ElectronAPI {
   onEmulatorDownloadProgress(
     callback: (progress: EmulatorDownloadProgress) => void
   ): () => void;
+
+  // Phase 13: File system pickers (Settings widgets)
+  pickFolder(): Promise<string | null>;
+  pickFile(
+    filters?: Array<{ name: string; extensions: string[] }>
+  ): Promise<string | null>;
 }
 
 declare global {
