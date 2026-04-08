@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AppConfig } from "../../../../core/types";
 import { useApp } from "../../context/AppContext";
 import { useNavigation } from "../../navigation/NavigationContext";
 import {
@@ -28,8 +29,8 @@ const SECTIONS: SettingsSection[] = [
   avanzadoSection,
 ];
 import { SettingsLayout } from "./shell/SettingsLayout";
+import { SaveBar } from "./shell/SaveBar";
 import { SettingsSidebar } from "./shell/SettingsSidebar";
-import { SettingsHeader } from "./shell/SettingsHeader";
 import { SettingsTabBar } from "./shell/SettingsTabBar";
 import {
   SettingsListView,
@@ -48,11 +49,36 @@ export function SettingsRoot() {
   const app = useApp();
   const navigation = useNavigation();
 
+  // ── Staging layer — buffer changes until user clicks "Guardar" ────
+  const [pendingChanges, setPendingChanges] = useState<Partial<AppConfig>>({});
+  const hasChanges = Object.keys(pendingChanges).length > 0;
+
+  const mergedConfig = useMemo(
+    () => (app.config ? { ...app.config, ...pendingChanges } : null),
+    [app.config, pendingChanges]
+  );
+
+  const stagingUpdateConfig = useCallback(
+    async (partial: Partial<AppConfig>) => {
+      setPendingChanges((prev) => ({ ...prev, ...partial }));
+    },
+    []
+  );
+
+  const handleSave = useCallback(async () => {
+    await app.updateConfig(pendingChanges);
+    setPendingChanges({});
+  }, [app.updateConfig, pendingChanges]);
+
+  const handleDiscard = useCallback(() => {
+    setPendingChanges({});
+  }, []);
+
   const ctx: ISettingsContext = useMemo(
     () => ({
-      // Config + persistence
-      config: app.config,
-      updateConfig: app.updateConfig,
+      // Config + persistence (staged)
+      config: mergedConfig,
+      updateConfig: stagingUpdateConfig,
 
       // Navigation
       navigation,
@@ -105,8 +131,8 @@ export function SettingsRoot() {
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      app.config,
-      app.updateConfig,
+      mergedConfig,
+      stagingUpdateConfig,
       navigation,
       app.favorites,
       app.recentlyPlayed,
@@ -166,28 +192,33 @@ export function SettingsRoot() {
     return best;
   }, [navigation.currentPath, sections]);
 
-  const activeGroups: SettingsGroup[] = useMemo(() => {
-    if (activeSection.groups) return activeSection.groups;
-    if (activeSection.tabs && activeSection.tabs.length > 0) {
-      // PR1: just show the first tab; PR2 introduces tabbed nav for Emuladores.
-      return activeSection.tabs[0]!.groups;
-    }
-    return [];
-  }, [activeSection]);
-
-  const listCount = countVisibleRows(activeGroups);
   const hasTabBar = Boolean(
     activeSection.tabs && activeSection.tabs.length > 0
   );
   const tabCount = activeSection.tabs?.length ?? 0;
   const sidebarCount = sections.length;
 
+  // listCount comes from activeGroups which depends on focus.tabIndex from
+  // the hook. Use a ref to carry the previous render's value and update it
+  // after computing activeGroups (stabilises on the next render).
+  const listCountRef = useRef(0);
+
   const { state: focus, dispatch } = useSettingsFocus({
     sidebarCount,
     tabCount,
-    listCount,
+    listCount: listCountRef.current,
     hasTabBar,
   });
+
+  const activeGroups: SettingsGroup[] = useMemo(() => {
+    if (activeSection.tabs && activeSection.tabs.length > 0) {
+      return activeSection.tabs[focus.tabIndex]?.groups ?? activeSection.tabs[0]!.groups;
+    }
+    if (activeSection.groups) return activeSection.groups;
+    return [];
+  }, [activeSection, focus.tabIndex]);
+
+  listCountRef.current = countVisibleRows(activeGroups);
 
   // Keep the sidebar index in sync with the nav path (so keyboard movement
   // through the sidebar highlights the active item).
@@ -216,6 +247,7 @@ export function SettingsRoot() {
     [dispatch, navigation]
   );
 
+  // When switching tabs, reset list focus to the top.
   const handleSelectTab = useCallback(
     (index: number) => {
       dispatch({ type: "SET_TAB", index });
@@ -227,10 +259,10 @@ export function SettingsRoot() {
   const handleBack = useCallback(() => {
     const popped = navigation.goBack();
     if (!popped) {
-      // At the bottom of the stack. PR2 hooks into AppContext for fullscreen;
-      // PR1 is a no-op so behavior matches the old flat router.
+      // At the bottom of the stack — return to library.
+      app.setCurrentView("library");
     }
-  }, [navigation]);
+  }, [navigation, app]);
 
   // Keyboard handling — dpad + Enter/Escape. This is isolated to the
   // Settings shell; the library's `useKeyboardNav` is not mounted while
@@ -290,13 +322,6 @@ export function SettingsRoot() {
           focusedIndex={focus.sidebarIndex}
           regionFocused={focus.region === "sidebar"}
           onSelect={handleSelectSection}
-        />
-      }
-      header={
-        <SettingsHeader
-          title={activeSection.label}
-          breadcrumb={["Ajustes", activeSection.label]}
-          canGoBack={navigation.canGoBack()}
           onBack={handleBack}
         />
       }
@@ -309,6 +334,11 @@ export function SettingsRoot() {
             regionFocused={focus.region === "tabbar"}
             onSelect={handleSelectTab}
           />
+        ) : undefined
+      }
+      saveBar={
+        hasChanges ? (
+          <SaveBar onSave={handleSave} onDiscard={handleDiscard} />
         ) : undefined
       }
     >

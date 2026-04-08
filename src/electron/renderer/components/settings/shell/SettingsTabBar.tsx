@@ -20,7 +20,7 @@ export function SettingsTabBar({
     <div
       role="tablist"
       aria-label="Section tabs"
-      className="flex items-center gap-2 border-b border-white/5 bg-surface-0 px-6 py-2"
+      className="flex items-center gap-2 px-6 py-2"
     >
       {tabs.map((tab, idx) => {
         const isActive = idx === activeIndex;
@@ -32,10 +32,10 @@ export function SettingsTabBar({
             role="tab"
             aria-selected={isActive}
             onClick={() => onSelect(idx)}
-            className={`rounded-md px-4 py-1.5 text-sm transition-colors ${
+            className={`folder-row-glass rounded-full px-6 py-2.5 text-sm transition-colors ${
               isActive
-                ? "bg-surface-2 text-primary"
-                : "text-secondary hover:bg-surface-1"
+                ? "ring-focus text-primary"
+                : "text-secondary hover:text-primary"
             } ${isFocused ? "ring-focus" : ""}`}
           >
             {tab.label}

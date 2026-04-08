@@ -37,8 +37,8 @@ export function ButtonRow({ setting, ctx, focused }: Props) {
 
   return (
     <div
-      className={`flex items-center justify-between rounded-md px-4 py-3 transition-colors ${
-        focused ? "ring-focus bg-surface-2" : "bg-surface-1"
+      className={`flex items-center justify-between rounded-[var(--radius-md)] px-4 py-3 transition-colors folder-row-glass ${
+        focused ? "ring-focus" : ""
       } ${disabled ? "opacity-50" : ""}`}
       style={{ marginBottom: "var(--spacing-row)" }}
     >

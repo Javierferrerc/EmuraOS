@@ -103,6 +103,10 @@ interface BaseSetting {
   description?: string;
   hidden?: boolean;
   disabled?: boolean | ((ctx: SettingsContext) => boolean);
+  /** When true, the row renders but is skipped by gamepad/keyboard focus. */
+  nonFocusable?: boolean;
+  /** When true, uses glassmorphic styling (matching FolderRow). */
+  glass?: boolean;
 }
 
 export interface ToggleSetting extends BaseSetting {
@@ -122,6 +126,8 @@ export interface DropdownSetting<V extends SettingValue = string>
   options: Array<DropdownOption<V>>;
   get: (ctx: SettingsContext) => V;
   set: (value: V, ctx: SettingsContext) => Promise<void> | void;
+  /** "selector" renders a console-style inline picker with left/right arrows. */
+  variant?: "dropdown" | "selector";
 }
 
 export interface SliderSetting extends BaseSetting {
@@ -146,6 +152,10 @@ export interface InfoSetting extends BaseSetting {
   kind: "info";
   value: (ctx: SettingsContext) => string;
   tone?: "default" | "good" | "warn" | "bad";
+  /** Stack label and value vertically instead of side-by-side. */
+  column?: boolean;
+  /** Visual variant. "glass" uses the glassmorphic TopBar style. */
+  variant?: "default" | "glass";
 }
 
 export interface FolderSetting extends BaseSetting {

@@ -6,6 +6,7 @@ interface Props {
   focusedIndex: number;
   regionFocused: boolean;
   onSelect: (section: SettingsSection, index: number) => void;
+  onBack: () => void;
 }
 
 export function SettingsSidebar({
@@ -14,39 +15,67 @@ export function SettingsSidebar({
   focusedIndex,
   regionFocused,
   onSelect,
+  onBack,
 }: Props) {
   return (
-    <nav
-      aria-label="Settings sections"
-      className="flex h-full flex-col gap-1 border-r border-white/5 bg-surface-0 p-4"
+    <div
+      className="flex h-full flex-col p-5"
       style={{ width: "var(--sidebar-width)" }}
     >
-      <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-muted">
-        Ajustes
-      </div>
-      {sections.map((section, idx) => {
-        const isActive = section.id === activeId;
-        const isFocused = regionFocused && idx === focusedIndex;
-        return (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => onSelect(section, idx)}
-            className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-              isActive
-                ? "bg-surface-2 text-primary"
-                : "text-secondary hover:bg-surface-1"
-            } ${isFocused ? "ring-focus" : ""}`}
-          >
-            {section.icon && (
-              <span aria-hidden className="text-base leading-none">
-                {section.icon}
-              </span>
-            )}
-            <span className="flex-1">{section.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+      {/* Back to menu */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 flex items-center gap-3 rounded-[var(--radius-md)] px-1 py-1 text-secondary transition-colors hover:text-primary"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="h-4 w-4 shrink-0"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white">
+          RL
+        </div>
+        <span className="text-sm">Volver al menú</span>
+      </button>
+
+      {/* Floating card */}
+      <nav
+        aria-label="Settings sections"
+        className="flex flex-col gap-0.5 overflow-y-auto rounded-[var(--radius-lg)] border border-white/[0.06] bg-surface-0 p-2 shadow-lg shadow-black/20"
+      >
+        {sections.map((section, idx) => {
+          const isActive = section.id === activeId;
+          const isFocused = regionFocused && idx === focusedIndex;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => onSelect(section, idx)}
+              className={`flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm transition-colors ${
+                isActive
+                  ? "bg-surface-2 text-primary"
+                  : "text-secondary hover:bg-surface-1"
+              } ${isFocused ? "ring-focus" : ""}`}
+            >
+              {section.icon && (
+                <span aria-hidden className="text-base leading-none">
+                  {section.icon}
+                </span>
+              )}
+              <span className="flex-1">{section.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

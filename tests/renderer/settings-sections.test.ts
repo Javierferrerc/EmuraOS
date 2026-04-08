@@ -5,7 +5,11 @@ import { bibliotecaSection } from "../../src/electron/renderer/components/settin
 import { coverArtSection } from "../../src/electron/renderer/components/settings/sections/cover-art";
 import { controlesSection } from "../../src/electron/renderer/components/settings/sections/controles";
 import { avanzadoSection } from "../../src/electron/renderer/components/settings/sections/avanzado";
-import type { SettingsContext } from "../../src/electron/renderer/schemas/settings-schema-types";
+import type {
+  SettingsContext,
+  SettingsGroup,
+  SettingsSection,
+} from "../../src/electron/renderer/schemas/settings-schema-types";
 
 // Minimal fake context that satisfies all the closure reads.
 const fakeCtx = {
@@ -63,6 +67,12 @@ const fakeCtx = {
   currentGameFileName: null,
 } as SettingsContext;
 
+/** Collect all groups from a section, whether it uses tabs or flat groups. */
+function allGroups(section: SettingsSection): SettingsGroup[] {
+  if (section.tabs) return section.tabs.flatMap((t) => t.groups);
+  return section.groups ?? [];
+}
+
 const ALL_SECTIONS = [
   generalSection,
   rutasSection,
@@ -73,10 +83,17 @@ const ALL_SECTIONS = [
 ];
 
 describe("PR2 real SettingsSections", () => {
-  it("all 6 group-based sections have groups array", () => {
+  it("all 6 sections have groups (via tabs or flat groups)", () => {
     for (const s of ALL_SECTIONS) {
-      expect(s.groups).toBeDefined();
-      expect(s.groups!.length).toBeGreaterThan(0);
+      const groups = allGroups(s);
+      expect(groups.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("all 6 sections use tabs", () => {
+    for (const s of ALL_SECTIONS) {
+      expect(s.tabs).toBeDefined();
+      expect(s.tabs!.length).toBeGreaterThan(0);
     }
   });
 
@@ -89,7 +106,7 @@ describe("PR2 real SettingsSections", () => {
   it("every row has a unique id within its section", () => {
     for (const s of ALL_SECTIONS) {
       const ids = new Set<string>();
-      for (const g of s.groups ?? []) {
+      for (const g of allGroups(s)) {
         for (const r of g.rows) {
           expect(r.id).toBeTruthy();
           expect(ids.has(r.id)).toBe(false);
@@ -100,26 +117,26 @@ describe("PR2 real SettingsSections", () => {
   });
 
   it("General section has language dropdown and toggle rows", () => {
-    const rows = generalSection.groups!.flatMap((g) => g.rows);
+    const rows = allGroups(generalSection).flatMap((g) => g.rows);
     const kinds = rows.map((r) => r.kind);
     expect(kinds).toContain("dropdown");
     expect(kinds).toContain("toggle");
   });
 
   it("Rutas section has folder rows", () => {
-    const rows = rutasSection.groups!.flatMap((g) => g.rows);
+    const rows = allGroups(rutasSection).flatMap((g) => g.rows);
     const folderRows = rows.filter((r) => r.kind === "folder");
     expect(folderRows.length).toBeGreaterThanOrEqual(2);
   });
 
   it("Cover Art section has path rows for credentials", () => {
-    const rows = coverArtSection.groups!.flatMap((g) => g.rows);
+    const rows = allGroups(coverArtSection).flatMap((g) => g.rows);
     const pathRows = rows.filter((r) => r.kind === "path");
     expect(pathRows.length).toBeGreaterThanOrEqual(2); // SGDB key + SS creds
   });
 
   it("Avanzado section has a danger button (reset config)", () => {
-    const rows = avanzadoSection.groups!.flatMap((g) => g.rows);
+    const rows = allGroups(avanzadoSection).flatMap((g) => g.rows);
     const dangerBtns = rows.filter(
       (r) => r.kind === "button" && r.variant === "danger"
     );
@@ -128,7 +145,7 @@ describe("PR2 real SettingsSections", () => {
 
   it("every getter runs without throwing given fakeCtx", () => {
     for (const s of ALL_SECTIONS) {
-      for (const g of s.groups ?? []) {
+      for (const g of allGroups(s)) {
         for (const r of g.rows) {
           switch (r.kind) {
             case "toggle":
