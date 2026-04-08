@@ -32,7 +32,7 @@ function createWindow(): void {
   });
 
   // TODO: remove before production
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools({ mode: "detach" });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -41,6 +41,17 @@ function createWindow(): void {
       path.join(__dirname, "..", "renderer", MAIN_WINDOW_VITE_NAME, "index.html")
     );
   }
+
+  // Chromium's Gamepad API requires document.hasFocus() to return valid data.
+  // Detached DevTools steals focus — restore it once loaded (with a small
+  // delay so the DevTools window finishes opening first) and every time
+  // the main window regains focus.
+  mainWindow.webContents.once("did-finish-load", () => {
+    setTimeout(() => mainWindow?.webContents.focus(), 300);
+  });
+  mainWindow.on("focus", () => {
+    mainWindow?.webContents.focus();
+  });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
