@@ -33,9 +33,9 @@ export function ToggleRow({ setting, ctx, focused }: Props) {
           onToggle();
         }
       }}
-      className={`flex cursor-pointer items-center justify-between rounded-md px-4 py-3 transition-colors ${
-        focused ? "ring-focus bg-surface-2" : "bg-surface-1"
-      } ${disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-surface-2"}`}
+      className={`flex cursor-pointer items-center justify-between rounded-[var(--radius-md)] px-4 py-3 transition-colors folder-row-glass ${
+        focused ? "ring-focus" : ""
+      } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
       style={{ marginBottom: "var(--spacing-row)" }}
     >
       <div className="flex-1 pr-4">

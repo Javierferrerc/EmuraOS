@@ -77,6 +77,7 @@ function createReducer(counts: SettingsFocusCounts) {
           ...state,
           region: "sidebar",
           sidebarIndex: clamp(action.index, counts.sidebarCount),
+          tabIndex: 0,
           active: true,
         };
       case "SET_TAB":
@@ -133,7 +134,7 @@ function createReducer(counts: SettingsFocusCounts) {
           if (state.tabIndex === 0) {
             return { ...state, region: "sidebar" };
           }
-          return { ...state, tabIndex: state.tabIndex - 1 };
+          return { ...state, tabIndex: state.tabIndex - 1, listIndex: 0 };
         }
         if (state.region === "list") {
           return { ...state, region: "sidebar" };
@@ -151,6 +152,7 @@ function createReducer(counts: SettingsFocusCounts) {
           return {
             ...state,
             tabIndex: clamp(state.tabIndex + 1, counts.tabCount),
+            listIndex: 0,
           };
         }
         return state;

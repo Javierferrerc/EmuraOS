@@ -104,6 +104,24 @@ describe("GameLauncher", () => {
   });
 
   it("should return error when no emulator is found", () => {
+    // Use isolated mapper so defaultPaths don't find real system emulators
+    const customData = [
+      {
+        id: "fake-emu",
+        name: "Fake",
+        executable: "fake.exe",
+        defaultPaths: [],
+        systems: ["nes"],
+        launchTemplate: "\"{executable}\" \"{romPath}\"",
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "no-emu.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+    const isolatedLauncher = new GameLauncher(isolatedMapper);
+
     const rom: DiscoveredRom = {
       fileName: "Game.nes",
       filePath: "C:\\roms\\nes\\Game.nes",
@@ -113,7 +131,7 @@ describe("GameLauncher", () => {
     };
 
     // Use a path with no emulator executables
-    const result = launcher.launch(rom, TEST_DIR);
+    const result = isolatedLauncher.launch(rom, TEST_DIR);
     expect(result.success).toBe(false);
     expect(result.error).toContain("No emulator found");
     expect(result.romPath).toBe(rom.filePath);

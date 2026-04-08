@@ -26,13 +26,16 @@ interface ButtonState {
 
 export function useGamepad(options: {
   onAction: (action: FocusAction) => void;
+  disabled?: boolean;
 }): { gamepadConnected: boolean; gamepadName: string | null } {
-  const { onAction } = options;
+  const { onAction, disabled } = options;
   const [connected, setConnected] = useState(false);
   const [gamepadName, setGamepadName] = useState<string | null>(null);
 
   const onActionRef = useRef(onAction);
   onActionRef.current = onAction;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   const prevButtonsRef = useRef<Record<number, boolean>>({});
   const buttonStateRef = useRef<Record<number, ButtonState>>({});
@@ -112,6 +115,10 @@ export function useGamepad(options: {
     }
 
     function poll() {
+      if (disabledRef.current) {
+        rafRef.current = requestAnimationFrame(poll);
+        return;
+      }
       const gamepads = navigator.getGamepads();
       let gp: Gamepad | null = null;
       for (const g of gamepads) {

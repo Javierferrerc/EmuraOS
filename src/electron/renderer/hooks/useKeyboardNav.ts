@@ -14,15 +14,19 @@ const KEY_MAP: Record<string, FocusAction> = {
 export function useKeyboardNav(options: {
   onAction: (action: FocusAction) => void;
   onToggleFullscreen: () => void;
+  disabled?: boolean;
 }) {
-  const { onAction, onToggleFullscreen } = options;
+  const { onAction, onToggleFullscreen, disabled } = options;
   const onActionRef = useRef(onAction);
   onActionRef.current = onAction;
   const onToggleRef = useRef(onToggleFullscreen);
   onToggleRef.current = onToggleFullscreen;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if (disabledRef.current) return;
       // F10 toggles fullscreen
       if (e.key === "F10") {
         e.preventDefault();

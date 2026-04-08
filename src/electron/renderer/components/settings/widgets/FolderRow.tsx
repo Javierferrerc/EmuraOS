@@ -43,8 +43,8 @@ export function FolderRow({ setting, ctx, focused }: Props) {
 
   return (
     <div
-      className={`rounded-md px-4 py-3 transition-colors ${
-        focused ? "ring-focus bg-surface-2" : "bg-surface-1"
+      className={`folder-row-glass rounded-[var(--radius-md)] px-4 py-3 transition-colors ${
+        focused ? "ring-focus" : ""
       } ${disabled ? "opacity-50" : ""}`}
       style={{ marginBottom: "var(--spacing-row)" }}
     >
@@ -62,13 +62,13 @@ export function FolderRow({ setting, ctx, focused }: Props) {
           onBlur={commit}
           disabled={disabled}
           tabIndex={disabled ? -1 : 0}
-          className="flex-1 rounded-md border border-white/10 bg-surface-0 px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
+          className="flex-1 rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
         />
         <button
           type="button"
           onClick={browse}
           disabled={disabled}
-          className="rounded-md border border-white/10 bg-surface-0 px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+          className="rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:border-white hover:bg-surface-2 disabled:opacity-50"
         >
           Browse…
         </button>

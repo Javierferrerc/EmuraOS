@@ -29,8 +29,8 @@ export function PathRow({ setting, ctx, focused }: Props) {
 
   return (
     <div
-      className={`rounded-md px-4 py-3 transition-colors ${
-        focused ? "ring-focus bg-surface-2" : "bg-surface-1"
+      className={`rounded-[var(--radius-md)] px-4 py-3 transition-colors folder-row-glass ${
+        focused ? "ring-focus" : ""
       } ${disabled ? "opacity-50" : ""}`}
       style={{ marginBottom: "var(--spacing-row)" }}
     >

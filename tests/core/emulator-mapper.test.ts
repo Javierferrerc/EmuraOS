@@ -49,12 +49,28 @@ describe("EmulatorMapper", () => {
   });
 
   it("should resolve emulator when executable exists in emulatorsPath", () => {
-    // Create a fake emulator executable
+    // Use isolated mapper so defaultPaths don't find real system emulators
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: "\"{executable}\" \"{romPath}\"",
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolve-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
     const emuDir = resolve(TEST_DIR, "snes9x");
     mkdirSync(emuDir, { recursive: true });
     writeFileSync(resolve(emuDir, "snes9x-x64.exe"), "fake-exe");
 
-    const resolved = mapper.resolve("snes", TEST_DIR);
+    const resolved = isolatedMapper.resolve("snes", TEST_DIR);
     expect(resolved).not.toBeNull();
     expect(resolved!.definition.id).toBe("snes9x");
     expect(resolved!.systemId).toBe("snes");
@@ -62,15 +78,48 @@ describe("EmulatorMapper", () => {
   });
 
   it("should return null when no emulator executable is found", () => {
-    const resolved = mapper.resolve("snes", TEST_DIR);
+    // Use isolated mapper so defaultPaths don't find real system emulators
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: "\"{executable}\" \"{romPath}\"",
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "null-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    const resolved = isolatedMapper.resolve("snes", TEST_DIR);
     expect(resolved).toBeNull();
   });
 
   it("should resolve emulator from flat emulatorsPath", () => {
-    // Place executable directly in emulatorsPath (no subfolder)
+    // Use isolated mapper so defaultPaths don't find real system emulators
+    const customData = [
+      {
+        id: "mgba",
+        name: "mGBA",
+        executable: "mGBA.exe",
+        defaultPaths: [],
+        systems: ["gba"],
+        launchTemplate: "\"{executable}\" \"{romPath}\"",
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "flat-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
     writeFileSync(resolve(TEST_DIR, "mGBA.exe"), "fake-exe");
 
-    const resolved = mapper.resolve("gba", TEST_DIR);
+    const resolved = isolatedMapper.resolve("gba", TEST_DIR);
     expect(resolved).not.toBeNull();
     expect(resolved!.definition.id).toBe("mgba");
   });

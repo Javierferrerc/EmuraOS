@@ -19,6 +19,7 @@ export default function App() {
 
   const {
     currentView,
+    isGameRunning,
     pendingCemuKeysLaunch,
     isCemuKeysModalOpen,
     showCemuKeysError,
@@ -28,10 +29,15 @@ export default function App() {
     dismissCemuKeysError,
   } = app;
 
-  // Bridge: mirror `currentView` → navigation stack. When the new flag is
-  // on, navigation is the source of truth.
+  // Bridge: mirror `currentView` → navigation stack.
+  //
+  // Game session transitions ("/game" ↔ "/library") must ALWAYS sync
+  // regardless of NEW_SETTINGS_ENABLED, because the game session IPC
+  // events set `currentView` directly. Without this, when the new
+  // settings flag is on, navigation.currentPath stays stale after a
+  // game launch and GameModeView never renders — leaving the Layout
+  // (and its useGamepad poll loop) active during gameplay.
   useEffect(() => {
-    if (NEW_SETTINGS_ENABLED) return;
     const target =
       currentView === "settings"
         ? "/settings"
@@ -40,6 +46,13 @@ export default function App() {
           : currentView === "game"
             ? "/game"
             : "/library";
+
+    // With the new settings flag, only sync game/library transitions.
+    // Settings paths are driven by NavigationContext directly.
+    if (NEW_SETTINGS_ENABLED && target !== "/game" && target !== "/library") {
+      return;
+    }
+
     if (navigation.currentPath !== target) {
       navigation.reset(target);
     }
@@ -56,7 +69,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCemuKeysError, pendingCemuKeysLaunch]);
 
-  // First-run wizard
+  // First-run wizard — only show when the user hasn't completed setup yet
   useEffect(() => {
     if (NEW_SETTINGS_ENABLED && app.config && !app.config.firstRunCompleted) {
       setShowWizard(true);
@@ -105,7 +118,18 @@ export default function App() {
       currentGameFileName: app.currentGame?.rom?.fileName ?? null,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [app.config, app.updateConfig, app.isDetectingEmulators]
+    [
+      app.config,
+      app.updateConfig,
+      app.isDetectingEmulators,
+      app.lastDetection,
+      app.driveEmulators,
+      app.isLoadingDrive,
+      app.downloadingEmulatorId,
+      app.emulatorDownloadProgress,
+      app.emulatorDefs,
+      app.gamepadConnected,
+    ]
   );
 
   let page;
@@ -116,7 +140,7 @@ export default function App() {
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
     } else {
-      page = <Layout />;
+      page = <Layout inputDisabled={showWizard || isGameRunning} />;
     }
   } else {
     switch (currentView) {
@@ -130,18 +154,18 @@ export default function App() {
         page = <GameModeView />;
         break;
       default:
-        page = <Layout />;
+        page = <Layout inputDisabled={showWizard || isGameRunning} />;
     }
   }
 
   return (
     <div className="flex h-screen flex-col">
       <div className="flex-1 overflow-hidden">{page}</div>
-      <StatusBar />
+      {/* <StatusBar /> */}
       {showWizard && (
         <FirstRunWizard
           ctx={wizardCtx}
-          onComplete={() => setShowWizard(false)}
+          onComplete={() => { setTimeout(() => setShowWizard(false), 300); }}
         />
       )}
       {isCemuKeysModalOpen && (

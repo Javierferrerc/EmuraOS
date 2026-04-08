@@ -31,13 +31,23 @@ export function EmuladoresList({ ctx }: { ctx: SettingsContext }) {
 
   return (
     <div className="space-y-4">
-      {/* Detect button */}
-      <div className="flex items-center gap-3">
+      {/* Header: title + description + detect button */}
+      <div className="flex items-center justify-between rounded-[var(--radius-md)] px-5 py-4 folder-row-glass">
+        <div className="flex-1 pr-4">
+          <div className="text-base font-semibold text-primary">Emuladores</div>
+          <div className="mt-0.5 text-xs text-muted">
+            Detecta y gestiona los emuladores instalados en tu sistema
+          </div>
+        </div>
         <button
           onClick={handleDetect}
           disabled={ctx.isDetectingEmulators || ctx.isLoadingDrive}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+          className="relative cursor-pointer whitespace-nowrap rounded-[var(--radius-sm)] px-4 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden isolate"
         >
+          <span
+            className="absolute inset-0 -z-10 rounded-inherit"
+            style={{ background: "linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))", opacity: 0.72 }}
+          />
           {ctx.isDetectingEmulators || ctx.isLoadingDrive
             ? "Detectando..."
             : "Detectar emuladores"}

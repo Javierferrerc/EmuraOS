@@ -24,7 +24,7 @@ import { useNavigationSounds } from "../hooks/useNavigationSounds";
 import { buildSliderItems } from "../utils/sliderItems";
 import type { DiscoveredRom } from "../../../core/types";
 
-export function Layout() {
+export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
   const {
     isLoading,
     currentView,
@@ -394,7 +394,7 @@ export function Layout() {
   );
 
   // Gamepad
-  const { gamepadConnected } = useGamepad({ onAction: handleAction });
+  const { gamepadConnected } = useGamepad({ onAction: handleAction, disabled: inputDisabled });
 
   // Sync gamepad state to context
   useEffect(() => {
@@ -405,6 +405,7 @@ export function Layout() {
   useKeyboardNav({
     onAction: handleAction,
     onToggleFullscreen: toggleFullscreen,
+    disabled: inputDisabled,
   });
 
   // Mouse escape hatch: deactivate focus on mouse click
@@ -461,7 +462,7 @@ export function Layout() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <TopBar
         focusedIndex={
           focusState.region === "topbar" ? focusState.topbarIndex : -1
