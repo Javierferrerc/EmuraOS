@@ -37,6 +37,23 @@ import type {
   DriveEmulatorMapping,
   EmulatorDefinition,
 } from "../../core/types.js";
+import { logSecurityEvent } from "../../core/security-logger.js";
+import {
+  AppConfigPartialSchema,
+  DiscoveredRomSchema,
+  SystemIdSchema,
+  EmulatorIdSchema,
+  CollectionIdSchema,
+  FileNameSchema,
+  BoundsSchema,
+  FileFilterSchema,
+  CemuKeysContentSchema,
+  EmulatorConfigChangesSchema,
+  CollectionNameSchema,
+  RecentlyPlayedLimitSchema,
+  ForceRefreshSchema,
+  UrlSchema,
+} from "./ipc-validators.js";
 
 function getDataPath(): string {
   if (app.isPackaged) {
@@ -142,9 +159,10 @@ export function registerIpcHandlers(
     return configManager.get();
   });
 
-  ipcMain.handle("update-config", (_event, partial: Partial<AppConfig>) => {
+  ipcMain.handle("update-config", (_event, partial: unknown) => {
+    const validated = AppConfigPartialSchema.parse(partial);
     const configManager = new ConfigManager(getProjectRoot());
-    configManager.update(partial);
+    configManager.update(validated);
     configManager.save();
     return configManager.get();
   });
@@ -166,24 +184,25 @@ export function registerIpcHandlers(
     return scanner.scan(configManager.getRomsPath());
   });
 
-  ipcMain.handle("launch-game", (_event, rom: DiscoveredRom) => {
+  ipcMain.handle("launch-game", (_event, rom: unknown) => {
+    const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const launcher = new GameLauncher(mapper);
     const emulatorsPath = configManager.getEmulatorsPath();
-    const resolved = mapper.resolve(rom.systemId, emulatorsPath);
+    const resolved = mapper.resolve(validated.systemId, emulatorsPath);
     if (resolved) {
       runPerEmulatorSetup(
         resolved.definition.id,
-        rom.systemId,
+        validated.systemId,
         resolved.executablePath,
         configManager.getRomsPath()
       );
     }
-    const result = launcher.launch(rom, emulatorsPath);
+    const result = launcher.launch(validated, emulatorsPath);
     if (result.success) {
       const lib = new UserLibrary(getProjectRoot());
-      lib.recordPlay(rom.systemId, rom.fileName);
+      lib.recordPlay(validated.systemId, validated.fileName);
     }
     return result;
   });
@@ -249,8 +268,9 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "list-drive-emulators",
-    async (_event, forceRefresh?: boolean) => {
-      if (cachedDriveListing && !forceRefresh) {
+    async (_event, forceRefresh?: unknown) => {
+      const refresh = ForceRefreshSchema.parse(forceRefresh);
+      if (cachedDriveListing && !refresh) {
         return cachedDriveListing;
       }
       try {
@@ -269,11 +289,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "download-emulator",
-    async (event, emulatorId: string) => {
+    async (event, emulatorId: unknown) => {
+      const validatedId = EmulatorIdSchema.parse(emulatorId);
       const configManager = new ConfigManager(getProjectRoot());
       const downloader = new EmulatorDownloader(getProjectRoot());
       return await downloader.download(
-        emulatorId,
+        validatedId,
         configManager.getEmulatorsPath(),
         (progress) => {
           event.sender.send("emulator-download-progress", progress);
@@ -297,9 +318,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "get-metadata",
-    (_event: IpcMainInvokeEvent, systemId: string, romFileName: string) => {
+    (_event: IpcMainInvokeEvent, systemId: unknown, romFileName: unknown) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(romFileName);
       const cache = new MetadataCache(getProjectRoot());
-      return cache.getMetadata(systemId, romFileName);
+      return cache.getMetadata(validatedSystem, validatedFile);
     }
   );
 
@@ -309,8 +332,12 @@ export function registerIpcHandlers(
       const configManager = new ConfigManager(getProjectRoot());
       const appConfig = configManager.get();
 
-      const devId = appConfig.screenScraperDevId;
-      const devPassword = appConfig.screenScraperDevPassword;
+      // Env vars take priority over config file
+      const devId =
+        process.env.SCREENSCRAPER_DEV_ID || appConfig.screenScraperDevId;
+      const devPassword =
+        process.env.SCREENSCRAPER_DEV_PASSWORD ||
+        appConfig.screenScraperDevPassword;
       if (!devId || !devPassword) {
         throw new Error("ScreenScraper credentials not configured");
       }
@@ -344,10 +371,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "get-cover-path",
-    (_event: IpcMainInvokeEvent, systemId: string, romFileName: string) => {
+    (_event: IpcMainInvokeEvent, systemId: unknown, romFileName: unknown) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(romFileName);
       const cache = new MetadataCache(getProjectRoot());
-      if (cache.coverExists(systemId, romFileName)) {
-        return cache.getCoverPath(systemId, romFileName);
+      if (cache.coverExists(validatedSystem, validatedFile)) {
+        return cache.getCoverPath(validatedSystem, validatedFile);
       }
       return null;
     }
@@ -356,10 +385,33 @@ export function registerIpcHandlers(
   ipcMain.handle(
     "read-cover-data-url",
     (_event: IpcMainInvokeEvent, coverPath: string) => {
-      if (!coverPath || !existsSync(coverPath)) return null;
+      if (!coverPath || typeof coverPath !== "string") return null;
+
+      // Validate path is within allowed directories to prevent path traversal
+      const projectRoot = getProjectRoot();
+      const allowedRoots = [
+        path.join(projectRoot, "metadata"),
+        path.join(projectRoot, "covers"),
+        path.join(projectRoot, "config", "metadata"),
+      ];
+      const resolved = path.resolve(coverPath);
+      const isAllowed = allowedRoots.some(
+        (root) => resolved.startsWith(root + path.sep) || resolved === root
+      );
+      if (!isAllowed) {
+        logSecurityEvent({
+          type: "PATH_TRAVERSAL_BLOCKED",
+          channel: "read-cover-data-url",
+          detail: `Blocked path: ${coverPath}`,
+          severity: "warn",
+        });
+        return null;
+      }
+
+      if (!existsSync(resolved)) return null;
       try {
-        const data = readFileSync(coverPath);
-        const ext = path.extname(coverPath).toLowerCase();
+        const data = readFileSync(resolved);
+        const ext = path.extname(resolved).toLowerCase();
         const mime =
           ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
         return `data:${mime};base64,${data.toString("base64")}`;
@@ -394,7 +446,9 @@ export function registerIpcHandlers(
       }
     );
 
-    const sgdbKey = appConfig.steamGridDbApiKey;
+    // Env var takes priority over config file
+    const sgdbKey =
+      process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey;
     if (!sgdbKey) {
       return libretroResult;
     }
@@ -461,9 +515,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "toggle-favorite",
-    (_event: IpcMainInvokeEvent, systemId: string, fileName: string) => {
+    (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
       const lib = new UserLibrary(getProjectRoot());
-      return lib.toggleFavorite(systemId, fileName);
+      return lib.toggleFavorite(validatedSystem, validatedFile);
     }
   );
 
@@ -474,25 +530,29 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "create-collection",
-    (_event: IpcMainInvokeEvent, name: string) => {
+    (_event: IpcMainInvokeEvent, name: unknown) => {
+      const validatedName = CollectionNameSchema.parse(name);
       const lib = new UserLibrary(getProjectRoot());
-      return lib.createCollection(name);
+      return lib.createCollection(validatedName);
     }
   );
 
   ipcMain.handle(
     "rename-collection",
-    (_event: IpcMainInvokeEvent, id: string, name: string) => {
+    (_event: IpcMainInvokeEvent, id: unknown, name: unknown) => {
+      const validatedId = CollectionIdSchema.parse(id);
+      const validatedName = CollectionNameSchema.parse(name);
       const lib = new UserLibrary(getProjectRoot());
-      lib.renameCollection(id, name);
+      lib.renameCollection(validatedId, validatedName);
     }
   );
 
   ipcMain.handle(
     "delete-collection",
-    (_event: IpcMainInvokeEvent, id: string) => {
+    (_event: IpcMainInvokeEvent, id: unknown) => {
+      const validatedId = CollectionIdSchema.parse(id);
       const lib = new UserLibrary(getProjectRoot());
-      lib.deleteCollection(id);
+      lib.deleteCollection(validatedId);
     }
   );
 
@@ -500,12 +560,15 @@ export function registerIpcHandlers(
     "add-to-collection",
     (
       _event: IpcMainInvokeEvent,
-      collectionId: string,
-      systemId: string,
-      fileName: string
+      collectionId: unknown,
+      systemId: unknown,
+      fileName: unknown
     ) => {
+      const validatedColl = CollectionIdSchema.parse(collectionId);
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
       const lib = new UserLibrary(getProjectRoot());
-      lib.addToCollection(collectionId, systemId, fileName);
+      lib.addToCollection(validatedColl, validatedSystem, validatedFile);
     }
   );
 
@@ -513,20 +576,24 @@ export function registerIpcHandlers(
     "remove-from-collection",
     (
       _event: IpcMainInvokeEvent,
-      collectionId: string,
-      systemId: string,
-      fileName: string
+      collectionId: unknown,
+      systemId: unknown,
+      fileName: unknown
     ) => {
+      const validatedColl = CollectionIdSchema.parse(collectionId);
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
       const lib = new UserLibrary(getProjectRoot());
-      lib.removeFromCollection(collectionId, systemId, fileName);
+      lib.removeFromCollection(validatedColl, validatedSystem, validatedFile);
     }
   );
 
   ipcMain.handle(
     "get-recently-played",
-    (_event: IpcMainInvokeEvent, limit?: number) => {
+    (_event: IpcMainInvokeEvent, limit?: unknown) => {
+      const validatedLimit = RecentlyPlayedLimitSchema.parse(limit);
       const lib = new UserLibrary(getProjectRoot());
-      return lib.getRecentlyPlayed(limit);
+      return lib.getRecentlyPlayed(validatedLimit);
     }
   );
 
@@ -534,14 +601,15 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "launch-game-embedded",
-    async (_event: IpcMainInvokeEvent, rom: DiscoveredRom) => {
-      console.log("[ipc] launch-game-embedded called for:", rom.fileName);
+    async (_event: IpcMainInvokeEvent, rom: unknown) => {
+      const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
+      console.log("[ipc] launch-game-embedded called for:", validated.fileName);
       const ov = getOrCreateOverlay();
       if (!ov) {
         return {
           success: false,
           emulatorId: "",
-          romPath: rom.filePath,
+          romPath: validated.filePath,
           command: "",
           error: "Main window not available",
         };
@@ -551,27 +619,27 @@ export function registerIpcHandlers(
       const mapper = new EmulatorMapper(getEmulatorsPath());
       const launcher = new GameLauncher(mapper);
       const emulatorsPath = configManager.getEmulatorsPath();
-      const resolved = mapper.resolve(rom.systemId, emulatorsPath);
+      const resolved = mapper.resolve(validated.systemId, emulatorsPath);
 
       if (!resolved) {
         return {
           success: false,
           emulatorId: "",
-          romPath: rom.filePath,
+          romPath: validated.filePath,
           command: "",
-          error: `No emulator found for system "${rom.systemId}"`,
+          error: `No emulator found for system "${validated.systemId}"`,
         };
       }
 
       runPerEmulatorSetup(
         resolved.definition.id,
-        rom.systemId,
+        validated.systemId,
         resolved.executablePath,
         configManager.getRomsPath()
       );
 
       const result = await ov.launchEmbedded(
-        rom,
+        validated,
         resolved,
         launcher,
         emulatorsPath
@@ -581,7 +649,7 @@ export function registerIpcHandlers(
 
       if (result.success) {
         const lib = new UserLibrary(getProjectRoot());
-        lib.recordPlay(rom.systemId, rom.fileName);
+        lib.recordPlay(validated.systemId, validated.fileName);
       }
 
       return result;
@@ -600,12 +668,10 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "set-game-area-bounds",
-    (
-      _event: IpcMainInvokeEvent,
-      bounds: { x: number; y: number; width: number; height: number }
-    ) => {
+    (_event: IpcMainInvokeEvent, bounds: unknown) => {
+      const validatedBounds = BoundsSchema.parse(bounds);
       if (overlay) {
-        overlay.setGameAreaBounds(bounds);
+        overlay.setGameAreaBounds(validatedBounds);
       }
     }
   );
@@ -614,9 +680,10 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "get-emulator-config",
-    (_event: IpcMainInvokeEvent, emulatorId: string, executablePath?: string) => {
+    (_event: IpcMainInvokeEvent, emulatorId: unknown, executablePath?: string) => {
+      const validatedId = EmulatorIdSchema.parse(emulatorId);
       const manager = new EmulatorConfigManager(getSchemasPath());
-      return manager.read(emulatorId, executablePath);
+      return manager.read(validatedId, executablePath);
     }
   );
 
@@ -624,12 +691,14 @@ export function registerIpcHandlers(
     "update-emulator-config",
     (
       _event: IpcMainInvokeEvent,
-      emulatorId: string,
-      changes: Record<string, string>,
+      emulatorId: unknown,
+      changes: unknown,
       executablePath?: string
     ) => {
+      const validatedId = EmulatorIdSchema.parse(emulatorId);
+      const validatedChanges = EmulatorConfigChangesSchema.parse(changes);
       const manager = new EmulatorConfigManager(getSchemasPath());
-      manager.write(emulatorId, changes, executablePath);
+      manager.write(validatedId, validatedChanges, executablePath);
     }
   );
 
@@ -640,10 +709,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "open-config-file",
-    async (_event: IpcMainInvokeEvent, emulatorId: string, executablePath?: string) => {
+    async (_event: IpcMainInvokeEvent, emulatorId: unknown, executablePath?: string) => {
+      const validatedId = EmulatorIdSchema.parse(emulatorId);
       const { shell } = await import("electron");
       const manager = new EmulatorConfigManager(getSchemasPath());
-      const configPath = manager.getConfigPath(emulatorId, executablePath);
+      const configPath = manager.getConfigPath(validatedId, executablePath);
       if (configPath && existsSync(configPath)) {
         shell.openPath(configPath);
       }
@@ -670,7 +740,8 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "write-cemu-keys",
-    (_event: IpcMainInvokeEvent, content: string) => {
+    (_event: IpcMainInvokeEvent, content: unknown) => {
+      const validatedContent = CemuKeysContentSchema.parse(content);
       const configManager = new ConfigManager(getProjectRoot());
       const mapper = new EmulatorMapper(getEmulatorsPath());
       const resolved = mapper.resolve(
@@ -680,7 +751,7 @@ export function registerIpcHandlers(
       if (!resolved || resolved.definition.id !== "cemu") {
         throw new Error("Cemu not detected");
       }
-      const keysPath = writeCemuKeys(resolved.executablePath, content);
+      const keysPath = writeCemuKeys(resolved.executablePath, validatedContent);
       return { path: keysPath };
     }
   );
@@ -703,12 +774,15 @@ export function registerIpcHandlers(
     "dialog:pick-file",
     async (
       _event: IpcMainInvokeEvent,
-      filters?: Electron.FileFilter[]
+      filters?: unknown
     ) => {
+      const validatedFilters = filters != null
+        ? FileFilterSchema.array().parse(filters)
+        : [];
       const win = getMainWindow();
       const options: Electron.OpenDialogOptions = {
         properties: ["openFile"],
-        filters: filters ?? [],
+        filters: validatedFilters,
       };
       const result = await (win
         ? dialog.showOpenDialog(win, options)
@@ -892,6 +966,28 @@ export function registerIpcHandlers(
     "open-external",
     async (_event: IpcMainInvokeEvent, url: string) => {
       try {
+        if (!url || typeof url !== "string") {
+          return { success: false, error: "Invalid URL" };
+        }
+
+        // Only allow http: and https: schemes — block file://, javascript:, data:, etc.
+        let parsed: URL;
+        try {
+          parsed = new URL(url);
+        } catch {
+          return { success: false, error: "Malformed URL" };
+        }
+
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+          logSecurityEvent({
+            type: "URL_SCHEME_BLOCKED",
+            channel: "open-external",
+            detail: `Blocked scheme "${parsed.protocol}" for URL: ${url}`,
+            severity: "warn",
+          });
+          return { success: false, error: "Only HTTP(S) URLs are allowed" };
+        }
+
         await shell.openExternal(url);
         return { success: true };
       } catch (err) {
