@@ -1,7 +1,5 @@
 import { createWriteStream, readFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 
 export interface DriveFile {
   id: string;
@@ -215,37 +213,47 @@ export class GDriveClient {
     destPath: string,
     onBytes: (deltaBytes: number) => void
   ): Promise<void> {
-    const apiKey = await this.getApiKey();
-    const url = `${DRIVE_API_BASE}/${fileId}?alt=media&key=${apiKey}`;
+    // Use the direct usercontent endpoint (skips the 303 redirect that
+    // drive.google.com/uc does). The API alt=media endpoint requires OAuth2,
+    // but this public endpoint works for any shared file.
+    let url = `https://drive.usercontent.google.com/download?id=${fileId}&export=download`;
 
-    const res = await this.fetchWithRetry(url);
+    let res = await this.fetchWithRetry(url);
+
+    // For large files Google returns an HTML virus-scan confirmation page
+    // instead of the file. Detect this and retry with confirm=t.
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("text/html")) {
+      url += "&confirm=t";
+      res = await this.fetchWithRetry(url);
+    }
+
     if (!res.body) {
       throw new Error(`Empty response body for file ${fileId}`);
     }
 
-    // Wrap the web ReadableStream with a passthrough that reports chunk
-    // sizes, then pipe to the destination file.
+    // Stream chunks from the web ReadableStream into the destination file,
+    // reporting progress for each chunk.
     const webStream = res.body as unknown as ReadableStream<Uint8Array>;
     const reader = webStream.getReader();
+    const writer = createWriteStream(destPath);
 
-    const nodeReadable = new Readable({
-      read: async () => {
-        try {
-          const { done, value } = await reader.read();
-          if (done) {
-            nodeReadable.push(null);
-            return;
-          }
-          onBytes(value.byteLength);
-          nodeReadable.push(Buffer.from(value));
-        } catch (err) {
-          nodeReadable.destroy(
-            err instanceof Error ? err : new Error(String(err))
-          );
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        onBytes(value.byteLength);
+        const ok = writer.write(Buffer.from(value));
+        if (!ok) {
+          await new Promise<void>((resolve) => writer.once("drain", resolve));
         }
-      },
-    });
-
-    await pipeline(nodeReadable, createWriteStream(destPath));
+      }
+    } finally {
+      writer.end();
+      await new Promise<void>((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
+    }
   }
 }

@@ -278,6 +278,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setIsLoading(false);
       }
+
+      // Fire-and-forget emulator detection so results are ready
+      // by the time the user opens the emulators settings page.
+      detectEmulators();
     }
     init();
   }, []);

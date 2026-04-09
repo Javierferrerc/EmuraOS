@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp, type ActiveFilter } from "../context/AppContext";
+import logoEmura from "../assets/logo-emura.svg";
 import "./TopBar.css";
 
 export const TOPBAR_ITEM_COUNT = 4;
@@ -85,9 +86,7 @@ export function TopBar({
       </svg>
 
       {/* Logo */}
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-sm">
-        RL
-      </div>
+      <img src={logoEmura} alt="Emura OS" className="h-9 shrink-0" />
 
       {/* Search */}
       <div

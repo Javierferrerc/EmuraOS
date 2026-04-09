@@ -3,9 +3,10 @@ import type { FocusAction } from "./useFocusManager";
 
 // Standard Gamepad button → FocusAction mapping
 const BUTTON_MAP: Record<number, FocusAction> = {
-  0: { type: "ACTIVATE" },      // A / Cross
-  1: { type: "BACK" },          // B / Circle
-  3: { type: "TOGGLE_FAVORITE" }, // Y / Triangle
+  0: { type: "ACTIVATE" },        // A / Cross
+  1: { type: "BACK" },            // B / Circle
+  2: { type: "SECONDARY_ACTION" }, // X / Square
+  3: { type: "TOGGLE_FAVORITE" },  // Y / Triangle
   4: { type: "PREV_FILTER" },   // LB
   5: { type: "NEXT_FILTER" },   // RB
   9: { type: "OPEN_SETTINGS" }, // Start
@@ -111,6 +112,29 @@ export function useGamepad(options: {
         }
       } else if (!pressed) {
         delete stateMap[key];
+      }
+    }
+
+    // Seed previous state with the current gamepad snapshot so that
+    // buttons/sticks already held when this hook mounts are not treated
+    // as new presses (avoids phantom activations on view transitions).
+    {
+      const gamepads = navigator.getGamepads();
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        for (const indexStr of Object.keys(BUTTON_MAP)) {
+          const idx = Number(indexStr);
+          prevButtonsRef.current[idx] = gp.buttons[idx]?.pressed ?? false;
+        }
+        const axisX = gp.axes[0] ?? 0;
+        const axisY = gp.axes[1] ?? 0;
+        const absX = Math.abs(axisX);
+        const absY = Math.abs(axisY);
+        prevAxesRef.current["stick-left"] = absX >= DEADZONE && axisX < 0;
+        prevAxesRef.current["stick-right"] = absX >= DEADZONE && axisX > 0;
+        prevAxesRef.current["stick-up"] = absY >= DEADZONE && axisY < 0;
+        prevAxesRef.current["stick-down"] = absY >= DEADZONE && axisY > 0;
+        break;
       }
     }
 

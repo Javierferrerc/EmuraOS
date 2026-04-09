@@ -8,7 +8,7 @@ import type {
 import { GDriveClient, type DriveFileEntry } from "./gdrive-client.js";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-const DOWNLOAD_CONCURRENCY = 4;
+const DOWNLOAD_CONCURRENCY = 10;
 const PROGRESS_EMIT_INTERVAL_MS = 100;
 
 /**
