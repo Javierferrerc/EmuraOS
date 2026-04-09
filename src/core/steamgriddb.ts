@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { MetadataCache } from "./metadata-cache.js";
+import { logSecurityEvent } from "./security-logger.js";
 import type {
   DiscoveredRom,
   CoverFetchProgress,
@@ -165,6 +166,11 @@ export class SteamGridDb {
     if (response.status === 429) {
       const retryAfter = Number(response.headers.get("Retry-After") ?? "5");
       const waitMs = Math.max(1000, retryAfter * 1000);
+      logSecurityEvent({
+        type: "RATE_LIMIT_HIT",
+        detail: `SteamGridDB returned 429, backing off ${waitMs}ms`,
+        severity: "warn",
+      });
       console.warn(
         `[steamgriddb] rate limited, waiting ${waitMs}ms then retrying once`
       );
@@ -180,6 +186,11 @@ export class SteamGridDb {
 
     if (response.status === 401) {
       if (!this.warnedUnauthorized) {
+        logSecurityEvent({
+          type: "AUTH_FAILURE",
+          detail: "SteamGridDB returned 401 Unauthorized",
+          severity: "error",
+        });
         console.warn(
           "[steamgriddb] 401 Unauthorized — check your API key in Settings"
         );

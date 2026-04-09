@@ -1,5 +1,6 @@
 import { createWriteStream, readFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
+import { logSecurityEvent } from "./security-logger.js";
 
 export interface DriveFile {
   id: string;
@@ -35,16 +36,21 @@ interface GDriveConfigFile {
 }
 
 /**
- * Load the Drive config from disk. Read at runtime (not via `import(...)`)
- * so the bundler never tries to statically resolve the gitignored file —
- * Rollup rejects unresolvable imports regardless of `try/catch`. Falls back
- * through three layers:
- *   1. `{projectRoot}/config/gdrive-config.json` (real, gitignored)
- *   2. `{projectRoot}/config/gdrive-config.example.json` (committed template)
- *   3. empty strings, so downstream API calls return 400 and the UI
+ * Load the Drive config. Priority order:
+ *   1. Environment variables (GDRIVE_API_KEY, GDRIVE_ROOT_FOLDER_ID)
+ *   2. `{projectRoot}/config/gdrive-config.json` (real, gitignored)
+ *   3. `{projectRoot}/config/gdrive-config.example.json` (committed template)
+ *   4. empty strings, so downstream API calls return 400 and the UI
  *      gracefully shows every emulator as "Not available yet"
  */
 function loadDriveConfig(projectRoot: string): GDriveConfigFile {
+  // Check environment variables first
+  const envApiKey = process.env.GDRIVE_API_KEY;
+  const envFolderId = process.env.GDRIVE_ROOT_FOLDER_ID;
+  if (envApiKey && envFolderId) {
+    return { rootFolderId: envFolderId, apiKey: envApiKey };
+  }
+
   const real = pathResolve(projectRoot, "config", "gdrive-config.json");
   const example = pathResolve(
     projectRoot,
@@ -111,7 +117,19 @@ export class GDriveClient {
       try {
         const res = await fetch(url);
         if (res.ok) return res;
+        if (res.status === 401 || res.status === 403) {
+          logSecurityEvent({
+            type: "AUTH_FAILURE",
+            detail: `GDrive API returned ${res.status}`,
+            severity: "error",
+          });
+        }
         if (res.status === 429 || res.status >= 500) {
+          logSecurityEvent({
+            type: "RATE_LIMIT_HIT",
+            detail: `GDrive API returned ${res.status}, attempt ${attempt + 1}/${maxAttempts}`,
+            severity: "warn",
+          });
           lastError = new Error(`HTTP ${res.status} from ${url}`);
           if (attempt < maxAttempts - 1) {
             await sleep(1000 * Math.pow(2, attempt));

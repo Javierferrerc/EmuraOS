@@ -1,8 +1,10 @@
-import { app, BrowserWindow, globalShortcut, Menu } from "electron";
+import "dotenv/config";
+import { app, BrowserWindow, globalShortcut, Menu, session } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
 import { isGameActive, claimF10Fire } from "./game-state.js";
+import { setSecurityLogDir } from "../../core/security-logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +30,7 @@ function createWindow(): void {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -92,6 +95,29 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Initialize security logging directory
+  setSecurityLogDir(app.getPath("logs"));
+
+  // Content Security Policy — restrict renderer from loading external
+  // scripts, connecting to arbitrary hosts, etc.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          "default-src 'self'; " +
+            "script-src 'self'; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data:; " +
+            "connect-src 'self'; " +
+            "font-src 'self'; " +
+            "object-src 'none'; " +
+            "base-uri 'self'",
+        ],
+      },
+    });
+  });
+
   registerIpcHandlers(() => mainWindow);
   createWindow();
 

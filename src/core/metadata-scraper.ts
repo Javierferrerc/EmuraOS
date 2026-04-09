@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MetadataCache } from "./metadata-cache.js";
+import { logSecurityEvent } from "./security-logger.js";
 import type {
   DiscoveredRom,
   GameMetadata,
@@ -174,6 +175,20 @@ export class MetadataScraper {
     const response = await fetch(url);
     if (!response.ok) {
       if (response.status === 404) return { found: false, metadata: null };
+      if (response.status === 401 || response.status === 403) {
+        logSecurityEvent({
+          type: "AUTH_FAILURE",
+          detail: `ScreenScraper API returned ${response.status}`,
+          severity: "error",
+        });
+      }
+      if (response.status === 429) {
+        logSecurityEvent({
+          type: "RATE_LIMIT_HIT",
+          detail: `ScreenScraper API returned 429`,
+          severity: "warn",
+        });
+      }
       throw new Error(`ScreenScraper API error: ${response.status}`);
     }
 
