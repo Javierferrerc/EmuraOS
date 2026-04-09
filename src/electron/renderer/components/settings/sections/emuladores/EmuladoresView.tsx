@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type MutableRefObject } from "react";
 import type { SettingsContext } from "../../../../schemas/settings-schema-types";
 import { EmuladoresList } from "./EmuladoresList";
 import { EmuladorDetail } from "./EmuladorDetail";
@@ -9,7 +9,19 @@ import { EmuladorDetail } from "./EmuladorDetail";
  * At `/settings/emuladores` — renders the emulator list.
  * At `/settings/emuladores/:id` — renders the 4-tab detail view.
  */
-export function EmuladoresView({ ctx }: { ctx: SettingsContext }) {
+export function EmuladoresView({
+  ctx,
+  focusIndex,
+  regionFocused,
+  activateRef,
+  secondaryRef,
+}: {
+  ctx: SettingsContext;
+  focusIndex: number;
+  regionFocused: boolean;
+  activateRef: MutableRefObject<(() => void) | null>;
+  secondaryRef: MutableRefObject<(() => void) | null>;
+}) {
   const currentPath = ctx.navigation.currentPath;
 
   const emulatorId = useMemo(() => {
@@ -21,5 +33,13 @@ export function EmuladoresView({ ctx }: { ctx: SettingsContext }) {
     return <EmuladorDetail ctx={ctx} emulatorId={emulatorId} />;
   }
 
-  return <EmuladoresList ctx={ctx} />;
+  return (
+    <EmuladoresList
+      ctx={ctx}
+      focusIndex={focusIndex}
+      regionFocused={regionFocused}
+      activateRef={activateRef}
+      secondaryRef={secondaryRef}
+    />
+  );
 }

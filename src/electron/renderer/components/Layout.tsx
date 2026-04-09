@@ -17,6 +17,7 @@ import {
   type KeyboardCursor,
 } from "./VirtualKeyboard";
 import { useApp } from "../context/AppContext";
+import logoEmura from "../assets/logo-emura.svg";
 import { useFocusManager, type FocusAction } from "../hooks/useFocusManager";
 import { useGamepad } from "../hooks/useGamepad";
 import { useKeyboardNav } from "../hooks/useKeyboardNav";
@@ -450,8 +451,8 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <div className="mb-4 text-4xl">🎮</div>
-          <p className="text-lg text-gray-500">Loading Retro Launcher...</p>
+          <img src={logoEmura} alt="Emura OS" className="mx-auto mb-6 h-14" />
+          <p className="text-lg text-gray-500">Cargando...</p>
         </div>
       </div>
     );

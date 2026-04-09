@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { SettingsContext } from "../../../../schemas/settings-schema-types";
+import { EmulatorIcon } from "./EmulatorIcon";
 import { EstadoTab } from "./tabs/EstadoTab";
 import { ConfiguracionTab } from "./tabs/ConfiguracionTab";
 import { DescargaTab } from "./tabs/DescargaTab";
@@ -48,15 +49,18 @@ export function EmuladorDetail({ ctx, emulatorId }: Props) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-          {def.name}
-        </h2>
-        {detected && (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {detected.executablePath}
-          </p>
-        )}
+      <div className="flex items-center gap-3">
+        <EmulatorIcon id={def.id} className="h-10 w-10" />
+        <div>
+          <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
+            {def.name}
+          </h2>
+          {detected && (
+            <p className="text-xs text-[var(--color-text-muted)]">
+              {detected.executablePath}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Tab bar */}

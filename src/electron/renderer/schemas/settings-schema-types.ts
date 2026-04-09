@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, MutableRefObject } from "react";
 import type {
   AppConfig,
   Collection,
@@ -207,7 +207,17 @@ export interface SettingsSection {
    */
   tabs?: SettingsTab[];
   groups?: SettingsGroup[];
-  customComponent?: ComponentType<{ ctx: SettingsContext }>;
+  customComponent?: ComponentType<{
+    ctx: SettingsContext;
+    focusIndex: number;
+    regionFocused: boolean;
+    activateRef: MutableRefObject<(() => void) | null>;
+    secondaryRef: MutableRefObject<(() => void) | null>;
+  }>;
+  /** Grid columns for customComponent list navigation (default: 1 = flat list). */
+  customListColumns?: number;
+  /** Total focusable item count inside the customComponent. */
+  customListCount?: number | ((ctx: SettingsContext) => number);
 }
 
 export function isDisabled(

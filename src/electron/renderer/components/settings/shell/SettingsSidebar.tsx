@@ -1,4 +1,5 @@
 import type { SettingsSection } from "../../../schemas/settings-schema-types";
+import logoEmura from "../../../assets/logo-emura.svg";
 
 interface Props {
   sections: SettingsSection[];
@@ -41,10 +42,7 @@ export function SettingsSidebar({
             d="M15 19l-7-7 7-7"
           />
         </svg>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white">
-          RL
-        </div>
-        <span className="text-sm">Volver al menú</span>
+        <img src={logoEmura} alt="Emura OS" className="h-9" />
       </button>
 
       {/* Floating card */}
@@ -76,6 +74,7 @@ export function SettingsSidebar({
           );
         })}
       </nav>
+
     </div>
   );
 }

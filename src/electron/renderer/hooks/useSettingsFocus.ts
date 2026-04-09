@@ -46,7 +46,7 @@ export interface SettingsFocusCounts {
 }
 
 const initialState: SettingsFocusState = {
-  region: "list",
+  region: "sidebar",
   sidebarIndex: 0,
   tabIndex: 0,
   listIndex: 0,

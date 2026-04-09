@@ -29,7 +29,8 @@ export type FocusAction =
   | { type: "ENTER_TEXT_INPUT" }
   | { type: "EXIT_TEXT_INPUT" }
   | { type: "DEACTIVATE" }
-  | { type: "RESET_GRID" };
+  | { type: "RESET_GRID" }
+  | { type: "SECONDARY_ACTION" };
 
 interface FocusCounts {
   topbarItemCount: number;

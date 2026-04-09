@@ -7,4 +7,7 @@ export const emuladoresSection: SettingsSection = {
   label: "Emuladores",
   icon: "🎮",
   customComponent: EmuladoresView,
+  customListColumns: 3,
+  // 1 (detect button) + emulator count — computed dynamically
+  customListCount: (ctx) => 1 + (ctx.emulatorDefs?.length ?? 0),
 };

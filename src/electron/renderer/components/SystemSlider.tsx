@@ -34,6 +34,12 @@ export function SystemSlider({
     <div
       ref={scrollRef}
       className="slider-container hide-scrollbar flex overflow-x-auto py-3"
+      onWheel={(e) => {
+        if (scrollRef.current && e.deltaY !== 0) {
+          e.preventDefault();
+          scrollRef.current.scrollLeft += e.deltaY;
+        }
+      }}
     >
       {items.map((item, idx) => {
         const isActive = idx === activeIndex;
