@@ -99,21 +99,32 @@ app.whenReady().then(() => {
   setSecurityLogDir(app.getPath("logs"));
 
   // Content Security Policy — restrict renderer from loading external
-  // scripts, connecting to arbitrary hosts, etc.
+  // scripts, connecting to arbitrary hosts, etc. In dev mode Vite needs
+  // 'unsafe-inline' scripts and ws: connections for HMR.
+  const isDev = !!MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  const csp = isDev
+    ? "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "connect-src 'self' ws:; " +
+      "font-src 'self'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'"
+    : "default-src 'self'; " +
+      "script-src 'self'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "connect-src 'self'; " +
+      "font-src 'self'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'";
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        "Content-Security-Policy": [
-          "default-src 'self'; " +
-            "script-src 'self'; " +
-            "style-src 'self' 'unsafe-inline'; " +
-            "img-src 'self' data:; " +
-            "connect-src 'self'; " +
-            "font-src 'self'; " +
-            "object-src 'none'; " +
-            "base-uri 'self'",
-        ],
+        "Content-Security-Policy": [csp],
       },
     });
   });

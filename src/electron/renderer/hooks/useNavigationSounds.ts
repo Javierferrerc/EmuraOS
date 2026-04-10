@@ -3,17 +3,17 @@ import navigateSound from "../assets/sounds/navigate.wav";
 import selectSound from "../assets/sounds/select.wav";
 
 // ── Tuning ──────────────────────────────────────────
-const NAV_VOLUME = 0.3;
+const BASE_NAV_VOLUME = 0.3;
 const NAV_FADE_OUT_MS = 120; // fade-out when a new navigate interrupts
-const SELECT_VOLUME = 0.4;
+const BASE_SELECT_VOLUME = 0.4;
 
 // Virtual keyboard click feedback. Reuses the navigate sample so the
 // keyboard feels consistent with the rest of the app's audio, applying
 // playback-rate and volume variations so different interactions still
 // feel distinct.
-const KB_NAV_VOLUME = 0.22;
+const KB_NAV_RATIO = 0.22 / 0.3; // relative to nav volume
 const KB_NAV_RATE = 1.15; // slightly brighter tick while moving cursor
-const KB_PRESS_VOLUME = 0.35;
+const KB_PRESS_RATIO = 0.35 / 0.3;
 const KB_PRESS_RATE = 1.0; // base click for char/space/backspace
 const KB_SHIFT_RATE = 1.2; // higher pitch for modifier toggles
 const KB_CONFIRM_RATE = 0.85; // deeper thunk for the Done key
@@ -41,11 +41,21 @@ function fadeOutAndStop(
 
 export type KeyboardSoundKind = "nav" | "press" | "shift" | "confirm";
 
-export function useNavigationSounds(): {
+interface NavigationSoundsOptions {
+  enabled?: boolean;
+  /** Volume 0–100 (from config). Default 70. */
+  volume?: number;
+}
+
+export function useNavigationSounds(options?: NavigationSoundsOptions): {
   playNavigate: () => void;
   playSelect: () => void;
   playKeyboardSound: (kind: KeyboardSoundKind) => void;
 } {
+  const enabled = options?.enabled ?? true;
+  // Convert 0–100 config value to a 0–1 multiplier
+  const volumeMultiplier = (options?.volume ?? 70) / 100;
+
   const ctxRef = useRef<AudioContext | null>(null);
   const navBufferRef = useRef<AudioBuffer | null>(null);
   const selBufferRef = useRef<AudioBuffer | null>(null);
@@ -53,6 +63,14 @@ export function useNavigationSounds(): {
     source: AudioBufferSourceNode;
     gain: GainNode;
   } | null>(null);
+
+  // Keep latest values in refs so callbacks don't need to be recreated
+  const enabledRef = useRef(enabled);
+  const volumeRef = useRef(volumeMultiplier);
+  useEffect(() => {
+    enabledRef.current = enabled;
+    volumeRef.current = volumeMultiplier;
+  }, [enabled, volumeMultiplier]);
 
   useEffect(() => {
     const ctx = new AudioContext();
@@ -65,6 +83,7 @@ export function useNavigationSounds(): {
   }, []);
 
   const playNavigate = useCallback(() => {
+    if (!enabledRef.current) return;
     const ctx = ctxRef.current;
     const buffer = navBufferRef.current;
     if (!ctx || !buffer) return;
@@ -79,7 +98,7 @@ export function useNavigationSounds(): {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const gain = ctx.createGain();
-    gain.gain.value = NAV_VOLUME;
+    gain.gain.value = BASE_NAV_VOLUME * volumeRef.current;
     source.connect(gain).connect(ctx.destination);
     source.start();
 
@@ -91,6 +110,7 @@ export function useNavigationSounds(): {
   }, []);
 
   const playSelect = useCallback(() => {
+    if (!enabledRef.current) return;
     const ctx = ctxRef.current;
     const buffer = selBufferRef.current;
     if (!ctx || !buffer) return;
@@ -98,36 +118,37 @@ export function useNavigationSounds(): {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     const gain = ctx.createGain();
-    gain.gain.value = SELECT_VOLUME;
+    gain.gain.value = BASE_SELECT_VOLUME * volumeRef.current;
     source.connect(gain).connect(ctx.destination);
     source.start();
   }, []);
 
   const playKeyboardSound = useCallback((kind: KeyboardSoundKind) => {
+    if (!enabledRef.current) return;
     const ctx = ctxRef.current;
     // Reuse the navigate buffer so the virtual keyboard shares the same
     // base click sample as the rest of the app's navigation feedback.
     const buffer = navBufferRef.current;
     if (!ctx || !buffer) return;
 
-    let volume: number;
+    let ratio: number;
     let rate: number;
     switch (kind) {
       case "nav":
-        volume = KB_NAV_VOLUME;
+        ratio = KB_NAV_RATIO;
         rate = KB_NAV_RATE;
         break;
       case "shift":
-        volume = KB_PRESS_VOLUME;
+        ratio = KB_PRESS_RATIO;
         rate = KB_SHIFT_RATE;
         break;
       case "confirm":
-        volume = KB_PRESS_VOLUME;
+        ratio = KB_PRESS_RATIO;
         rate = KB_CONFIRM_RATE;
         break;
       case "press":
       default:
-        volume = KB_PRESS_VOLUME;
+        ratio = KB_PRESS_RATIO;
         rate = KB_PRESS_RATE;
         break;
     }
@@ -136,7 +157,7 @@ export function useNavigationSounds(): {
     source.buffer = buffer;
     source.playbackRate.value = rate;
     const gain = ctx.createGain();
-    gain.gain.value = volume;
+    gain.gain.value = BASE_NAV_VOLUME * ratio * volumeRef.current;
     source.connect(gain).connect(ctx.destination);
     source.start();
   }, []);

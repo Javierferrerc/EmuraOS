@@ -41,6 +41,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     setGamepadConnected,
     searchQuery,
     setSearchQuery,
+    config,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -113,7 +114,10 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     }
   }, [activeFilter, setActiveFilter]);
 
-  const { playNavigate, playSelect, playKeyboardSound } = useNavigationSounds();
+  const { playNavigate, playSelect, playKeyboardSound } = useNavigationSounds({
+    enabled: config?.navSoundEnabled ?? true,
+    volume: config?.navSoundVolume ?? 70,
+  });
 
   // --- Virtual keyboard helpers ------------------------------------------------
   // Move the cursor within the on-screen keyboard. Between rows of different

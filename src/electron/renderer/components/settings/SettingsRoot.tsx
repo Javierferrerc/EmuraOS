@@ -8,6 +8,7 @@ import {
 } from "../../hooks/useSettingsFocus";
 import { useGamepad } from "../../hooks/useGamepad";
 import type { FocusAction } from "../../hooks/useFocusManager";
+import { useNavigationSounds } from "../../hooks/useNavigationSounds";
 import xIcon from "../../assets/icons/controls/x.svg";
 import circleIcon from "../../assets/icons/controls/circle.svg";
 import squareIcon from "../../assets/icons/controls/square.svg";
@@ -216,6 +217,11 @@ export function SettingsRoot() {
     hasTabBar,
   });
 
+  const { playNavigate, playSelect } = useNavigationSounds({
+    enabled: mergedConfig?.navSoundEnabled ?? true,
+    volume: mergedConfig?.navSoundVolume ?? 70,
+  });
+
   const activeGroups: SettingsGroup[] = useMemo(() => {
     if (activeSection.tabs && activeSection.tabs.length > 0) {
       return activeSection.tabs[focus.tabIndex]?.groups ?? activeSection.tabs[0]!.groups;
@@ -265,6 +271,20 @@ export function SettingsRoot() {
     }
   }, [focus.region, focus.active, focus.sidebarIndex, sections, activeSection.id, navigation]);
 
+  // Auto-focus the list region when navigating into a detail sub-path
+  // (e.g. /settings/emuladores/retroarch). This ensures the custom
+  // component's listActionRef receives gamepad actions immediately.
+  const isInsideSubPath = useMemo(() => {
+    const p = navigation.currentPath;
+    return sections.some((s) => p.startsWith(s.path + "/") && p !== s.path);
+  }, [navigation.currentPath, sections]);
+
+  useEffect(() => {
+    if (isInsideSubPath) {
+      dispatch({ type: "SET_REGION", region: "list" });
+    }
+  }, [isInsideSubPath, dispatch]);
+
   const handleSelectSection = useCallback(
     (section: SettingsSection, index: number) => {
       dispatch({ type: "SET_SIDEBAR", index });
@@ -302,6 +322,11 @@ export function SettingsRoot() {
   focusRef.current = focus;
   const activateRef = useRef<(() => void) | null>(null);
   const secondaryRef = useRef<(() => void) | null>(null);
+  const prevFilterRef = useRef<(() => void) | null>(null);
+  const nextFilterRef = useRef<(() => void) | null>(null);
+  const listActionRef = useRef<((action: "up" | "down" | "left" | "right" | "activate") => boolean) | null>(null);
+  const isInsideSubPathRef = useRef(isInsideSubPath);
+  isInsideSubPathRef.current = isInsideSubPath;
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
   const ctxRef = useRef(ctx);
@@ -359,8 +384,10 @@ export function SettingsRoot() {
 
   // Helper: handle a directional action inside the list region when the
   // active section declares grid columns. Returns true if handled.
+  // Disabled inside detail sub-paths where listActionRef manages navigation.
   const handleGridListNav = useCallback(
     (dir: "up" | "down" | "left" | "right"): boolean => {
+      if (isInsideSubPathRef.current) return false;
       const sec = activeSectionRef.current;
       const cols = sec.customListColumns;
       if (!cols || !sec.customComponent) return false;
@@ -393,17 +420,31 @@ export function SettingsRoot() {
   // settings focus system so the controller works while Settings is open.
   const handleGamepadAction = useCallback(
     (action: FocusAction) => {
+      // Helper: try custom list action handler first (for emulator detail, etc.)
+      const tryListAction = (a: "up" | "down" | "left" | "right" | "activate"): boolean => {
+        if (focusRef.current.region !== "list") return false;
+        return listActionRef.current?.(a) ?? false;
+      };
+
       switch (action.type) {
         case "MOVE_UP":
+          playNavigate();
+          if (tryListAction("up")) break;
           if (!handleGridListNav("up")) dispatch(action);
           break;
         case "MOVE_DOWN":
+          playNavigate();
+          if (tryListAction("down")) break;
           if (!handleGridListNav("down")) dispatch(action);
           break;
         case "MOVE_LEFT":
+          playNavigate();
+          if (tryListAction("left")) break;
           if (!handleGridListNav("left")) dispatch(action);
           break;
         case "MOVE_RIGHT": {
+          playNavigate();
+          if (tryListAction("right")) break;
           if (handleGridListNav("right")) break;
           const f = focusRef.current;
           if (f.region === "sidebar") {
@@ -414,6 +455,8 @@ export function SettingsRoot() {
           break;
         }
         case "ACTIVATE": {
+          playSelect();
+          if (tryListAction("activate")) break;
           const f = focusRef.current;
           if (f.region === "sidebar") {
             const section = sections[f.sidebarIndex];
@@ -426,22 +469,29 @@ export function SettingsRoot() {
           break;
         }
         case "PREV_FILTER": {
+          playNavigate();
           const f = focusRef.current;
           if (tabCount > 0) {
             const prev = f.tabIndex <= 0 ? tabCount - 1 : f.tabIndex - 1;
             handleSelectTab(prev);
+          } else {
+            prevFilterRef.current?.();
           }
           break;
         }
         case "NEXT_FILTER": {
+          playNavigate();
           const f = focusRef.current;
           if (tabCount > 0) {
             const next = f.tabIndex >= tabCount - 1 ? 0 : f.tabIndex + 1;
             handleSelectTab(next);
+          } else {
+            nextFilterRef.current?.();
           }
           break;
         }
         case "SECONDARY_ACTION": {
+          playSelect();
           const f = focusRef.current;
           if (f.region === "list") {
             secondaryRef.current?.();
@@ -450,11 +500,12 @@ export function SettingsRoot() {
         }
         case "BACK":
         case "OPEN_SETTINGS":
+          playSelect();
           handleBack();
           break;
       }
     },
-    [dispatch, handleBack, handleSelectSection, handleSelectTab, handleGridListNav, sections, tabCount]
+    [dispatch, handleBack, handleSelectSection, handleSelectTab, handleGridListNav, sections, tabCount, playNavigate, playSelect]
   );
 
   useGamepad({ onAction: handleGamepadAction });
@@ -463,6 +514,12 @@ export function SettingsRoot() {
   // Settings shell; the library's `useKeyboardNav` is not mounted while
   // Settings is visible (enforced by App.tsx routing).
   useEffect(() => {
+    // Helper: try custom list action handler (mirrors gamepad logic)
+    const tryListAction = (a: "up" | "down" | "left" | "right" | "activate"): boolean => {
+      if (focusRef.current.region !== "list") return false;
+      return listActionRef.current?.(a) ?? false;
+    };
+
     function onKeyDown(e: KeyboardEvent) {
       // Don't swallow typing inside inputs/textareas.
       const target = e.target as HTMLElement | null;
@@ -478,18 +535,26 @@ export function SettingsRoot() {
       let action: SettingsFocusAction | null = null;
       switch (e.key) {
         case "ArrowUp":
+          playNavigate();
+          if (tryListAction("up")) { e.preventDefault(); return; }
           if (handleGridListNav("up")) { e.preventDefault(); return; }
           action = { type: "MOVE_UP" };
           break;
         case "ArrowDown":
+          playNavigate();
+          if (tryListAction("down")) { e.preventDefault(); return; }
           if (handleGridListNav("down")) { e.preventDefault(); return; }
           action = { type: "MOVE_DOWN" };
           break;
         case "ArrowLeft":
+          playNavigate();
+          if (tryListAction("left")) { e.preventDefault(); return; }
           if (handleGridListNav("left")) { e.preventDefault(); return; }
           action = { type: "MOVE_LEFT" };
           break;
         case "ArrowRight": {
+          playNavigate();
+          if (tryListAction("right")) { e.preventDefault(); return; }
           if (handleGridListNav("right")) { e.preventDefault(); return; }
           const f = focusRef.current;
           if (f.region === "sidebar") {
@@ -502,6 +567,8 @@ export function SettingsRoot() {
         case "Enter":
         case " ": {
           e.preventDefault();
+          playSelect();
+          if (tryListAction("activate")) return;
           const f = focusRef.current;
           if (f.region === "sidebar") {
             const section = sections[f.sidebarIndex];
@@ -516,6 +583,7 @@ export function SettingsRoot() {
         case "Escape":
         case "Backspace":
           e.preventDefault();
+          playSelect();
           handleBack();
           return;
       }
@@ -526,7 +594,7 @@ export function SettingsRoot() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dispatch, handleBack, handleSelectSection, handleSelectTab, handleGridListNav, sections]);
+  }, [dispatch, handleBack, handleSelectSection, handleSelectTab, handleGridListNav, sections, playNavigate, playSelect]);
 
   return (
     <SettingsLayout
@@ -559,6 +627,12 @@ export function SettingsRoot() {
       bottomBar={
         app.gamepadConnected ? (
           <footer className="flex items-center justify-end gap-6 px-4 pt-2 pb-4 text-[16px] font-medium text-gray-600">
+            {navigation.currentPath.match(/^\/settings\/emuladores\/.+/) && (
+              <span className="flex items-center gap-1.5">
+                <span className="rounded bg-gray-700 px-1.5 py-0.5 text-xs font-bold text-gray-300">L1/R1</span>
+                Tabs
+              </span>
+            )}
             <span className="flex items-center gap-1.5">
               <img src={xIcon} alt="" className="h-5 w-5" />
               Seleccionar
@@ -586,6 +660,9 @@ export function SettingsRoot() {
           regionFocused={focus.region === "list"}
           activateRef={activateRef}
           secondaryRef={secondaryRef}
+          prevFilterRef={prevFilterRef}
+          nextFilterRef={nextFilterRef}
+          listActionRef={listActionRef}
         />
       ) : (
         <SettingsListView

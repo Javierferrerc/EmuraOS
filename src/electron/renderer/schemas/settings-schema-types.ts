@@ -213,6 +213,11 @@ export interface SettingsSection {
     regionFocused: boolean;
     activateRef: MutableRefObject<(() => void) | null>;
     secondaryRef: MutableRefObject<(() => void) | null>;
+    prevFilterRef: MutableRefObject<(() => void) | null>;
+    nextFilterRef: MutableRefObject<(() => void) | null>;
+    /** When set, receives directional + activate actions in the list region.
+     *  Return true if handled (SettingsRoot skips default navigation). */
+    listActionRef: MutableRefObject<((action: "up" | "down" | "left" | "right" | "activate") => boolean) | null>;
   }>;
   /** Grid columns for customComponent list navigation (default: 1 = flat list). */
   customListColumns?: number;
