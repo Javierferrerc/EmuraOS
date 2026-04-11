@@ -47,6 +47,17 @@ export const generalSection: SettingsSection = {
                 await ctx.updateConfig({ autoScanOnStartup: value });
               },
             },
+            {
+              id: "gen.card-tilt",
+              kind: "toggle",
+              label: "Efecto 3D en tarjetas",
+              description:
+                "Inclinar las tarjetas de juego con reflejo de cristal al pasar el cursor o enfocar con el mando.",
+              get: (ctx) => ctx.config?.cardTiltEnabled ?? true,
+              set: async (value, ctx) => {
+                await ctx.updateConfig({ cardTiltEnabled: value });
+              },
+            },
           ],
         },
       ],
