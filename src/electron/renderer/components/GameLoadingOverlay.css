@@ -1,0 +1,160 @@
+/*
+ * GameLoadingOverlay — fullscreen loader shown from the moment the user
+ * triggers a launch until the main process confirms the game window is
+ * visible (onGameSessionStarted). Masks the ~500ms "findWindowByPid"
+ * wait + the setFullScreen paint stall so the user never sees a blank
+ * frame mid-launch.
+ *
+ * Cube: adapted from Uiverse.io by PriyanshuGupta28. Each face uses the
+ * game's cover art as background-image, framed with the same blue→purple
+ * gradient border used on GameCard hover (`.game-card::after`) so the
+ * loader feels continuous with the card that spawned it.
+ */
+
+.game-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+  animation: gl-fade-in 0.25s ease-out both;
+}
+
+@keyframes gl-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.game-loading-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(10, 14, 30, 0.82) 0%,
+    rgba(0, 0, 0, 0.96) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.game-loading-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+/* Drop-shadow follows the rotating cube and composes with 3D transforms.
+   Double stack mimics the blue+purple halo of the GameCard focus state. */
+.loader-container {
+  perspective: 900px;
+  filter:
+    drop-shadow(0 0 32px rgba(96, 165, 250, 0.45))
+    drop-shadow(0 0 64px rgba(168, 85, 247, 0.25));
+}
+
+.loader {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  transform-style: preserve-3d;
+  animation: gl-spin 4s linear infinite;
+}
+
+.loader .face {
+  position: absolute;
+  inset: 0;
+  background-color: #0f172a;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+}
+
+/* Gradient border on each face using the padding-box mask technique —
+   identical to `.game-card::after` in GameCard.css so the border reads
+   as the same visual language as the card's hover frame. */
+.loader .face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(163deg, #60a5fa 0%, #a855f7 100%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* translateZ must equal HALF the cube side (80px for a 160px cube). */
+.loader .front  { transform: translateZ(80px); }
+.loader .back   { transform: rotateY(180deg) translateZ(80px); }
+.loader .left   { transform: rotateY(-90deg) translateZ(80px); }
+.loader .right  { transform: rotateY(90deg)  translateZ(80px); }
+.loader .top    { transform: rotateX(90deg)  translateZ(80px); }
+.loader .bottom { transform: rotateX(-90deg) translateZ(80px); }
+
+@keyframes gl-spin {
+  0% {
+    transform: rotateX(0) rotateY(0) rotateZ(0);
+  }
+  100% {
+    transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg);
+  }
+}
+
+.game-loading-title {
+  max-width: min(640px, 80vw);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  text-align: center;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.8);
+  margin: 0;
+  /* Truncate very long ROM names with ellipsis instead of wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-loading-subtitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.85);
+  margin: 0;
+  /* Soft pulse so the user sees the overlay is "alive" even if the cube
+     spin ever stops (e.g. reduced motion). */
+  animation: gl-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gl-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+/* Respect the user's motion preferences — freeze the cube and the
+   subtitle pulse, but keep the overlay visible so the launch feedback
+   isn't lost entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .game-loading-overlay,
+  .loader,
+  .game-loading-subtitle {
+    animation: none;
+  }
+  /* Park the cube at a slight 3D tilt so the user can still see 4 faces
+     (front + top + right) instead of a flat front-only view. */
+  .loader {
+    transform: rotateX(-20deg) rotateY(25deg);
+  }
+}
