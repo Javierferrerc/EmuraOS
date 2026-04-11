@@ -45,6 +45,7 @@ export interface AppConfig {
   firstRunCompleted?: boolean;
   navSoundEnabled?: boolean;
   navSoundVolume?: number;
+  cardTiltEnabled?: boolean;
   devMode?: boolean;
 }
 

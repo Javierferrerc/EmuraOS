@@ -60,7 +60,11 @@ export const AppConfigPartialSchema = z
       .optional(),
     firstRunCompleted: z.boolean().optional(),
     navSoundEnabled: z.boolean().optional(),
-    navSoundVolume: z.number().min(0).max(1).optional(),
+    // Percent 0..100 — matches the slider UI range and the `/100` divisor in
+    // useNavigationSounds. Was previously `.max(1)` which silently rejected
+    // every real value the slider could produce.
+    navSoundVolume: z.number().min(0).max(100).optional(),
+    cardTiltEnabled: z.boolean().optional(),
     devMode: z.boolean().optional(),
   })
   .strict();

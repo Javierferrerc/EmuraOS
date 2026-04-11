@@ -18,6 +18,7 @@ const DEFAULT_CONFIG: AppConfig = {
   firstRunCompleted: false,
   navSoundEnabled: true,
   navSoundVolume: 70,
+  cardTiltEnabled: true,
   devMode: false,
 };
 

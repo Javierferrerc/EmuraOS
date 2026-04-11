@@ -1,0 +1,139 @@
+/*
+ * GameCard — 3D tilt on hover / gamepad focus.
+ *
+ * Design notes:
+ *
+ * 1. `transform-style: preserve-3d` on the outer card lets the bottom
+ *    overlay pop forward with its own translateZ, so the title/badge
+ *    sits "above" the cover in 3D space rather than sliding on a flat
+ *    plane.
+ *
+ * 2. Overflow clipping is intentionally NOT on the outer card. Setting
+ *    overflow != visible on a preserve-3d element flattens its children
+ *    in every browser, which would defeat the whole effect. The cover
+ *    image is clipped inside a dedicated `.game-card__cover` wrapper.
+ *
+ * 3. Perspective is applied inside the `transform: perspective()` function
+ *    (per-card) instead of on a parent container. This gives every card
+ *    an identical 3D feel regardless of grid position, and avoids having
+ *    to touch GameGrid.
+ */
+
+.game-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Static tilt is reserved for gamepad focus. Mouse hover is driven by an
+   inline `transform` computed from the cursor position (CometCard-style),
+   which needs to override the CSS transform — so we deliberately do NOT
+   match `:hover` here. */
+.game-card.is-focused {
+  transform: perspective(800px)
+             translateZ(8px)
+             rotateX(7deg)
+             rotateY(7deg);
+}
+
+/* Mouse-tracked tilt: swap the easing to a tighter linear curve so the
+   card snaps to the cursor instead of lagging behind by half a second. */
+.game-card.is-mouse-tilting {
+  transition: transform 0.12s linear;
+}
+
+/*
+ * Glass reflection effect on the cover.
+ *
+ * 1. Inner box-shadow on the cover wrapper simulates light refracting along
+ *    the top + left edges — this is what sells the "glass panel" feel
+ *    without any extra DOM.
+ *
+ * 2. The `::after` pseudo-element stacks two gradients:
+ *      - a soft top→down highlight (diffuse light hitting the upper face)
+ *      - a diagonal 135° sheen coming from the top-left corner
+ *    Both use plain alpha (not blend modes) so the effect is predictable
+ *    across dark and light cover art.
+ *
+ * 3. On hover/focus, a faint bottom-right shadow gradient deepens, giving
+ *    the impression the card tilts into actual 3D space and catches more
+ *    light.
+ */
+/* All glass rules are scoped under `.game-card` so they are inert when the
+   3D tilt preference is disabled and the outer card has no `.game-card` class. */
+.game-card .game-card__cover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    inset -1px 0 0 rgba(0, 0, 0, 0.25);
+}
+
+.game-card .game-card__cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    /* Top diffuse highlight */
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0.04) 14%,
+      transparent 32%
+    ),
+    /* Diagonal glass sheen from top-left, with a soft long-range falloff
+       into a blurred dark corner on the bottom-right. Multiple low-alpha
+       stops between 40% and 100% fake a blur: each stop adds a tiny bit
+       more darkness, so the eye reads it as a gradual out-of-focus shadow
+       rather than a hard gradient edge. */
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.26) 0%,
+      rgba(255, 255, 255, 0.08) 18%,
+      transparent 40%,
+      rgba(0, 0, 0, 0.03) 55%,
+      rgba(0, 0, 0, 0.08) 70%,
+      rgba(0, 0, 0, 0.16) 85%,
+      rgba(0, 0, 0, 0.28) 100%
+    );
+  opacity: 0.85;
+  transition: opacity 0.35s ease-out;
+}
+
+.game-card:hover .game-card__cover::after,
+.game-card.is-focused .game-card__cover::after {
+  opacity: 1;
+}
+
+/*
+ * The bottom overlay (system badge + title) pops forward in 3D space so
+ * the text visually lifts off the cover. Opacity transition is owned
+ * here too because we replaced the Tailwind `transition-opacity` utility
+ * on the overlay element to avoid two competing `transition` shorthands.
+ */
+.game-card__overlay {
+  transition:
+    opacity 0.2s ease-out,
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.game-card:hover .game-card__overlay,
+.game-card.is-focused .game-card__overlay {
+  transform: translateZ(30px);
+}
+
+/* Honor reduced-motion preferences — skip the tilt entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .game-card,
+  .game-card__overlay {
+    transition: none;
+  }
+  .game-card:hover,
+  .game-card.is-focused,
+  .game-card:hover .game-card__overlay,
+  .game-card.is-focused .game-card__overlay {
+    transform: none;
+  }
+}
