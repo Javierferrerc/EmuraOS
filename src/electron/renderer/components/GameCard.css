@@ -22,24 +22,110 @@
 .game-card {
   transform-style: preserve-3d;
   will-change: transform;
-  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Force a clean GPU layer so 3D rotation doesn't leave aliasing seams
+     on the edge of the card or its mask-based gradient border. */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition:
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.35s ease-out;
 }
 
 /* Static tilt is reserved for gamepad focus. Mouse hover is driven by an
    inline `transform` computed from the cursor position (CometCard-style),
    which needs to override the CSS transform — so we deliberately do NOT
-   match `:hover` here. */
+   match `:hover` here.
+   Tilt angle is intentionally subtle (5° vs the original 7°): more
+   aggressive angles make the bottom-right perspective foreshortening
+   too pronounced and surface a hard "clipped shadow" feel where the
+   overlay gradient meets the rotated card edge. */
 .game-card.is-focused {
   transform: perspective(800px)
-             translateZ(8px)
-             rotateX(7deg)
-             rotateY(7deg);
+             translateZ(6px)
+             rotateX(5deg)
+             rotateY(5deg);
 }
 
-/* Mouse-tracked tilt: swap the easing to a tighter linear curve so the
-   card snaps to the cursor instead of lagging behind by half a second. */
+/* Mouse-tracked tilt: kill the transform transition entirely while the
+   mouse is driving the tilt. The per-frame transform writes are already
+   synced to vsync via requestAnimationFrame in GameCard.tsx, so any CSS
+   transition on top would just stack a 120ms smoothing curve between
+   every mousemove and the next — which is exactly the "gooey" feel we
+   want to avoid. Box-shadow keeps its slower curve so the glow doesn't
+   strobe with the per-frame transform updates.
+   When the mouse leaves, `.is-mouse-tilting` is removed and the card
+   falls back to the default `.game-card` transition (0.5s ease) for a
+   smooth settle back to rest. */
 .game-card.is-mouse-tilting {
-  transition: transform 0.12s linear;
+  transition:
+    transform 0s linear,
+    box-shadow 0.35s ease-out;
+}
+
+/* Comet highlight — hidden by default, fades in on mouse tilt. The radial
+   gradient itself is written directly to `background` via ref in JS so
+   React doesn't need to re-render on every mouse move. */
+.game-card .game-card__comet {
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+.game-card.is-mouse-tilting .game-card__comet {
+  opacity: 1;
+}
+
+/*
+ * Animated accent glow on hover / gamepad focus.
+ *
+ * Replaces the previous static `ring-2 ring-blue-500` Tailwind ring,
+ * which felt flat and snapped in instantly. The colour matches the app
+ * accent (`--color-focus-ring` / #60a5fa) at low alpha so it reads as a
+ * soft halo on the dark library background. Pairs with the gradient
+ * border below — together they create a "card lights up" feel.
+ */
+.game-card:hover,
+.game-card.is-focused {
+  box-shadow: 0 0 30px 1px rgba(96, 165, 250, 0.3);
+}
+
+/*
+ * Gradient border using the padding-box mask technique.
+ *
+ * `border-image` would be the obvious tool, but it does NOT compose with
+ * `border-radius`, so we paint a 2px gradient frame on `::after` and
+ * mask out the inner content-box. Same trick as `.info-row-glass::before`
+ * in theme.css — keeping it consistent with the rest of the codebase.
+ *
+ * The gradient runs blue → purple at 163° to mirror the Uiverse reference
+ * but with the app's accent palette. Opacity fades in over 0.3s so the
+ * border feels alive instead of snapping like the old hard ring.
+ *
+ * Painted on `::after` (not `::before`) so it stacks on top of the cover
+ * wrapper without needing an explicit z-index. Pointer-events disabled so
+ * the favorite button remains clickable through the frame.
+ */
+.game-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(163deg, #60a5fa 0%, #a855f7 100%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.game-card:hover::after,
+.game-card.is-focused::after {
+  opacity: 1;
 }
 
 /*
@@ -60,13 +146,15 @@
  *    light.
  */
 /* All glass rules are scoped under `.game-card` so they are inert when the
-   3D tilt preference is disabled and the outer card has no `.game-card` class. */
+   3D tilt preference is disabled and the outer card has no `.game-card` class.
+   Only the bright top + left inset edges remain — the dark bottom-right
+   edges have been removed because, combined with the 3D rotation toward
+   the bottom-right, they read as a hard clipped shadow on the corner of
+   focused cards. */
 .game-card .game-card__cover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 1px 0 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-    inset -1px 0 0 rgba(0, 0, 0, 0.25);
+    inset 1px 0 0 rgba(255, 255, 255, 0.14);
 }
 
 .game-card .game-card__cover::after {
@@ -83,20 +171,17 @@
       rgba(255, 255, 255, 0.04) 14%,
       transparent 32%
     ),
-    /* Diagonal glass sheen from top-left, with a soft long-range falloff
-       into a blurred dark corner on the bottom-right. Multiple low-alpha
-       stops between 40% and 100% fake a blur: each stop adds a tiny bit
-       more darkness, so the eye reads it as a gradual out-of-focus shadow
-       rather than a hard gradient edge. */
+    /* Diagonal glass sheen from top-left only. The previous version added
+       a long-range dark gradient at the bottom-right corner to fake a
+       drop shadow, but on real cover art it read as a hard clipped patch
+       instead of a soft falloff. The bright sheen alone is enough to
+       sell the glass effect — the inset box-shadow on the cover wrapper
+       handles the edge refraction. */
     linear-gradient(
       135deg,
       rgba(255, 255, 255, 0.26) 0%,
       rgba(255, 255, 255, 0.08) 18%,
-      transparent 40%,
-      rgba(0, 0, 0, 0.03) 55%,
-      rgba(0, 0, 0, 0.08) 70%,
-      rgba(0, 0, 0, 0.16) 85%,
-      rgba(0, 0, 0, 0.28) 100%
+      transparent 40%
     );
   opacity: 0.85;
   transition: opacity 0.35s ease-out;
@@ -119,15 +204,26 @@
     transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.game-card:hover .game-card__overlay,
-.game-card.is-focused .game-card__overlay {
-  transform: translateZ(30px);
+/* Pop the overlay forward in 3D — mouse hover only.
+   On gamepad focus the rotation is STATIC (rotateX/Y 5deg), which means
+   the parent's local Z axis is fixed-tilted. A translateZ on the overlay
+   then becomes a parallax shift that visually exposes a gap between the
+   overlay's bottom edge and the card's bottom edge. Because the grid has
+   no background behind the card, that gap shows the dark app background
+   and reads as a "black border" under focused cards.
+   Mouse hover uses a DYNAMIC rotation that follows the cursor, so the
+   same gap geometry rarely manifests — and the comet highlight masks any
+   residual edge artifact. Keep the pop only on :hover. */
+.game-card:hover .game-card__overlay {
+  transform: translateZ(12px);
 }
 
-/* Honor reduced-motion preferences — skip the tilt entirely. */
+/* Honor reduced-motion preferences — skip the tilt entirely and make
+   the glow + gradient border appear instantly instead of fading. */
 @media (prefers-reduced-motion: reduce) {
   .game-card,
-  .game-card__overlay {
+  .game-card__overlay,
+  .game-card::after {
     transition: none;
   }
   .game-card:hover,
