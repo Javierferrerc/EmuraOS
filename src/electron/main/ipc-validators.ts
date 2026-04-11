@@ -66,6 +66,7 @@ export const AppConfigPartialSchema = z
     navSoundVolume: z.number().min(0).max(100).optional(),
     cardTiltEnabled: z.boolean().optional(),
     devMode: z.boolean().optional(),
+    citraGamepadAutoConfigured: z.boolean().optional(),
   })
   .strict();
 

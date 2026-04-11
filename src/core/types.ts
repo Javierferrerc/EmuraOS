@@ -47,6 +47,11 @@ export interface AppConfig {
   navSoundVolume?: number;
   cardTiltEnabled?: boolean;
   devMode?: boolean;
+  // One-shot flag: set to true after we auto-apply the Citra gamepad
+  // profile on the first 3DS launch. Prevents re-patching qt-config.ini
+  // on every subsequent launch and keeps the user in control if they
+  // later customize their bindings inside Citra.
+  citraGamepadAutoConfigured?: boolean;
 }
 
 export interface EmulatorDefinition {
