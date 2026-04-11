@@ -35,6 +35,15 @@ export type ActiveFilter =
   | { type: "recent" }
   | { type: "collection"; collectionId: string };
 
+// Transient state for the fullscreen loading overlay shown between the
+// moment the user triggers a launch and the moment the emulator window
+// is actually visible (onGameSessionStarted). Carries the cover so the
+// overlay can paint it onto the 3D cube without refetching.
+export interface LaunchingGameState {
+  rom: DiscoveredRom;
+  coverDataUrl: string | null;
+}
+
 interface AppState {
   config: AppConfig | null;
   systems: SystemDefinition[];
@@ -44,6 +53,7 @@ interface AppState {
   isLoading: boolean;
   currentView: "library" | "settings" | "emulator-config" | "game";
   isGameRunning: boolean;
+  launchingGame: LaunchingGameState | null;
   currentGame: GameSessionEvent | null;
   lastDetection: DetectionResult | null;
   lastLaunchResult: LaunchResult | null;
@@ -134,6 +144,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     "library" | "settings" | "emulator-config" | "game"
   >("library");
   const [isGameRunning, setIsGameRunning] = useState(false);
+  const [launchingGame, setLaunchingGame] =
+    useState<LaunchingGameState | null>(null);
   const [currentGame, setCurrentGame] = useState<GameSessionEvent | null>(null);
   const [lastDetection, setLastDetection] = useState<DetectionResult | null>(
     null
@@ -209,6 +221,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsGameRunning(true);
       setCurrentGame(event);
       setCurrentView("game");
+      // Clear the loading overlay — the main process just confirmed the
+      // emulator window is visible (parented + fullscreen'd). All three
+      // setStates batch into one render so the loader unmounts at the
+      // same frame GameModeView mounts, avoiding any flash.
+      setLaunchingGame(null);
     });
     window.electronAPI.onGameSessionEnded(() => {
       setIsGameRunning(false);
@@ -220,6 +237,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.electronAPI.removeGameSessionEndedListener();
     };
   }, []);
+
+  // Safety net: if the loader is shown but `game-session-started` never
+  // fires (e.g. main-process bug, emulator crash during boot), force-clear
+  // after 30s so the user isn't trapped behind the overlay.
+  useEffect(() => {
+    if (!launchingGame) return;
+    const id = window.setTimeout(() => {
+      console.warn(
+        "[launchingGame] safety timeout reached — clearing overlay"
+      );
+      setLaunchingGame(null);
+    }, 30_000);
+    return () => window.clearTimeout(id);
+  }, [launchingGame]);
 
   const stopGame = useCallback(async () => {
     try {
@@ -443,7 +474,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const doLaunch = useCallback(
     async (rom: DiscoveredRom) => {
-      // Try embedded overlay first
+      // Show the loading overlay immediately so the user has instant
+      // visual feedback. Look up the cover (cached in metadata) and read
+      // it as a data URL so the overlay can paint it onto the 3D cube
+      // without re-fetching from disk. Missing covers are fine — the
+      // overlay falls back to a system-colored gradient.
+      const lastDot = rom.fileName.lastIndexOf(".");
+      const metadataKey =
+        lastDot > 0 ? rom.fileName.substring(0, lastDot) : rom.fileName;
+      const metadata = metadataMap[rom.systemId]?.[metadataKey] ?? null;
+
+      let coverDataUrl: string | null = null;
+      if (metadata?.coverPath) {
+        try {
+          coverDataUrl = await window.electronAPI.readCoverDataUrl(
+            metadata.coverPath
+          );
+        } catch (err) {
+          console.warn("Failed to read cover for loading overlay:", err);
+        }
+      }
+      setLaunchingGame({ rom, coverDataUrl });
+
+      // Try embedded overlay first. On success we DON'T clear the overlay
+      // here — `onGameSessionStarted` will clear it when the main process
+      // confirms the emulator window is visible. This keeps the cube
+      // spinning through the ~500ms findWindowByPid + setFullScreen wait.
       try {
         console.log("[renderer] calling launchGameEmbedded...");
         const embeddedResult =
@@ -461,14 +517,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.warn("Embedded launch threw, falling back to normal:", err);
       }
 
-      // Fallback to normal (detached) launch
+      // Fallback to normal (detached) launch. Detached emulators don't
+      // emit game-session-started, so clear the overlay manually when
+      // the IPC resolves — success or failure.
       try {
         await fallbackLaunch(rom);
       } catch (err) {
         console.error("Failed to launch game:", err);
+      } finally {
+        setLaunchingGame(null);
       }
     },
-    [updatePlayStats, fallbackLaunch]
+    [updatePlayStats, fallbackLaunch, metadataMap]
   );
 
   const launchGame = useCallback(
@@ -738,6 +798,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isLoading,
     currentView,
     isGameRunning,
+    launchingGame,
     currentGame,
     lastDetection,
     lastLaunchResult,
