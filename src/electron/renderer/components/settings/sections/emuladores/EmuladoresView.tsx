@@ -15,12 +15,18 @@ export function EmuladoresView({
   regionFocused,
   activateRef,
   secondaryRef,
+  prevFilterRef,
+  nextFilterRef,
+  listActionRef,
 }: {
   ctx: SettingsContext;
   focusIndex: number;
   regionFocused: boolean;
   activateRef: MutableRefObject<(() => void) | null>;
   secondaryRef: MutableRefObject<(() => void) | null>;
+  prevFilterRef: MutableRefObject<(() => void) | null>;
+  nextFilterRef: MutableRefObject<(() => void) | null>;
+  listActionRef: MutableRefObject<((action: "up" | "down" | "left" | "right" | "activate") => boolean) | null>;
 }) {
   const currentPath = ctx.navigation.currentPath;
 
@@ -30,7 +36,15 @@ export function EmuladoresView({
   }, [currentPath]);
 
   if (emulatorId) {
-    return <EmuladorDetail ctx={ctx} emulatorId={emulatorId} />;
+    return (
+      <EmuladorDetail
+        ctx={ctx}
+        emulatorId={emulatorId}
+        prevFilterRef={prevFilterRef}
+        nextFilterRef={nextFilterRef}
+        listActionRef={listActionRef}
+      />
+    );
   }
 
   return (

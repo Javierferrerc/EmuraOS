@@ -1,13 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react";
 import type { SettingsContext } from "../../../../../schemas/settings-schema-types";
 import type { EmulatorConfigData } from "../../../../../../core/types";
+
+type FocusArea = "subtabs" | "settings" | "actions";
 
 interface Props {
   ctx: SettingsContext;
   emulatorId: string;
+  /** Receives directional + activate actions from SettingsRoot via EmuladorDetail. */
+  actionRef: MutableRefObject<((action: "up" | "down" | "left" | "right" | "activate") => boolean) | null>;
 }
 
-export function ConfiguracionTab({ ctx, emulatorId }: Props) {
+export function ConfiguracionTab({ ctx, emulatorId, actionRef }: Props) {
   const detected = ctx.lastDetection?.detected.find(
     (d) => d.id === emulatorId
   );
@@ -17,12 +21,34 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
   const [editedSettings, setEditedSettings] = useState<Record<string, string>>(
     {}
   );
-  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [activeCategoryIdx, setActiveCategoryIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [showRawEditor, setShowRawEditor] = useState(false);
   const [rawText, setRawText] = useState("");
+
+  // Internal gamepad focus state
+  const [focusArea, setFocusArea] = useState<FocusArea>("subtabs");
+  const [focusSettingIdx, setFocusSettingIdx] = useState(0);
+  // 0 = Guardar, 1 = Restablecer
+  const [focusActionIdx, setFocusActionIdx] = useState(0);
+
+  // Keep refs for the stable action handler
+  const focusAreaRef = useRef(focusArea);
+  focusAreaRef.current = focusArea;
+  const focusSettingIdxRef = useRef(focusSettingIdx);
+  focusSettingIdxRef.current = focusSettingIdx;
+  const focusActionIdxRef = useRef(focusActionIdx);
+  focusActionIdxRef.current = focusActionIdx;
+  const activeCategoryIdxRef = useRef(activeCategoryIdx);
+  activeCategoryIdxRef.current = activeCategoryIdx;
+  const configDataRef = useRef(configData);
+  configDataRef.current = configData;
+  const editedSettingsRef = useRef(editedSettings);
+  editedSettingsRef.current = editedSettings;
+  const showRawEditorRef = useRef(showRawEditor);
+  showRawEditorRef.current = showRawEditor;
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
@@ -38,7 +64,7 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
       setConfigData(data);
       setEditedSettings({ ...data.settings });
       if (data.schema.categories.length > 0) {
-        setActiveCategory(data.schema.categories[0].id);
+        setActiveCategoryIdx(0);
       } else {
         setShowRawEditor(true);
       }
@@ -62,14 +88,15 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
     setEditedSettings((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSave() {
-    if (!configData) return;
+  const handleSave = useCallback(async () => {
+    const cd = configDataRef.current;
+    if (!cd) return;
     setIsSaving(true);
     setSaveMessage("");
     try {
       const changes: Record<string, string> = {};
-      for (const [key, value] of Object.entries(editedSettings)) {
-        if (configData.settings[key] !== value) {
+      for (const [key, value] of Object.entries(editedSettingsRef.current)) {
+        if (cd.settings[key] !== value) {
           changes[key] = value;
         }
       }
@@ -80,7 +107,7 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
         return;
       }
       await window.electronAPI.updateEmulatorConfig(
-        configData.emulatorId,
+        cd.emulatorId,
         changes,
         executablePath
       );
@@ -92,13 +119,14 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
     } finally {
       setIsSaving(false);
     }
-  }
+  }, [executablePath, loadConfig]);
 
-  function handleReset() {
-    if (!configData) return;
-    setEditedSettings({ ...configData.settings });
+  const handleReset = useCallback(() => {
+    const cd = configDataRef.current;
+    if (!cd) return;
+    setEditedSettings({ ...cd.settings });
     setSaveMessage("");
-  }
+  }, []);
 
   function handleRawApply() {
     const parsed: Record<string, string> = {};
@@ -121,6 +149,186 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
     }
     setEditedSettings(parsed);
   }
+
+  // Get the current category's settings count
+  const getCurrentSettings = useCallback(() => {
+    const cd = configDataRef.current;
+    if (!cd || showRawEditorRef.current) return [];
+    const cat = cd.schema.categories[activeCategoryIdxRef.current];
+    return cat?.settings ?? [];
+  }, []);
+
+  // Gamepad action handler
+  const handleAction = useCallback((action: "up" | "down" | "left" | "right" | "activate"): boolean => {
+    const cd = configDataRef.current;
+    if (!cd || showRawEditorRef.current) return false;
+
+    const area = focusAreaRef.current;
+    const catCount = cd.schema.categories.length;
+    if (catCount === 0) return false;
+
+    const settings = getCurrentSettings();
+    const settingsCount = settings.length;
+
+    switch (action) {
+      case "up": {
+        if (area === "subtabs") return true; // stay at top — use LEFT to escape to sidebar
+        if (area === "settings") {
+          if (focusSettingIdxRef.current <= 0) {
+            setFocusArea("subtabs");
+          } else {
+            setFocusSettingIdx(focusSettingIdxRef.current - 1);
+          }
+          return true;
+        }
+        if (area === "actions") {
+          if (settingsCount > 0) {
+            setFocusArea("settings");
+            setFocusSettingIdx(settingsCount - 1);
+          } else {
+            setFocusArea("subtabs");
+          }
+          return true;
+        }
+        return false;
+      }
+      case "down": {
+        if (area === "subtabs") {
+          if (settingsCount > 0) {
+            setFocusArea("settings");
+            setFocusSettingIdx(0);
+          } else {
+            setFocusArea("actions");
+            setFocusActionIdx(0);
+          }
+          return true;
+        }
+        if (area === "settings") {
+          if (focusSettingIdxRef.current >= settingsCount - 1) {
+            setFocusArea("actions");
+            setFocusActionIdx(0);
+          } else {
+            setFocusSettingIdx(focusSettingIdxRef.current + 1);
+          }
+          return true;
+        }
+        // actions: stay at bottom
+        return true;
+      }
+      case "left": {
+        if (area === "subtabs") {
+          if (activeCategoryIdxRef.current <= 0) return false; // escape to sidebar
+          setActiveCategoryIdx(activeCategoryIdxRef.current - 1);
+          setFocusSettingIdx(0);
+          return true;
+        }
+        if (area === "settings") {
+          // For enum/boolean, cycle value left
+          const setting = settings[focusSettingIdxRef.current];
+          if (setting) {
+            cycleSettingValue(setting, -1);
+          }
+          return true;
+        }
+        if (area === "actions") {
+          setFocusActionIdx(Math.max(0, focusActionIdxRef.current - 1));
+          return true;
+        }
+        return false;
+      }
+      case "right": {
+        if (area === "subtabs") {
+          if (activeCategoryIdxRef.current >= catCount - 1) return true; // stay
+          setActiveCategoryIdx(activeCategoryIdxRef.current + 1);
+          setFocusSettingIdx(0);
+          return true;
+        }
+        if (area === "settings") {
+          // For enum/boolean, cycle value right
+          const setting = settings[focusSettingIdxRef.current];
+          if (setting) {
+            cycleSettingValue(setting, 1);
+          }
+          return true;
+        }
+        if (area === "actions") {
+          setFocusActionIdx(Math.min(1, focusActionIdxRef.current + 1));
+          return true;
+        }
+        return false;
+      }
+      case "activate": {
+        if (area === "subtabs") return true; // sub-tabs are navigated with left/right
+        if (area === "settings") {
+          const setting = settings[focusSettingIdxRef.current];
+          if (setting) {
+            activateSetting(setting);
+          }
+          return true;
+        }
+        if (area === "actions") {
+          if (focusActionIdxRef.current === 0) {
+            handleSave();
+          } else {
+            handleReset();
+          }
+          return true;
+        }
+        return false;
+      }
+    }
+    return false;
+  }, [getCurrentSettings, handleSave, handleReset]);
+
+  // Cycle a setting value (for boolean toggle, enum prev/next)
+  function cycleSettingValue(
+    setting: { key: string; type: string; options?: (string | { value: string; label: string })[] },
+    direction: -1 | 1
+  ) {
+    const currentVal = editedSettingsRef.current[setting.key] ?? "";
+    if (setting.type === "boolean") {
+      const isOn = currentVal.toLowerCase() === "true";
+      handleSettingChange(setting.key, isOn ? "false" : "true");
+    } else if (setting.type === "enum" && setting.options) {
+      const values = setting.options.map((o) =>
+        typeof o === "string" ? o : o.value
+      );
+      const idx = values.indexOf(currentVal);
+      const nextIdx =
+        idx < 0
+          ? 0
+          : (idx + direction + values.length) % values.length;
+      handleSettingChange(setting.key, values[nextIdx]);
+    } else if (setting.type === "number") {
+      const num = parseFloat(currentVal) || 0;
+      handleSettingChange(setting.key, String(num + direction));
+    }
+  }
+
+  // Activate a setting (toggle boolean, etc.)
+  function activateSetting(
+    setting: { key: string; type: string }
+  ) {
+    const currentVal = editedSettingsRef.current[setting.key] ?? "";
+    if (setting.type === "boolean") {
+      const isOn = currentVal.toLowerCase() === "true";
+      handleSettingChange(setting.key, isOn ? "false" : "true");
+    }
+    // For other types, activate doesn't do anything special — user uses left/right
+  }
+
+  // Wire the action ref
+  useEffect(() => {
+    actionRef.current = handleAction;
+    return () => {
+      actionRef.current = null;
+    };
+  }, [actionRef, handleAction]);
+
+  // Reset focus when category changes
+  useEffect(() => {
+    setFocusSettingIdx(0);
+  }, [activeCategoryIdx]);
 
   if (!detected) {
     return (
@@ -146,9 +354,7 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
     );
   }
 
-  const currentCategory = configData.schema.categories.find(
-    (c) => c.id === activeCategory
-  );
+  const currentCategory = configData.schema.categories[activeCategoryIdx];
 
   return (
     <div className="space-y-4">
@@ -199,14 +405,21 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
         <>
           {/* Category tab bar */}
           <div className="flex gap-1 border-b border-[var(--color-surface-1)]">
-            {configData.schema.categories.map((cat) => (
+            {configData.schema.categories.map((cat, idx) => (
               <button
                 key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
+                onClick={() => {
+                  setActiveCategoryIdx(idx);
+                  setFocusArea("subtabs");
+                }}
                 className={`border-b-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activeCategory === cat.id
+                  activeCategoryIdx === idx
                     ? "border-[var(--color-accent)] text-[var(--color-accent)]"
                     : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                } ${
+                  focusArea === "subtabs" && activeCategoryIdx === idx
+                    ? "ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-surface-0)] rounded-t"
+                    : ""
                 }`}
               >
                 {cat.name}
@@ -216,8 +429,8 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
 
           {/* Settings form */}
           {currentCategory && (
-            <div className="space-y-4 rounded-[var(--radius-md)] bg-[var(--color-surface-0)] p-4">
-              {currentCategory.settings.map((setting) => (
+            <div className="space-y-1 rounded-[var(--radius-md)] bg-[var(--color-surface-0)] p-4">
+              {currentCategory.settings.map((setting, idx) => (
                 <SettingField
                   key={setting.key}
                   setting={setting}
@@ -225,6 +438,7 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
                     editedSettings[setting.key] ?? setting.default ?? ""
                   }
                   onChange={(val) => handleSettingChange(setting.key, val)}
+                  focused={focusArea === "settings" && focusSettingIdx === idx}
                 />
               ))}
             </div>
@@ -261,13 +475,21 @@ export function ConfiguracionTab({ ctx, emulatorId }: Props) {
         <button
           onClick={handleSave}
           disabled={isSaving || !configData.configPath}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+          className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 ${
+            focusArea === "actions" && focusActionIdx === 0
+              ? "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-surface-0)]"
+              : ""
+          }`}
         >
           {isSaving ? "Guardando..." : "Guardar"}
         </button>
         <button
           onClick={handleReset}
-          className="rounded-lg border border-[var(--color-surface-2)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-1)]"
+          className={`rounded-lg border border-[var(--color-surface-2)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-1)] ${
+            focusArea === "actions" && focusActionIdx === 1
+              ? "ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-surface-0)]"
+              : ""
+          }`}
         >
           Restablecer
         </button>
@@ -302,14 +524,31 @@ interface SettingFieldProps {
   };
   value: string;
   onChange: (value: string) => void;
+  focused?: boolean;
 }
 
-function SettingField({ setting, value, onChange }: SettingFieldProps) {
+function SettingField({ setting, value, onChange, focused }: SettingFieldProps) {
   const inputClass =
     "w-full rounded-[var(--radius-sm)] border border-[var(--color-surface-2)] bg-[var(--color-surface-0)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]";
 
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll focused setting into view
+  useEffect(() => {
+    if (focused && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [focused]);
+
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div
+      ref={rowRef}
+      className={`flex items-start justify-between gap-4 rounded-lg px-3 py-3 transition-colors ${
+        focused
+          ? "bg-[var(--color-accent)]/10 ring-1 ring-[var(--color-accent)]"
+          : ""
+      }`}
+    >
       <div className="min-w-0 flex-1">
         <label className="mb-1 block text-sm font-medium text-[var(--color-text-secondary)]">
           {setting.label}
@@ -345,36 +584,60 @@ function SettingField({ setting, value, onChange }: SettingFieldProps) {
           })()}
 
         {setting.type === "enum" && setting.options && (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className={inputClass}
-          >
-            {!setting.options.some(
-              (opt) => (typeof opt === "string" ? opt : opt.value) === value
-            ) &&
-              value && <option value={value}>{value} (actual)</option>}
-            {setting.options.map((opt) => {
-              const val = typeof opt === "string" ? opt : opt.value;
-              const label = typeof opt === "string" ? opt : opt.label;
-              return (
-                <option key={val} value={val}>
-                  {label}
-                </option>
-              );
-            })}
-          </select>
+          <div className="flex items-center gap-2">
+            {focused && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                &larr;
+              </span>
+            )}
+            <select
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className={`${inputClass} flex-1`}
+            >
+              {!setting.options.some(
+                (opt) => (typeof opt === "string" ? opt : opt.value) === value
+              ) &&
+                value && <option value={value}>{value} (actual)</option>}
+              {setting.options.map((opt) => {
+                const val = typeof opt === "string" ? opt : opt.value;
+                const label = typeof opt === "string" ? opt : opt.label;
+                return (
+                  <option key={val} value={val}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+            {focused && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                &rarr;
+              </span>
+            )}
+          </div>
         )}
 
         {setting.type === "number" && (
-          <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            min={setting.min}
-            max={setting.max}
-            className={inputClass}
-          />
+          <div className="flex items-center gap-2">
+            {focused && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                &larr;
+              </span>
+            )}
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              min={setting.min}
+              max={setting.max}
+              className={`${inputClass} flex-1`}
+            />
+            {focused && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                &rarr;
+              </span>
+            )}
+          </div>
         )}
 
         {(setting.type === "string" || setting.type === "path") && (
