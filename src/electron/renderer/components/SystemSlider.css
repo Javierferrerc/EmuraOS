@@ -3,6 +3,13 @@
   position: relative;
   z-index: 10;
   scroll-padding-inline: 1.25rem;
+  /* Dock-style magnification anchors items to the bottom of the container
+     so they grow upward on hover instead of shifting horizontally. The
+     min-height reserves room for the max magnified size (140px) plus the
+     py-3 Tailwind padding on the container, so the grid below never
+     reflows while the user hovers over the slider. */
+  align-items: flex-end;
+  min-height: 164px;
 }
 
 .slider-container > :first-child {
@@ -22,6 +29,26 @@
   position: relative;
   background: linear-gradient(135deg, var(--slider-dark) 16%, var(--slider-color-bg) 94%);
   isolation: isolate;
+  /* Width/height are written every frame by the rAF loop in
+     SystemSlider.tsx while the mouse is over the slider. The CSS
+     transition smooths frame-to-frame deltas into a springy follow —
+     the browser re-targets the in-flight transition on every write,
+     which produces a natural damped lag identical to a low-mass spring.
+     When the mouse leaves, the inline styles are cleared and the same
+     transition animates each chip back to 114px. */
+  will-change: width, height;
+  transition:
+    width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.2s ease-out,
+    box-shadow 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slider-btn {
+    transition: none;
+    will-change: auto;
+  }
 }
 
 .slider-btn::before {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { SliderItem } from "../utils/sliderItems";
 import "./SystemSlider.css";
 
@@ -10,6 +10,14 @@ interface SystemSliderProps {
   onSelect: (index: number) => void;
 }
 
+// Dock-style magnification constants. Tuned to the 114px base chip so the
+// growth is noticeable but the vertical footprint of the slider stays
+// compact — bigger magnifications force a taller container and eat into
+// the grid below.
+const BASE_SIZE = 114;
+const MAGNIFICATION = 140;
+const INFLUENCE_DISTANCE = 280;
+
 export function SystemSlider({
   items,
   activeIndex,
@@ -19,7 +27,30 @@ export function SystemSlider({
 }: SystemSliderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll focused item into view
+  // Direct refs into each button so the rAF-throttled magnification loop
+  // can write width/height straight to the DOM without going through
+  // React state (same pattern as the mouse tilt in GameCard.tsx).
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const rafRef = useRef<number | null>(null);
+  // Cursor X in client coords; null means the mouse is not over the slider.
+  const mouseXRef = useRef<number | null>(null);
+
+  // Honor the user's motion preferences — magnification is pure eye-candy,
+  // so users who opted out of animations see the flat 114px chips.
+  const prefersReducedMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+
+  // Keep the refs array in sync with the item list so stale refs from a
+  // previous render don't leak into the magnification loop.
+  useEffect(() => {
+    buttonRefs.current.length = items.length;
+  }, [items.length]);
+
+  // Auto-scroll focused item into view (gamepad navigation). Unchanged.
   useEffect(() => {
     if (focusedIndex < 0 || !focusActive) return;
     const el = scrollRef.current?.querySelector(
@@ -30,10 +61,91 @@ export function SystemSlider({
     }
   }, [focusedIndex, focusActive]);
 
+  // Core magnification loop. Runs inside requestAnimationFrame so DOM
+  // writes are coalesced to one per vsync frame regardless of how fast
+  // mousemove events fire.
+  const applyMagnification = useCallback(() => {
+    rafRef.current = null;
+    const mouseX = mouseXRef.current;
+    const buttons = buttonRefs.current;
+
+    for (let i = 0; i < buttons.length; i++) {
+      const btn = buttons[i];
+      if (!btn) continue;
+
+      if (mouseX === null) {
+        // Mouse left the slider — clear inline sizes and let the CSS
+        // transition animate each chip back to base.
+        btn.style.width = "";
+        btn.style.height = "";
+        continue;
+      }
+
+      const rect = btn.getBoundingClientRect();
+      const center = rect.left + rect.width / 2;
+      const absDist = Math.abs(mouseX - center);
+
+      let size: number;
+      if (absDist >= INFLUENCE_DISTANCE) {
+        size = BASE_SIZE;
+      } else {
+        // Linear falloff from cursor center outward. The CSS transition
+        // on width/height smooths frame-to-frame deltas into a springy
+        // follow without needing an actual spring solver.
+        const t = 1 - absDist / INFLUENCE_DISTANCE;
+        size = BASE_SIZE + (MAGNIFICATION - BASE_SIZE) * t;
+      }
+
+      btn.style.width = `${size}px`;
+      btn.style.height = `${size}px`;
+    }
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (prefersReducedMotion) return;
+      mouseXRef.current = e.clientX;
+      // Coalesce bursts of mousemove events into one update per frame.
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(applyMagnification);
+    },
+    [applyMagnification, prefersReducedMotion]
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    if (prefersReducedMotion) return;
+    mouseXRef.current = null;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    // Clear inline sizes synchronously so the CSS transition starts now
+    // instead of waiting for the next frame.
+    const buttons = buttonRefs.current;
+    for (const btn of buttons) {
+      if (!btn) continue;
+      btn.style.width = "";
+      btn.style.height = "";
+    }
+  }, [prefersReducedMotion]);
+
+  // Cancel any in-flight rAF on unmount so we don't write to a detached
+  // node (mirrors the cleanup in GameCard.tsx).
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <div
       ref={scrollRef}
       className="slider-container hide-scrollbar flex overflow-x-auto py-3"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       onWheel={(e) => {
         if (scrollRef.current && e.deltaY !== 0) {
           e.preventDefault();
@@ -48,11 +160,14 @@ export function SystemSlider({
         return (
           <button
             key={item.key}
+            ref={(el) => {
+              buttonRefs.current[idx] = el;
+            }}
             data-slider-index={idx}
             onClick={() => onSelect(idx)}
-            className={`slider-btn flex items-center justify-center text-xs font-bold text-white transition-all duration-200 ${
+            className={`slider-btn flex items-center justify-center text-xs font-bold text-white ${
               isFocused ? "ring-2 ring-blue-500 scale-105" : ""
-            } ${isActive ? "scale-105" : "hover:scale-105"}`}
+            } ${isActive ? "scale-105" : ""}`}
             style={{
               "--slider-color": item.color,
               "--slider-icon-color": item.iconColor,
