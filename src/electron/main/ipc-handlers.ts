@@ -29,6 +29,11 @@ import {
   writeCemuKeys,
 } from "../../core/cemu-setup.js";
 import { ensurePpssppPortable } from "../../core/ppsspp-setup.js";
+import {
+  applyCitraGamepadProfile,
+  readCitraGamepadStatus,
+  CITRA_GAMEPAD_PROFILES,
+} from "../../core/citra-gamepad.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import type {
@@ -637,6 +642,73 @@ export function registerIpcHandlers(
         resolved.executablePath,
         configManager.getRomsPath()
       );
+
+      // Citra first-launch gamepad auto-config. Patches qt-config.ini
+      // with a known-good PS DualShock profile so the controller works
+      // out of the box without the user walking Emulation → Configure
+      // → Controls → Auto-Assign inside Citra. Runs at most once: the
+      // `citraGamepadAutoConfigured` flag flips after the first attempt
+      // so subsequent launches no-op. If the user has already customized
+      // their bindings via Citra's own UI we respect that and mark the
+      // flag without overwriting anything.
+      //
+      // Edge case: if qt-config.ini does not exist yet (Citra was never
+      // launched even once), we defer without flipping the flag. That
+      // means the user may still need one manual Auto-Assign on their
+      // very first 3DS launch ever; the next launch will catch up.
+      if (
+        resolved.definition.id === "citra" &&
+        validated.systemId === "3ds" &&
+        !configManager.get().citraGamepadAutoConfigured
+      ) {
+        try {
+          const citraConfigPath = path.join(
+            app.getPath("appData"),
+            "Citra",
+            "config",
+            "qt-config.ini"
+          );
+          const status = readCitraGamepadStatus(citraConfigPath);
+          if (status.configExists) {
+            if (status.hasCustomGamepad) {
+              console.log(
+                "[citra-gamepad] user already has custom bindings (guid:",
+                status.currentGuid,
+                ") — marking configured without overwriting"
+              );
+            } else {
+              const applyResult = applyCitraGamepadProfile(
+                citraConfigPath,
+                CITRA_GAMEPAD_PROFILES["ps-dualshock"]
+              );
+              if (applyResult.success) {
+                console.log(
+                  "[citra-gamepad] applied ps-dualshock profile — replaced:",
+                  applyResult.linesReplaced,
+                  "inserted:",
+                  applyResult.linesInserted
+                );
+              } else {
+                console.warn(
+                  "[citra-gamepad] failed to apply profile:",
+                  applyResult.error
+                );
+              }
+            }
+            // Flip the flag regardless of apply success: either we wrote
+            // the profile, or we detected existing bindings we don't
+            // want to pave over. Either way, don't re-check next launch.
+            configManager.update({ citraGamepadAutoConfigured: true });
+            configManager.save();
+          } else {
+            console.log(
+              "[citra-gamepad] qt-config.ini not yet created; deferring"
+            );
+          }
+        } catch (err) {
+          console.warn("[citra-gamepad] auto-config failed:", err);
+        }
+      }
 
       const result = await ov.launchEmbedded(
         validated,

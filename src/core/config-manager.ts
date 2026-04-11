@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: AppConfig = {
   navSoundVolume: 70,
   cardTiltEnabled: true,
   devMode: false,
+  citraGamepadAutoConfigured: false,
 };
 
 export class ConfigManager {
