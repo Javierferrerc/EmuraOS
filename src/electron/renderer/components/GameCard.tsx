@@ -58,17 +58,20 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const [imgError, setImgError] = useState(false);
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
 
-  // Mouse-tracked tilt state. When non-null, the outer card renders an inline
-  // `transform` that follows the cursor (Aceternity CometCard style) and a
-  // radial highlight chases the mouse across the cover. When null, the card
-  // falls back to the static `.is-focused` CSS tilt (gamepad path).
+  // Mouse-tracked tilt. Instead of storing rx/ry/px/py in React state (which
+  // would trigger a full re-render on every mousemove — jittery even on fast
+  // machines), we:
+  //   1. Drive the tilt transform + comet gradient directly via refs.
+  //   2. Throttle writes to one per animation frame via requestAnimationFrame,
+  //      so DOM updates stay perfectly in sync with the browser's vsync.
+  //   3. Only use React state for a boolean `isMouseTilting` flag, which toggles
+  //      the `.is-mouse-tilting` class for the CSS transition swap and the
+  //      comet's opacity.
   const cardRef = useRef<HTMLDivElement>(null);
-  const [mouseTilt, setMouseTilt] = useState<{
-    rx: number;
-    ry: number;
-    px: number;
-    py: number;
-  } | null>(null);
+  const cometRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastMouseRef = useRef<{ x: number; y: number } | null>(null);
+  const [isMouseTilting, setIsMouseTilting] = useState(false);
 
   // Honor reduced-motion: bail out of mouse tracking entirely so users who
   // opted out of animations never see the dynamic tilt either.
@@ -82,24 +85,73 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!tiltEnabled || prefersReducedMotion) return;
-      const card = cardRef.current;
-      if (!card) return;
-      const rect = card.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      // Normalize cursor position on card to 0..1, then map to ±10° tilt.
-      // rotateX is inverted so that moving the mouse up tilts the top of
-      // the card toward the viewer (natural "looking at a surface" feel).
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = (e.clientY - rect.top) / rect.height;
-      const ry = (x - 0.5) * 20;
-      const rx = -(y - 0.5) * 20;
-      setMouseTilt({ rx, ry, px: x * 100, py: y * 100 });
+      // Capture raw client coords synchronously; the React event is pooled
+      // and won't survive the rAF callback otherwise.
+      lastMouseRef.current = { x: e.clientX, y: e.clientY };
+
+      if (!isMouseTilting) setIsMouseTilting(true);
+
+      // Coalesce bursts of mousemove events into one update per frame.
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const card = cardRef.current;
+        const comet = cometRef.current;
+        const last = lastMouseRef.current;
+        if (!card || !last) return;
+        const rect = card.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        // Normalize cursor position on card to 0..1, then map to ±10° tilt.
+        // rotateX is inverted so that moving the mouse up tilts the top of
+        // the card toward the viewer (natural "looking at a surface" feel).
+        const x = (last.x - rect.left) / rect.width;
+        const y = (last.y - rect.top) / rect.height;
+        const ry = (x - 0.5) * 20;
+        const rx = -(y - 0.5) * 20;
+        // Direct DOM write — bypasses React reconciliation entirely so the
+        // transform lands on the compositor the very next frame.
+        card.style.transform = `perspective(800px) translateZ(8px) rotateX(${rx.toFixed(
+          2
+        )}deg) rotateY(${ry.toFixed(2)}deg)`;
+        if (comet) {
+          comet.style.background = `radial-gradient(circle at ${(x * 100).toFixed(
+            1
+          )}% ${(y * 100).toFixed(
+            1
+          )}%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 22%, transparent 48%)`;
+        }
+      });
     },
-    [tiltEnabled, prefersReducedMotion]
+    [tiltEnabled, prefersReducedMotion, isMouseTilting]
   );
 
   const handleMouseLeave = useCallback(() => {
-    setMouseTilt(null);
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastMouseRef.current = null;
+    // Clear the inline transform so the card animates back to rest using the
+    // default `.game-card` transition (0.5s ease). Also clear the comet's
+    // background; its opacity fade is driven by the `.is-mouse-tilting` class
+    // being removed below.
+    if (cardRef.current) {
+      cardRef.current.style.transform = "";
+    }
+    if (cometRef.current) {
+      cometRef.current.style.background = "";
+    }
+    setIsMouseTilting(false);
+  }, []);
+
+  // Cancel any in-flight rAF on unmount so we don't write to a detached node.
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, []);
 
   const metadata = getMetadataForRom(rom.systemId, rom.fileName);
@@ -138,27 +190,27 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   // The `is-mouse-tilting` modifier swaps the transition to a tighter linear
   // curve so the card follows the cursor snappily instead of chasing with the
   // 0.5s ease used for the gamepad static tilt.
+  // The blue Tailwind ring is intentionally absent from the tilt-on branch:
+  // focus indication is now an animated gradient border + glow defined in
+  // GameCard.css (`.game-card::after` + `.game-card.is-focused`). The legacy
+  // path keeps the static ring so it still looks pixel-identical to the
+  // pre-3D-tilt era when the preference is off.
   const outerCardClass = tiltEnabled
     ? `game-card group relative h-full cursor-pointer rounded-2xl${
-        isFocused ? " is-focused ring-2 ring-blue-500" : ""
-      }${mouseTilt ? " is-mouse-tilting" : ""}`
+        isFocused ? " is-focused" : ""
+      }${isMouseTilting ? " is-mouse-tilting" : ""}`
     : `group relative h-full cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 ${
         isFocused ? "scale-105 ring-2 ring-blue-500" : "hover:scale-[1.03]"
       }`;
 
-  // Inline transform when mouse is tilting. Overrides any CSS transform
-  // thanks to inline-style specificity, so `.is-focused` static tilt yields
-  // to the cursor while the mouse is over the card.
-  const tiltInlineStyle: React.CSSProperties | undefined = mouseTilt
-    ? {
-        transform: `perspective(800px) translateZ(8px) rotateX(${mouseTilt.rx}deg) rotateY(${mouseTilt.ry}deg)`,
-      }
-    : undefined;
-
   // Bottom overlay — legacy uses `transition-opacity`; new owns its transitions
   // via `.game-card__overlay` in CSS so we don't layer two `transition` props.
+  // The tilt-enabled variant uses an inline gradient with a longer, softer
+  // fade (`from-black/70 via-black/40 to-transparent`) so the dark area
+  // doesn't end with a hard edge against the rotated card — that hard edge
+  // was reading as a "clipped black shadow" on focused cards.
   const overlayClass = tiltEnabled
-    ? `game-card__overlay absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-8 ${
+    ? `game-card__overlay absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/70 via-black/40 to-transparent px-3 pb-3 pt-10 ${
         isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-100"
       }`
     : `absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-8 transition-opacity ${
@@ -186,7 +238,6 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       onMouseMove={tiltEnabled ? handleMouseMove : undefined}
       onMouseLeave={tiltEnabled ? handleMouseLeave : undefined}
       className={outerCardClass}
-      style={tiltInlineStyle}
       title={`Double-click to launch\n${rom.filePath}`}
     >
       {/* When tilt is enabled, the cover image needs its own clipping wrapper
@@ -199,16 +250,16 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
           {/* Comet highlight — a soft radial glow anchored to the cursor.
               Rendered above the cover via DOM order and brightened with
               `mix-blend-mode: plus-lighter` so it additively lightens the
-              underlying image instead of overlaying a flat white wash. */}
-          {mouseTilt && (
-            <div
-              className="game-card__comet pointer-events-none absolute inset-0"
-              style={{
-                background: `radial-gradient(circle at ${mouseTilt.px}% ${mouseTilt.py}%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.08) 22%, transparent 48%)`,
-                mixBlendMode: "plus-lighter",
-              }}
-            />
-          )}
+              underlying image instead of overlaying a flat white wash.
+              Always mounted (not conditionally rendered) so its ref stays
+              stable and the rAF handler in handleMouseMove can write the
+              radial-gradient `background` directly. Visibility is driven by
+              the `.is-mouse-tilting` class via CSS opacity transition. */}
+          <div
+            ref={cometRef}
+            className="game-card__comet pointer-events-none absolute inset-0"
+            style={{ mixBlendMode: "plus-lighter" }}
+          />
         </div>
       ) : (
         coverContent
