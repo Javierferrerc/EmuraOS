@@ -51,6 +51,10 @@ function createWindow(): void {
   // the main window regains focus.
   mainWindow.webContents.once("did-finish-load", () => {
     setTimeout(() => mainWindow?.webContents.focus(), 300);
+    // Trigger an update check after the UI has settled
+    setTimeout(() => {
+      mainWindow?.webContents.send("startup-update-check");
+    }, 3000);
   });
   mainWindow.on("focus", () => {
     mainWindow?.webContents.focus();

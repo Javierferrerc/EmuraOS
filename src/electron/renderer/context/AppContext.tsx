@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 import type {
@@ -26,6 +27,7 @@ import type {
   EmulatorDefinition,
   DriveEmulatorMapping,
   EmulatorDownloadProgress,
+  UpdateInfo,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -81,6 +83,8 @@ interface AppState {
   isLoadingDrive: boolean;
   downloadingEmulatorId: string | null;
   emulatorDownloadProgress: EmulatorDownloadProgress | null;
+  updateInfo: UpdateInfo | null;
+  isUpdateModalOpen: boolean;
 }
 
 interface AppActions {
@@ -125,6 +129,8 @@ interface AppActions {
   downloadEmulator: (
     emulatorId: string
   ) => Promise<{ success: boolean; installPath: string; error?: string }>;
+  checkForUpdates: () => Promise<void>;
+  dismissUpdateModal: () => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -133,6 +139,13 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  // Stable ref to the latest config so callbacks like `doLaunch` can read
+  // up-to-date values without taking `config` as a dependency (which would
+  // recreate the callback on every toggle change).
+  const configRef = useRef<AppConfig | null>(null);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
   const [systems, setSystems] = useState<SystemDefinition[]>([]);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>({
@@ -193,6 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   >(null);
   const [emulatorDownloadProgress, setEmulatorDownloadProgress] =
     useState<EmulatorDownloadProgress | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -445,6 +460,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [detectEmulators]
   );
 
+  // ── Auto-update ──────────────────────────────────────────────────
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const result = await window.electronAPI.checkForUpdates();
+      if (result.available && result.updateInfo) {
+        setUpdateInfo(result.updateInfo);
+        setIsUpdateModalOpen(true);
+      }
+    } catch (err) {
+      console.warn("Update check failed:", err);
+    }
+  }, []);
+
+  const dismissUpdateModal = useCallback(() => {
+    setIsUpdateModalOpen(false);
+  }, []);
+
+  // Listen for the main-process startup trigger
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onStartupUpdateCheck(() => {
+      checkForUpdates();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [checkForUpdates]);
+
   const updatePlayStats = useCallback((rom: DiscoveredRom) => {
     const key = `${rom.systemId}:${rom.fileName}`;
     setRecentlyPlayed((prev) => {
@@ -479,22 +521,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // it as a data URL so the overlay can paint it onto the 3D cube
       // without re-fetching from disk. Missing covers are fine — the
       // overlay falls back to a system-colored gradient.
-      const lastDot = rom.fileName.lastIndexOf(".");
-      const metadataKey =
-        lastDot > 0 ? rom.fileName.substring(0, lastDot) : rom.fileName;
-      const metadata = metadataMap[rom.systemId]?.[metadataKey] ?? null;
+      //
+      // When the user has disabled the loading overlay from settings,
+      // skip the cover read and the state write entirely — this makes
+      // launches go straight from click to GameModeView without the
+      // intermediate cube.
+      const overlayEnabled =
+        configRef.current?.gameLoadingOverlayEnabled ?? true;
 
-      let coverDataUrl: string | null = null;
-      if (metadata?.coverPath) {
-        try {
-          coverDataUrl = await window.electronAPI.readCoverDataUrl(
-            metadata.coverPath
-          );
-        } catch (err) {
-          console.warn("Failed to read cover for loading overlay:", err);
+      if (overlayEnabled) {
+        const lastDot = rom.fileName.lastIndexOf(".");
+        const metadataKey =
+          lastDot > 0 ? rom.fileName.substring(0, lastDot) : rom.fileName;
+        const metadata = metadataMap[rom.systemId]?.[metadataKey] ?? null;
+
+        let coverDataUrl: string | null = null;
+        if (metadata?.coverPath) {
+          try {
+            coverDataUrl = await window.electronAPI.readCoverDataUrl(
+              metadata.coverPath
+            );
+          } catch (err) {
+            console.warn("Failed to read cover for loading overlay:", err);
+          }
         }
+        setLaunchingGame({ rom, coverDataUrl });
       }
-      setLaunchingGame({ rom, coverDataUrl });
 
       // Try embedded overlay first. On success we DON'T clear the overlay
       // here — `onGameSessionStarted` will clear it when the main process
@@ -854,6 +906,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissCemuKeysError,
     refreshDriveEmulators,
     downloadEmulator: downloadEmulatorAction,
+    updateInfo,
+    isUpdateModalOpen,
+    checkForUpdates,
+    dismissUpdateModal,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -8,6 +8,7 @@ interface SystemSliderProps {
   focusedIndex: number;
   focusActive: boolean;
   onSelect: (index: number) => void;
+  magnificationEnabled?: boolean;
 }
 
 // Dock-style magnification constants. Tuned to the 114px base chip so the
@@ -24,6 +25,7 @@ export function SystemSlider({
   focusedIndex,
   focusActive,
   onSelect,
+  magnificationEnabled = true,
 }: SystemSliderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -103,17 +105,17 @@ export function SystemSlider({
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (prefersReducedMotion) return;
+      if (prefersReducedMotion || !magnificationEnabled) return;
       mouseXRef.current = e.clientX;
       // Coalesce bursts of mousemove events into one update per frame.
       if (rafRef.current !== null) return;
       rafRef.current = requestAnimationFrame(applyMagnification);
     },
-    [applyMagnification, prefersReducedMotion]
+    [applyMagnification, prefersReducedMotion, magnificationEnabled]
   );
 
   const handleMouseLeave = useCallback(() => {
-    if (prefersReducedMotion) return;
+    if (prefersReducedMotion || !magnificationEnabled) return;
     mouseXRef.current = null;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -127,7 +129,7 @@ export function SystemSlider({
       btn.style.width = "";
       btn.style.height = "";
     }
-  }, [prefersReducedMotion]);
+  }, [prefersReducedMotion, magnificationEnabled]);
 
   // Cancel any in-flight rAF on unmount so we don't write to a detached
   // node (mirrors the cleanup in GameCard.tsx).
@@ -139,6 +141,25 @@ export function SystemSlider({
       }
     };
   }, []);
+
+  // When magnification is toggled off at runtime, clear any in-flight rAF
+  // and reset inline sizes so buttons snap back to the base 114px via the
+  // existing CSS transition. Without this, chips that were magnified at
+  // the moment the user flipped the setting would stay stuck.
+  useEffect(() => {
+    if (magnificationEnabled) return;
+    mouseXRef.current = null;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const buttons = buttonRefs.current;
+    for (const btn of buttons) {
+      if (!btn) continue;
+      btn.style.width = "";
+      btn.style.height = "";
+    }
+  }, [magnificationEnabled]);
 
   return (
     <div

@@ -65,6 +65,8 @@ export const AppConfigPartialSchema = z
     // every real value the slider could produce.
     navSoundVolume: z.number().min(0).max(100).optional(),
     cardTiltEnabled: z.boolean().optional(),
+    gameLoadingOverlayEnabled: z.boolean().optional(),
+    systemSliderMagnificationEnabled: z.boolean().optional(),
     devMode: z.boolean().optional(),
     citraGamepadAutoConfigured: z.boolean().optional(),
   })

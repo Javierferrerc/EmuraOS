@@ -20,6 +20,8 @@ import type {
   EmulatorDefinition,
   DriveEmulatorMapping,
   EmulatorDownloadProgress,
+  UpdateCheckResult,
+  UpdateDownloadProgress,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -162,6 +164,16 @@ export interface ElectronAPI {
     error?: string;
   }>;
   openExternal(url: string): Promise<{ success: boolean; error?: string }>;
+
+  // Auto-update
+  checkForUpdates(): Promise<UpdateCheckResult>;
+  downloadUpdate(url: string): Promise<string>;
+  installUpdate(): Promise<void>;
+  cancelUpdateDownload(): Promise<void>;
+  onUpdateDownloadProgress(
+    callback: (progress: UpdateDownloadProgress) => void
+  ): () => void;
+  onStartupUpdateCheck(callback: () => void): () => void;
 }
 
 declare global {
