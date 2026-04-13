@@ -2,12 +2,26 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { VitePlugin } from "@electron-forge/plugin-vite";
+import { cpSync } from "node:fs";
+import path from "node:path";
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: { unpack: "**/node_modules/koffi/**" },
     extraResource: ["src/data"],
     icon: "assets/icon",
+  },
+  hooks: {
+    // The Vite plugin only includes bundled output in the asar — native
+    // modules marked as `external` are left out. Copy koffi into the
+    // packaged app so `require("koffi")` resolves at runtime.
+    packageAfterCopy: async (_config, buildPath) => {
+      cpSync(
+        path.resolve("node_modules/koffi"),
+        path.join(buildPath, "node_modules/koffi"),
+        { recursive: true }
+      );
+    },
   },
   makers: [
     new MakerSquirrel({ name: "emuraos", setupIcon: "assets/icon.ico" }),
