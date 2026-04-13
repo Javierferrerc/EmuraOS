@@ -9,7 +9,7 @@ const config: ForgeConfig = {
     extraResource: ["src/data"],
   },
   makers: [
-    new MakerSquirrel({ name: "retro-launcher" }),
+    new MakerSquirrel({ name: "emuraos" }),
     new MakerZIP({}, ["win32"]),
   ],
   plugins: [

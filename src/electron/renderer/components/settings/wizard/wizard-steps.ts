@@ -33,7 +33,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     groups: [
       {
         id: "wiz-welcome",
-        title: "Bienvenido a Retro Launcher",
+        title: "Bienvenido a EmuraOS",
         description:
           "Configura las rutas de tus ROMs y emuladores para empezar.",
         rows: [

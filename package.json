@@ -1,6 +1,7 @@
 {
-  "name": "retro-launcher",
+  "name": "emuraos",
   "version": "0.1.0",
+  "author": "Javier Ferrer",
   "description": "Open-source retro gaming frontend — detect ROMs, map emulators, launch games",
   "type": "module",
   "main": ".vite/build/index.js",

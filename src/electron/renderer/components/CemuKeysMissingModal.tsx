@@ -79,7 +79,7 @@ export function CemuKeysMissingModal({
           <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
             <p className="text-xs text-amber-200">
               <strong>Nota legal:</strong> Las disc keys son material propietario
-              de Nintendo. Retro Launcher no puede distribuirlas. Necesitás
+              de Nintendo. EmuraOS no puede distribuirlas. Necesitás
               obtenerlas de tu propia Wii U o tener juegos pre-desencriptados
               (formatos{" "}
               <code className="text-amber-100">.rpx</code> /{" "}

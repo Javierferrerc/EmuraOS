@@ -113,7 +113,7 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
           {state === "info" && (
             <div className="space-y-3 text-sm text-gray-300">
               <p>
-                Una nueva versión de Retro Launcher está disponible.
+                Una nueva versión de EmuraOS está disponible.
               </p>
               {updateInfo.releaseNotes && (
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 bg-gray-900/50 p-3 text-xs text-gray-400">

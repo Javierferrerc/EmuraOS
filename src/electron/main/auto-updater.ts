@@ -108,7 +108,7 @@ export class AutoUpdater {
     }
 
     const bytesTotal = Number(res.headers.get("content-length") ?? 0);
-    const fileName = url.split("/").pop() ?? "retro-launcher-update.exe";
+    const fileName = url.split("/").pop() ?? "emuraos-update.exe";
     const destPath = path.join(app.getPath("temp"), fileName);
 
     let bytesDownloaded = 0;

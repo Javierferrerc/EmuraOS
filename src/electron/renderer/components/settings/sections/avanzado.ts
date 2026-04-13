@@ -34,7 +34,7 @@ export const avanzadoSection: SettingsSection = {
               id: "adv.version",
               kind: "info",
               label: "Versión",
-              value: () => "Retro Launcher",
+              value: () => "EmuraOS",
               tone: "default",
             },
           ],

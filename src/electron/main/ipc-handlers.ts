@@ -909,7 +909,7 @@ export function registerIpcHandlers(
   ipcMain.handle("export-user-library", async () => {
     const win = getMainWindow();
     const saveOptions: Electron.SaveDialogOptions = {
-      defaultPath: "retro-launcher-library.json",
+      defaultPath: "emuraos-library.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     };
     const result = await (win
@@ -947,7 +947,7 @@ export function registerIpcHandlers(
   ipcMain.handle("export-diagnostic-bundle", async () => {
     const win = getMainWindow();
     const saveOptions: Electron.SaveDialogOptions = {
-      defaultPath: `retro-launcher-diagnostic-${Date.now()}.json`,
+      defaultPath: `emuraos-diagnostic-${Date.now()}.json`,
       filters: [{ name: "JSON", extensions: ["json"] }],
     };
     const result = await (win

@@ -24,7 +24,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: "Retro Launcher",
+    title: "EmuraOS",
     backgroundColor: "#111827",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
