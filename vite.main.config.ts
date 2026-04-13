@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 // The Forge Vite plugin hardcodes CJS output with .js extension.
 // Since package.json has "type": "module", Node treats .js as ESM.
@@ -23,6 +26,10 @@ export default defineConfig({
     mainFields: ["module", "jsnext:main", "jsnext"],
   },
   plugins: [cjsPackageJson],
+  define: {
+    "process.env.GDRIVE_API_KEY": JSON.stringify(process.env.GDRIVE_API_KEY ?? ""),
+    "process.env.GDRIVE_ROOT_FOLDER_ID": JSON.stringify(process.env.GDRIVE_ROOT_FOLDER_ID ?? ""),
+  },
   build: {
     rollupOptions: {
       external: ["electron", "koffi"],
