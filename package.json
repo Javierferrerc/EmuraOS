@@ -1,6 +1,6 @@
 {
   "name": "retro-launcher",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "Open-source retro gaming frontend — detect ROMs, map emulators, launch games",
   "type": "module",
   "main": ".vite/build/index.js",
