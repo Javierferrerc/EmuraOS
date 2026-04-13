@@ -1,6 +1,6 @@
 {
   "name": "emuraos",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "author": "Javier Ferrer",
   "description": "Open-source retro gaming frontend — detect ROMs, map emulators, launch games",
   "type": "module",
@@ -30,7 +30,7 @@
     "roms",
     "electron"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=20.0.0"
   },
