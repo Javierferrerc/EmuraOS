@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "start:electron": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "make:installer": "electron-builder --prepackaged out/emuraos-win32-x64 --win nsis",
+    "generate:installer-images": "node scripts/generate-installer-images.mjs"
   },
   "keywords": [
     "retro",
@@ -49,6 +51,7 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.6.0",
     "@electron-forge/maker-squirrel": "^7.6.0",
+    "@electron-forge/maker-wix": "^7.11.1",
     "@electron-forge/maker-zip": "^7.6.0",
     "@electron-forge/plugin-vite": "^7.6.0",
     "@tailwindcss/vite": "^4.0.0",
@@ -57,6 +60,8 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
     "electron": "^39.8.5",
+    "electron-builder": "^26.8.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.8.2",
     "vitest": "^3.1.1"

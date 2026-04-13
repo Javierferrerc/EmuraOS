@@ -10,6 +10,14 @@ const config: ForgeConfig = {
     asar: { unpack: "**/node_modules/koffi/**" },
     extraResource: ["src/data"],
     icon: "assets/icon",
+    ignore: [
+      /^\/config($|\/)/,
+      /^\/roms($|\/)/,
+      /^\/out($|\/)/,
+      /^\/scripts($|\/)/,
+      /^\/assets\/installer($|\/)/,
+      /^\/electron-builder\.yml$/,
+    ],
   },
   hooks: {
     // The Vite plugin only includes bundled output in the asar — native

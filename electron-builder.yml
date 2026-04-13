@@ -1,0 +1,31 @@
+# electron-builder config — NSIS installer for Windows
+# Usage: npm run make:installer  (requires `npm run package` first)
+
+appId: com.emuraos.app
+productName: EmuraOS
+copyright: Copyright © 2026 Javier Ferrer
+
+directories:
+  output: out/installers
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: EmuraOS
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerSidebar: assets/installer/installerSidebar.bmp
+  uninstallerSidebar: assets/installer/installerSidebar.bmp
+  installerHeader: assets/installer/installerHeader.bmp
+  license: LICENSE
+  perMachine: true
+  menuCategory: true
