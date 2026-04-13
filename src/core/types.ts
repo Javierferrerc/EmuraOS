@@ -46,6 +46,14 @@ export interface AppConfig {
   navSoundEnabled?: boolean;
   navSoundVolume?: number;
   cardTiltEnabled?: boolean;
+  // Toggle the fullscreen 3D cube shown while a game is launching. When
+  // false, game launches go straight from double-click to GameModeView
+  // without the intermediate loader.
+  gameLoadingOverlayEnabled?: boolean;
+  // Toggle the dock-style magnification on the horizontal system slider.
+  // When false, the slider behaves like a normal flat list with no mouse
+  // tracking.
+  systemSliderMagnificationEnabled?: boolean;
   devMode?: boolean;
   // One-shot flag: set to true after we auto-apply the Citra gamepad
   // profile on the first 3DS launch. Prevents re-patching qt-config.ini
@@ -275,4 +283,28 @@ export interface EmulatorConfigData {
   configPath: string | null;
   settings: Record<string, string>;
   schema: EmulatorConfigSchema;
+}
+
+// ── Auto-Update System ─────────────────────────────────────────────
+
+export interface UpdateInfo {
+  version: string;
+  releaseNotes: string;
+  downloadUrl: string;
+  publishedAt: string;
+  size: number;
+}
+
+export interface UpdateDownloadProgress {
+  bytesDownloaded: number;
+  bytesTotal: number;
+  percentComplete: number;
+  status: "downloading" | "complete" | "cancelled" | "error";
+}
+
+export interface UpdateCheckResult {
+  available: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  updateInfo?: UpdateInfo;
 }

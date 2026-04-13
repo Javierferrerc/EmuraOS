@@ -36,6 +36,7 @@ import {
 } from "../../core/citra-gamepad.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
+import { AutoUpdater } from "./auto-updater.js";
 import type {
   AppConfig,
   DiscoveredRom,
@@ -1067,4 +1068,34 @@ export function registerIpcHandlers(
       }
     }
   );
+
+  // ── Auto-Update handlers ──────────────────────────────────────────
+  const autoUpdater = new AutoUpdater();
+
+  ipcMain.handle("check-for-updates", async () => {
+    try {
+      return await autoUpdater.checkForUpdates();
+    } catch (err) {
+      console.warn("[auto-update] check failed:", err);
+      return { available: false, currentVersion: app.getVersion() };
+    }
+  });
+
+  ipcMain.handle(
+    "download-update",
+    async (event, url: unknown) => {
+      const validatedUrl = UrlSchema.parse(url);
+      return await autoUpdater.downloadUpdate(validatedUrl, (progress) => {
+        event.sender.send("update-download-progress", progress);
+      });
+    }
+  );
+
+  ipcMain.handle("install-update", () => {
+    autoUpdater.installUpdate();
+  });
+
+  ipcMain.handle("cancel-update-download", () => {
+    autoUpdater.cancelDownload();
+  });
 }

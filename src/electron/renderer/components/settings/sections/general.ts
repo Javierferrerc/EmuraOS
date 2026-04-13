@@ -58,6 +58,28 @@ export const generalSection: SettingsSection = {
                 await ctx.updateConfig({ cardTiltEnabled: value });
               },
             },
+            {
+              id: "gen.game-loading-overlay",
+              kind: "toggle",
+              label: "Pantalla de carga al abrir un juego",
+              description:
+                "Mostrar un cubo 3D con la portada del juego mientras se lanza el emulador.",
+              get: (ctx) => ctx.config?.gameLoadingOverlayEnabled ?? true,
+              set: async (value, ctx) => {
+                await ctx.updateConfig({ gameLoadingOverlayEnabled: value });
+              },
+            },
+            {
+              id: "gen.system-slider-magnification",
+              kind: "toggle",
+              label: "Efecto dock en el slider de consolas",
+              description:
+                "Aumentar el tamaño de los iconos del slider horizontal al pasar el cursor.",
+              get: (ctx) => ctx.config?.systemSliderMagnificationEnabled ?? true,
+              set: async (value, ctx) => {
+                await ctx.updateConfig({ systemSliderMagnificationEnabled: value });
+              },
+            },
           ],
         },
       ],

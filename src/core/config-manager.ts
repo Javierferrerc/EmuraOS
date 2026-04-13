@@ -19,6 +19,8 @@ const DEFAULT_CONFIG: AppConfig = {
   navSoundEnabled: true,
   navSoundVolume: 70,
   cardTiltEnabled: true,
+  gameLoadingOverlayEnabled: true,
+  systemSliderMagnificationEnabled: true,
   devMode: false,
   citraGamepadAutoConfigured: false,
 };

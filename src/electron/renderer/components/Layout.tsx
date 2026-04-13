@@ -484,6 +484,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
         }
         focusActive={focusState.active}
         onSelect={handleSliderSelect}
+        magnificationEnabled={config?.systemSliderMagnificationEnabled ?? true}
       />
       <main className="game-grid-scroll flex-1 overflow-y-auto px-6 pb-4">
         <GameGrid

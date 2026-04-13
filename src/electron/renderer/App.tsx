@@ -7,6 +7,8 @@ import { EmulatorConfigPage } from "./components/EmulatorConfigPage";
 import { GameModeView } from "./components/GameModeView";
 import { CemuKeysModal } from "./components/CemuKeysModal";
 import { CemuKeysMissingModal } from "./components/CemuKeysMissingModal";
+import { GameLoadingOverlay } from "./components/GameLoadingOverlay";
+import { UpdateModal } from "./components/UpdateModal";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
@@ -27,6 +29,9 @@ export default function App() {
     cancelCemuKeys,
     goToCemuKeysSettings,
     dismissCemuKeysError,
+    isUpdateModalOpen,
+    updateInfo,
+    dismissUpdateModal,
   } = app;
 
   // Bridge: mirror `currentView` → navigation stack.
@@ -180,6 +185,13 @@ export default function App() {
             onCancel={dismissCemuKeysError}
           />
         )}
+      {isUpdateModalOpen && updateInfo && (
+        <UpdateModal updateInfo={updateInfo} onDismiss={dismissUpdateModal} />
+      )}
+      {/* Launch loading overlay — mounted last so DOM order + z-index 9999
+          + isolation guarantee it wins stacking over any modal. Conditional
+          on `launchingGame` inside the component itself. */}
+      <GameLoadingOverlay />
     </div>
   );
 }
