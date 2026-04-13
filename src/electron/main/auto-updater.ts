@@ -12,7 +12,7 @@ import type {
 
 // ── Configuration ──────────────────────────────────────────────────
 const GITHUB_OWNER = "Javierferrerc";
-const GITHUB_REPO = "retro-launcher";
+const GITHUB_REPO = "EmuraOS";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 
 /**
