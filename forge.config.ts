@@ -7,9 +7,10 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: { unpack: "**/node_modules/koffi/**" },
     extraResource: ["src/data"],
+    icon: "assets/icon",
   },
   makers: [
-    new MakerSquirrel({ name: "emuraos" }),
+    new MakerSquirrel({ name: "emuraos", setupIcon: "assets/icon.ico" }),
     new MakerZIP({}, ["win32"]),
   ],
   plugins: [
