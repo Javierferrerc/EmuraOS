@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { MetadataCache } from "./metadata-cache.js";
 import { logSecurityEvent } from "./security-logger.js";
+import { normalizeTitle } from "./title-utils.js";
 import type {
   DiscoveredRom,
   CoverFetchProgress,
@@ -80,14 +81,6 @@ export class SteamGridDb {
     return { Authorization: `Bearer ${this.apiKey}` };
   }
 
-  private normalize(s: string): string {
-    return s
-      .toLowerCase()
-      .replace(/[:\-_'’,!?.]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
   /**
    * Tiered title matcher.
    * 1. Exact case-insensitive match.
@@ -102,12 +95,14 @@ export class SteamGridDb {
     if (results.length === 0) return null;
 
     const titleLower = title.toLowerCase();
-    const titleNorm = this.normalize(title);
+    const titleNorm = normalizeTitle(title);
 
     const tier1 = results.filter((r) => r.name.toLowerCase() === titleLower);
-    const tier2 = results.filter((r) => this.normalize(r.name) === titleNorm);
+    const tier2 = results.filter(
+      (r) => normalizeTitle(r.name) === titleNorm
+    );
     const tier3 = results.filter((r) =>
-      this.normalize(r.name).startsWith(titleNorm)
+      normalizeTitle(r.name).startsWith(titleNorm)
     );
 
     const chosen = tier1.length > 0 ? tier1 : tier2.length > 0 ? tier2 : tier3;

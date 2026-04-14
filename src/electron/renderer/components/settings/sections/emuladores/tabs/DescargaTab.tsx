@@ -63,19 +63,38 @@ export function DescargaTab({ ctx, emulatorId }: Props) {
         >
           {ctx.isLoadingDrive ? "Actualizando..." : "Refrescar Drive"}
         </button>
-        {driveEntry && (
+        {driveEntry && !isDownloading && (
           <button
             onClick={() => ctx.downloadEmulator(emulatorId)}
-            disabled={isDownloading || ctx.downloadingEmulatorId !== null}
+            disabled={ctx.downloadingEmulatorId !== null}
             className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors bg-[var(--color-good)] hover:opacity-90 disabled:opacity-50"
           >
-            {isDownloading ? "Descargando..." : "Descargar"}
+            Descargar
+          </button>
+        )}
+        {isDownloading && (
+          <button
+            onClick={() => ctx.cancelEmulatorDownload()}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors bg-[var(--color-bad)] hover:opacity-90"
+          >
+            Cancelar
           </button>
         )}
       </div>
 
-      {/* Download progress */}
-      {isDownloading && progress && (
+      {/* Download progress — listing phase */}
+      {isDownloading && progress && progress.phase === "listing" && (
+        <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-0)] p-4">
+          <p className="mb-2 text-xs text-[var(--color-text-muted)]">
+            Analizando archivos en Drive...
+          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-[var(--color-good)]" />
+          </div>
+        </div>
+      )}
+      {/* Download progress — downloading phase */}
+      {isDownloading && progress && progress.phase === "downloading" && (
         <div className="rounded-[var(--radius-md)] bg-[var(--color-surface-0)] p-4">
           <div className="mb-2 flex justify-between text-xs text-[var(--color-text-muted)]">
             <span>

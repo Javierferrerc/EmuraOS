@@ -8,24 +8,28 @@ import type {
 import { GDriveClient, type DriveFileEntry } from "./gdrive-client.js";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-const DOWNLOAD_CONCURRENCY = 10;
+const DOWNLOAD_CONCURRENCY = 25;
 const PROGRESS_EMIT_INTERVAL_MS = 100;
 
 /**
  * Run up to `limit` async workers in parallel, each pulling the next item
  * from the supplied queue. Returns when the queue is drained or any worker
  * throws — the first error is re-thrown after all in-flight workers finish.
+ *
+ * Supports early exit via an optional `AbortSignal`.
  */
 async function runParallel<T>(
   items: T[],
   limit: number,
-  worker: (item: T) => Promise<void>
+  worker: (item: T) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<void> {
   let index = 0;
   let firstError: unknown;
 
   const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (index < items.length && firstError === undefined) {
+      if (signal?.aborted) return;
       const i = index++;
       try {
         await worker(items[i]);
@@ -36,6 +40,9 @@ async function runParallel<T>(
   });
 
   await Promise.all(runners);
+  if (signal?.aborted) {
+    throw signal.reason ?? new DOMException("Download cancelled", "AbortError");
+  }
   if (firstError !== undefined) {
     throw firstError instanceof Error ? firstError : new Error(String(firstError));
   }
@@ -96,11 +103,16 @@ export class EmulatorDownloader {
    * Download and mirror one emulator's folder into
    * `{emulatorsPath}/{emulatorId}/`. Resumable: files that already exist at
    * the destination with the expected size are skipped.
+   *
+   * Pass an `AbortSignal` to cancel the download mid-flight. Already-
+   * downloaded files are kept on disk so a subsequent `download()` call
+   * resumes where it left off.
    */
   async download(
     emulatorId: string,
     emulatorsPath: string,
-    onProgress: (p: EmulatorDownloadProgress) => void
+    onProgress: (p: EmulatorDownloadProgress) => void,
+    signal?: AbortSignal
   ): Promise<{ success: boolean; installPath: string; error?: string }> {
     const installPath = join(emulatorsPath, emulatorId);
     const lowerId = emulatorId.toLowerCase();
@@ -119,8 +131,9 @@ export class EmulatorDownloader {
 
     let entries: DriveFileEntry[];
     try {
+      signal?.throwIfAborted();
       const rootId = await this.client.getRootFolderId();
-      const rootChildren = await this.client.listFolder(rootId);
+      const rootChildren = await this.client.listFolder(rootId, signal);
       const match = rootChildren.find(
         (c) =>
           c.mimeType === FOLDER_MIME && c.name.toLowerCase() === lowerId
@@ -138,8 +151,19 @@ export class EmulatorDownloader {
         });
         return { success: false, installPath, error: msg };
       }
-      entries = await this.client.listFolderRecursive(match.id);
+      entries = await this.client.listFolderRecursive(match.id, signal);
     } catch (err) {
+      if (isAbortError(err)) {
+        onProgress({
+          emulatorId,
+          phase: "cancelled",
+          filesCompleted: 0,
+          filesTotal: 0,
+          bytesReceived: 0,
+          bytesTotal: 0,
+        });
+        return { success: false, installPath, error: "cancelled" };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       onProgress({
         emulatorId,
@@ -205,11 +229,23 @@ export class EmulatorDownloader {
         await this.client.downloadFile(entry.id, destPath, (delta) => {
           bytesReceived += delta;
           emitProgress();
-        });
+        }, signal);
         filesCompleted += 1;
         emitProgress();
-      });
+      }, signal);
     } catch (err) {
+      if (isAbortError(err)) {
+        onProgress({
+          emulatorId,
+          phase: "cancelled",
+          filesCompleted,
+          filesTotal,
+          bytesReceived,
+          bytesTotal,
+          currentFile,
+        });
+        return { success: false, installPath, error: "cancelled" };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       onProgress({
         emulatorId,
@@ -244,4 +280,10 @@ export class EmulatorDownloader {
 
     return { success: true, installPath };
   }
+}
+
+function isAbortError(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  if (err instanceof Error && err.name === "AbortError") return true;
+  return false;
 }

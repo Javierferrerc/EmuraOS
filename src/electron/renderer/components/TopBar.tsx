@@ -3,11 +3,13 @@ import { useApp, type ActiveFilter } from "../context/AppContext";
 import logoEmura from "../assets/logo-emura.svg";
 import "./TopBar.css";
 
-export const TOPBAR_ITEM_COUNT = 4;
+export const TOPBAR_ITEM_COUNT = 6;
 export const TOPBAR_INDEX_SEARCH = 0;
-export const TOPBAR_INDEX_FAVORITES = 1;
-export const TOPBAR_INDEX_PROFILE = 2;
-export const TOPBAR_INDEX_SETTINGS = 3;
+export const TOPBAR_INDEX_ADD_ROM = 1;
+export const TOPBAR_INDEX_RESCAN = 2;
+export const TOPBAR_INDEX_FAVORITES = 3;
+export const TOPBAR_INDEX_PROFILE = 4;
+export const TOPBAR_INDEX_SETTINGS = 5;
 
 interface TopBarProps {
   focusedIndex: number;
@@ -22,7 +24,17 @@ export function TopBar({
   textInputMode,
   onExitTextInput,
 }: TopBarProps) {
-  const { searchQuery, setSearchQuery, setCurrentView, activeFilter, setActiveFilter } = useApp();
+  const {
+    searchQuery,
+    setSearchQuery,
+    setCurrentView,
+    activeFilter,
+    setActiveFilter,
+    addRomsFlow,
+    refreshScan,
+    isScanning,
+    isAddingRoms,
+  } = useApp();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,6 +147,42 @@ export function TopBar({
 
       {/* Action buttons */}
       <div className="flex items-center gap-2">
+        {/* Add ROM */}
+        <button
+          data-topbar-index={TOPBAR_INDEX_ADD_ROM}
+          onClick={() => addRomsFlow()}
+          disabled={isAddingRoms}
+          className={`topbar-icon-btn flex items-center gap-1.5 px-3 py-2.5 ${focusRingClass(
+            TOPBAR_INDEX_ADD_ROM
+          )}`}
+          style={{ borderRadius: 999 }}
+          title="Add ROMs"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
+            <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
+          </svg>
+          <span className="text-sm font-medium text-gray-300">Añadir ROM</span>
+        </button>
+
+        {/* Re-scan */}
+        <button
+          data-topbar-index={TOPBAR_INDEX_RESCAN}
+          onClick={() => refreshScan()}
+          disabled={isScanning}
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_RESCAN
+          )}`}
+          title="Re-scan ROMs"
+        >
+          <svg
+            className={`h-5 w-5 ${isScanning ? "animate-spin" : ""}`}
+            viewBox="0 0 256 256"
+            fill="url(#icon-gradient)"
+          >
+            <path d="M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16h28.69L190.93,74.24a80,80,0,0,0-130,8.6,8,8,0,1,1-13.86-8A96,96,0,0,1,202.54,61.54L224,83.32V56a8,8,0,0,1,16,0ZM208.94,181.16a80,80,0,0,1-130-8.6L57.31,150.8H86a8,8,0,0,0,0-16H38a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V164.68l21.46,21.78A96,96,0,0,0,222.54,200.84a8,8,0,1,0-13.86-8Z" />
+          </svg>
+        </button>
+
         {/* Favorites toggle */}
         <button
           data-topbar-index={TOPBAR_INDEX_FAVORITES}

@@ -103,6 +103,90 @@ describe("GameLauncher", () => {
     expect(command).toContain('"C:\\roms\\nes\\game.nes"');
   });
 
+  it("should launch with a specific emulatorId", () => {
+    const customData = [
+      {
+        id: "retroarch",
+        name: "RetroArch",
+        executable: "retroarch.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "emu-select.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+    const isolatedLauncher = new GameLauncher(isolatedMapper);
+
+    // Create only snes9x executable — retroarch is NOT present
+    const snesDir = resolve(TEST_DIR, "snes9x");
+    mkdirSync(snesDir, { recursive: true });
+    writeFileSync(resolve(snesDir, "snes9x-x64.exe"), "fake-exe");
+
+    const rom: DiscoveredRom = {
+      fileName: "Game.sfc",
+      filePath: "C:\\roms\\snes\\Game.sfc",
+      systemId: "snes",
+      systemName: "Super Nintendo",
+      sizeBytes: 2048,
+    };
+
+    // Without emulatorId — should fail because retroarch (first candidate)
+    // is not installed, but snes9x IS installed so resolve() would find
+    // snes9x since retroarch isn't there. Actually resolve() iterates
+    // candidates in order, so it'll skip retroarch and find snes9x.
+    const resultDefault = isolatedLauncher.launch(rom, TEST_DIR);
+    expect(resultDefault.emulatorId).toBe("snes9x");
+
+    // With explicit emulatorId=snes9x — should use snes9x
+    const resultExplicit = isolatedLauncher.launch(rom, TEST_DIR, "snes9x");
+    expect(resultExplicit.emulatorId).toBe("snes9x");
+  });
+
+  it("should return error when specified emulatorId is not found", () => {
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "emu-notfound.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+    const isolatedLauncher = new GameLauncher(isolatedMapper);
+
+    const rom: DiscoveredRom = {
+      fileName: "Game.sfc",
+      filePath: "C:\\roms\\snes\\Game.sfc",
+      systemId: "snes",
+      systemName: "Super Nintendo",
+      sizeBytes: 2048,
+    };
+
+    const result = isolatedLauncher.launch(rom, TEST_DIR, "nonexistent");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No emulator found");
+  });
+
   it("should return error when no emulator is found", () => {
     // Use isolated mapper so defaultPaths don't find real system emulators
     const customData = [

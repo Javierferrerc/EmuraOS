@@ -110,12 +110,16 @@ export class GDriveClient {
    * Fetch a Drive API endpoint with retry on 429/5xx (3 attempts,
    * exponential backoff 1s/2s/4s).
    */
-  private async fetchWithRetry(url: string): Promise<Response> {
+  private async fetchWithRetry(
+    url: string,
+    signal?: AbortSignal
+  ): Promise<Response> {
     const maxAttempts = 3;
     let lastError: unknown;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      signal?.throwIfAborted();
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, signal ? { signal } : undefined);
         if (res.ok) return res;
         if (res.status === 401 || res.status === 403) {
           logSecurityEvent({
@@ -154,12 +158,16 @@ export class GDriveClient {
    * List the immediate children of a folder. Handles pagination via
    * `nextPageToken` for folders with more than `pageSize` items.
    */
-  async listFolder(folderId: string): Promise<DriveFile[]> {
+  async listFolder(
+    folderId: string,
+    signal?: AbortSignal
+  ): Promise<DriveFile[]> {
     const apiKey = await this.getApiKey();
     const results: DriveFile[] = [];
     let pageToken: string | undefined;
 
     do {
+      signal?.throwIfAborted();
       const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
       const fields = encodeURIComponent(
         "nextPageToken,files(id,name,mimeType,size)"
@@ -171,7 +179,7 @@ export class GDriveClient {
         url += `&pageToken=${encodeURIComponent(pageToken)}`;
       }
 
-      const res = await this.fetchWithRetry(url);
+      const res = await this.fetchWithRetry(url, signal);
       const data = (await res.json()) as DriveApiListResponse;
 
       for (const f of data.files ?? []) {
@@ -193,16 +201,27 @@ export class GDriveClient {
    * Recursively walk a folder and return a flat list of all non-folder files
    * with paths relative to that folder. Google-native files (Docs/Sheets/etc)
    * are skipped because they can't be downloaded via alt=media.
+   *
+   * Subfolders at each level are listed in parallel (up to 6 concurrent API
+   * calls) to cut enumeration time from 20+ seconds to a few seconds for
+   * large trees like RetroArch.
    */
-  async listFolderRecursive(folderId: string): Promise<DriveFileEntry[]> {
+  async listFolderRecursive(
+    folderId: string,
+    signal?: AbortSignal
+  ): Promise<DriveFileEntry[]> {
     const out: DriveFileEntry[] = [];
+    const LISTING_CONCURRENCY = 6;
 
     const walk = async (id: string, relBase: string): Promise<void> => {
-      const children = await this.listFolder(id);
+      signal?.throwIfAborted();
+      const children = await this.listFolder(id, signal);
+
+      const subfolders: { id: string; rel: string }[] = [];
       for (const child of children) {
         const childRel = relBase ? `${relBase}/${child.name}` : child.name;
         if (child.mimeType === FOLDER_MIME) {
-          await walk(child.id, childRel);
+          subfolders.push({ id: child.id, rel: childRel });
           continue;
         }
         // Skip Google-native files (Docs, Sheets, Shortcuts…); they can't
@@ -215,6 +234,22 @@ export class GDriveClient {
           relPath: childRel,
           size: child.size ?? 0,
         });
+      }
+
+      // Walk subfolders in parallel with a concurrency limit to avoid
+      // hammering the Drive API with too many simultaneous requests.
+      if (subfolders.length > 0) {
+        let idx = 0;
+        const runners = Array.from(
+          { length: Math.min(LISTING_CONCURRENCY, subfolders.length) },
+          async () => {
+            while (idx < subfolders.length) {
+              const i = idx++;
+              await walk(subfolders[i].id, subfolders[i].rel);
+            }
+          }
+        );
+        await Promise.all(runners);
       }
     };
 
@@ -229,21 +264,22 @@ export class GDriveClient {
   async downloadFile(
     fileId: string,
     destPath: string,
-    onBytes: (deltaBytes: number) => void
+    onBytes: (deltaBytes: number) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // Use the direct usercontent endpoint (skips the 303 redirect that
     // drive.google.com/uc does). The API alt=media endpoint requires OAuth2,
     // but this public endpoint works for any shared file.
     let url = `https://drive.usercontent.google.com/download?id=${fileId}&export=download`;
 
-    let res = await this.fetchWithRetry(url);
+    let res = await this.fetchWithRetry(url, signal);
 
     // For large files Google returns an HTML virus-scan confirmation page
     // instead of the file. Detect this and retry with confirm=t.
     const contentType = res.headers.get("content-type") ?? "";
     if (contentType.includes("text/html")) {
       url += "&confirm=t";
-      res = await this.fetchWithRetry(url);
+      res = await this.fetchWithRetry(url, signal);
     }
 
     if (!res.body) {
@@ -258,6 +294,7 @@ export class GDriveClient {
 
     try {
       for (;;) {
+        signal?.throwIfAborted();
         const { done, value } = await reader.read();
         if (done) break;
         onBytes(value.byteLength);

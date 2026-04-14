@@ -22,6 +22,8 @@ export const rutasSection: SettingsSection = {
               set: async (value, ctx) => {
                 await ctx.updateConfig({ romsPath: value });
               },
+              hint: (ctx) => ctx.resolvedPaths?.romsPath,
+              openable: true,
             },
             {
               id: "rut.emulators-path",
@@ -32,6 +34,8 @@ export const rutasSection: SettingsSection = {
               set: async (value, ctx) => {
                 await ctx.updateConfig({ emulatorsPath: value });
               },
+              hint: (ctx) => ctx.resolvedPaths?.emulatorsPath,
+              openable: true,
             },
             {
               id: "rut.metadata-path",

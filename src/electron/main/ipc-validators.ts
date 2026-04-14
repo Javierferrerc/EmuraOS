@@ -93,3 +93,16 @@ export const CollectionNameSchema = z.string().min(1).max(100);
 export const RecentlyPlayedLimitSchema = z.number().int().positive().optional();
 
 export const ForceRefreshSchema = z.boolean().optional();
+
+export const FilePathsSchema = z.array(z.string().min(1).max(500)).min(1).max(200);
+
+export const AddRomEntrySchema = z.object({
+  filePath: z.string().min(1).max(500),
+  systemId: z.string().regex(/^[a-z0-9-]+$/),
+});
+
+export const AddRomsSchema = z.array(AddRomEntrySchema).min(1).max(200);
+
+export const OptionalEmulatorIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50).optional();
+
+export const FolderPathSchema = z.string().min(1).max(500);

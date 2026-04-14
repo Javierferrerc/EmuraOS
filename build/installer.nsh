@@ -1,3 +1,7 @@
+!macro preInit
+  StrCpy $INSTDIR "$PROGRAMFILES64\EmuraOS"
+!macroend
+
 !macro customUnInstall
   MessageBox MB_YESNO "¿Desea eliminar también los datos de la aplicación (ROMs, emuladores, configuración)? Se encuentran en $PROFILE\EmuraOS\" IDYES deleteUserData IDNO skipDelete
   deleteUserData:

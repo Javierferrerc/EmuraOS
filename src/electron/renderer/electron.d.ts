@@ -30,7 +30,8 @@ export interface ElectronAPI {
   configExists(): Promise<boolean>;
   getSystems(): Promise<SystemDefinition[]>;
   scanRoms(): Promise<ScanResult>;
-  launchGame(rom: DiscoveredRom): Promise<LaunchResult>;
+  getEmulatorsForSystem(systemId: string): Promise<Array<{ emulatorId: string; emulatorName: string }>>;
+  launchGame(rom: DiscoveredRom, emulatorId?: string): Promise<LaunchResult>;
   detectEmulators(): Promise<DetectionResult & { readiness?: ReadinessReport }>;
   getAllMetadata(): Promise<Record<string, Record<string, GameMetadata>>>;
   getMetadata(
@@ -77,7 +78,7 @@ export interface ElectronAPI {
   getRecentlyPlayed(limit?: number): Promise<string[]>;
 
   // Embedded overlay
-  launchGameEmbedded(rom: DiscoveredRom): Promise<EmbeddedLaunchResult>;
+  launchGameEmbedded(rom: DiscoveredRom, emulatorId?: string): Promise<EmbeddedLaunchResult>;
   stopEmbeddedGame(): Promise<void>;
   isGameRunning(): Promise<boolean>;
   setGameAreaBounds(bounds: {
@@ -121,6 +122,7 @@ export interface ElectronAPI {
   downloadEmulator(
     emulatorId: string
   ): Promise<{ success: boolean; installPath: string; error?: string }>;
+  cancelEmulatorDownload(emulatorId: string): Promise<void>;
   onEmulatorDownloadProgress(
     callback: (progress: EmulatorDownloadProgress) => void
   ): () => void;
@@ -130,6 +132,27 @@ export interface ElectronAPI {
   pickFile(
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null>;
+  pickRomFiles(): Promise<string[] | null>;
+  resolveRomSystems(
+    filePaths: string[]
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      systems: Array<{ id: string; name: string }>;
+    }>
+  >;
+  addRoms(
+    entries: Array<{ filePath: string; systemId: string }>
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      systemId: string;
+      success: boolean;
+      error?: string;
+    }>
+  >;
 
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache(): Promise<{ success: boolean; error?: string }>;
@@ -164,6 +187,8 @@ export interface ElectronAPI {
     error?: string;
   }>;
   openExternal(url: string): Promise<{ success: boolean; error?: string }>;
+  resolveConfigPaths(): Promise<{ romsPath: string; emulatorsPath: string }>;
+  openFolder(folderPath: string): Promise<void>;
 
   // Auto-update
   checkForUpdates(): Promise<UpdateCheckResult>;

@@ -219,7 +219,7 @@ export interface DriveEmulatorMapping {
 
 export interface EmulatorDownloadProgress {
   emulatorId: string;
-  phase: "listing" | "downloading" | "finalizing" | "done" | "error";
+  phase: "listing" | "downloading" | "finalizing" | "done" | "error" | "cancelled";
   filesCompleted: number;
   filesTotal: number;
   bytesReceived: number;

@@ -80,6 +80,7 @@ export interface SettingsContext {
   downloadEmulator: (
     emulatorId: string
   ) => Promise<{ success: boolean; installPath: string; error?: string }>;
+  cancelEmulatorDownload: () => void;
 
   // --- Cemu keys flow ---
   pendingCemuKeysLaunch: DiscoveredRom | null;
@@ -94,6 +95,9 @@ export interface SettingsContext {
   // --- Game session (for StatusBar + Estado tab) ---
   isGameRunning: boolean;
   currentGameFileName: string | null;
+
+  // --- Resolved paths (absolute paths for folder hints) ---
+  resolvedPaths?: { romsPath: string; emulatorsPath: string };
 }
 
 interface BaseSetting {
@@ -162,6 +166,10 @@ export interface FolderSetting extends BaseSetting {
   kind: "folder";
   get: (ctx: SettingsContext) => string;
   set: (value: string, ctx: SettingsContext) => Promise<void> | void;
+  /** Resolved absolute path shown as hint below the input. */
+  hint?: (ctx: SettingsContext) => string | undefined;
+  /** Show a button to open the folder in the file explorer. */
+  openable?: boolean;
 }
 
 export interface PathSetting extends BaseSetting {

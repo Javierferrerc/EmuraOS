@@ -9,6 +9,7 @@ export { MetadataCache } from "./metadata-cache.js";
 export { MetadataScraper } from "./metadata-scraper.js";
 export { LibretroThumbnails } from "./libretro-thumbnails.js";
 export { SteamGridDb } from "./steamgriddb.js";
+export { normalizeTitle, tokenize } from "./title-utils.js";
 export { UserLibrary } from "./user-library.js";
 export type {
   SystemDefinition,
