@@ -34,7 +34,7 @@ jobs:
         run: npm run make
 
       - name: Build NSIS installer
-        run: npm run make:installer
+        run: npx electron-builder --prepackaged out/emuraos-win32-x64 --win nsis --publish never
 
       - name: Upload assets to release
         env:
