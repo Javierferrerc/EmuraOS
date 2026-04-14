@@ -1,0 +1,52 @@
+name: Build & Upload Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Package app (Electron Forge)
+        env:
+          GDRIVE_API_KEY: ${{ secrets.GDRIVE_API_KEY }}
+          GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_ROOT_FOLDER_ID }}
+        run: npm run package
+
+      - name: Build ZIP distributable
+        run: npm run make
+
+      - name: Build NSIS installer
+        run: npm run make:installer
+
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          # Upload ZIP
+          for f in out/make/zip/win32/x64/*.zip; do
+            [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
+          done
+          # Upload NSIS installer
+          for f in out/installers/*.exe; do
+            [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
+          done
