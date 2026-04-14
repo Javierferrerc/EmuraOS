@@ -10,6 +10,9 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      GDRIVE_API_KEY: ${{ secrets.GDRIVE_API_KEY }}
+      GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_ROOT_FOLDER_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,13 +27,7 @@ jobs:
       - name: Run tests (exclude flaky GDrive download tests)
         run: npx vitest run --exclude tests/core/emulator-downloader.test.ts
 
-      - name: Package app (Electron Forge)
-        env:
-          GDRIVE_API_KEY: ${{ secrets.GDRIVE_API_KEY }}
-          GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_ROOT_FOLDER_ID }}
-        run: npm run package
-
-      - name: Build ZIP distributable
+      - name: Build ZIP distributable (Electron Forge)
         run: npm run make
 
       - name: Build NSIS installer
