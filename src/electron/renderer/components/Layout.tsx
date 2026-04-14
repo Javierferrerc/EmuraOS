@@ -4,6 +4,8 @@ import {
   TOPBAR_ITEM_COUNT,
   TOPBAR_INDEX_SEARCH,
   TOPBAR_INDEX_FAVORITES,
+  TOPBAR_INDEX_ADD_ROM,
+  TOPBAR_INDEX_RESCAN,
   TOPBAR_INDEX_PROFILE,
   TOPBAR_INDEX_SETTINGS,
 } from "./TopBar";
@@ -42,6 +44,8 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     searchQuery,
     setSearchQuery,
     config,
+    addRomsFlow,
+    refreshScan,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -271,6 +275,12 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
               case TOPBAR_INDEX_FAVORITES:
                 handleToggleFavoritesFilter();
                 break;
+              case TOPBAR_INDEX_ADD_ROM:
+                addRomsFlow();
+                break;
+              case TOPBAR_INDEX_RESCAN:
+                refreshScan();
+                break;
               case TOPBAR_INDEX_PROFILE:
                 // Placeholder — profile action not yet implemented
                 break;
@@ -374,6 +384,8 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
       toggleFavorite,
       toggleFullscreen,
       handleToggleFavoritesFilter,
+      addRomsFlow,
+      refreshScan,
       playNavigate,
       playSelect,
       playKeyboardSound,

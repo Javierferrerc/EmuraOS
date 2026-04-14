@@ -135,6 +135,9 @@ export function SettingsRoot() {
       // Game session
       isGameRunning: app.isGameRunning,
       currentGameFileName: app.currentGame?.rom?.fileName ?? null,
+
+      // Resolved paths
+      resolvedPaths: app.resolvedPaths ?? undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -175,6 +178,7 @@ export function SettingsRoot() {
       app.toggleFullscreen,
       app.isGameRunning,
       app.currentGame,
+      app.resolvedPaths,
     ]
   );
 

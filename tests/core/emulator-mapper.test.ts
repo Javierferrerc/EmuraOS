@@ -124,6 +124,160 @@ describe("EmulatorMapper", () => {
     expect(resolved!.definition.id).toBe("mgba");
   });
 
+  it("should resolve all available emulators for a system", () => {
+    const customData = [
+      {
+        id: "retroarch",
+        name: "RetroArch",
+        executable: "retroarch.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      {
+        id: "mgba",
+        name: "mGBA",
+        executable: "mGBA.exe",
+        defaultPaths: [],
+        systems: ["gba"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolveall-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    // Create both SNES emulator executables
+    const raDir = resolve(TEST_DIR, "retroarch");
+    mkdirSync(raDir, { recursive: true });
+    writeFileSync(resolve(raDir, "retroarch.exe"), "fake-exe");
+
+    const snesDir = resolve(TEST_DIR, "snes9x");
+    mkdirSync(snesDir, { recursive: true });
+    writeFileSync(resolve(snesDir, "snes9x-x64.exe"), "fake-exe");
+
+    const results = isolatedMapper.resolveAll("snes", TEST_DIR);
+    expect(results).toHaveLength(2);
+    const ids = results.map((r) => r.definition.id);
+    expect(ids).toContain("retroarch");
+    expect(ids).toContain("snes9x");
+  });
+
+  it("should return empty array from resolveAll when no executables found", () => {
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolveall-empty.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    const results = isolatedMapper.resolveAll("snes", TEST_DIR);
+    expect(results).toHaveLength(0);
+  });
+
+  it("should resolve a specific emulator by id", () => {
+    const customData = [
+      {
+        id: "retroarch",
+        name: "RetroArch",
+        executable: "retroarch.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolvebyid-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    // Create only snes9x executable
+    const snesDir = resolve(TEST_DIR, "snes9x");
+    mkdirSync(snesDir, { recursive: true });
+    writeFileSync(resolve(snesDir, "snes9x-x64.exe"), "fake-exe");
+
+    const resolved = isolatedMapper.resolveById("snes9x", "snes", TEST_DIR);
+    expect(resolved).not.toBeNull();
+    expect(resolved!.definition.id).toBe("snes9x");
+    expect(resolved!.systemId).toBe("snes");
+  });
+
+  it("should return null from resolveById for non-existent emulator", () => {
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolvebyid-null.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    const resolved = isolatedMapper.resolveById("nonexistent", "snes", TEST_DIR);
+    expect(resolved).toBeNull();
+  });
+
+  it("should return null from resolveById when emulator doesn't support the system", () => {
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "resolvebyid-wrongsys.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    const resolved = isolatedMapper.resolveById("snes9x", "nes", TEST_DIR);
+    expect(resolved).toBeNull();
+  });
+
   it("should load from custom JSON path", () => {
     const customData = [
       {

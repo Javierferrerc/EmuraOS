@@ -106,6 +106,7 @@ export function WizardEmulatorStep({
     downloadingEmulatorId,
     emulatorDownloadProgress,
     downloadEmulator,
+    cancelEmulatorDownload,
   } = ctx;
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -316,11 +317,21 @@ export function WizardEmulatorStep({
                       </button>
                     )}
 
-                    {/* Downloading indicator */}
+                    {/* Downloading indicator + cancel */}
                     {isDownloading && (
                       <span className="shrink-0 flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
                         <Spinner />
-                        Descargando...
+                        {progress?.phase === "listing" ? "Preparando..." : "Descargando..."}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelEmulatorDownload();
+                          }}
+                          title="Cancelar descarga"
+                          className="ml-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-[var(--color-surface-2)]"
+                        >
+                          <CancelIcon />
+                        </button>
                       </span>
                     )}
 
@@ -339,7 +350,17 @@ export function WizardEmulatorStep({
                   </div>
 
                   {/* Download progress bar */}
-                  {isDownloading && progress && (
+                  {isDownloading && progress && progress.phase === "listing" && (
+                    <div className="px-4 pt-2 pb-2 ml-8">
+                      <p className="text-[10px] text-[var(--color-text-muted)]">
+                        Analizando archivos en Drive...
+                      </p>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+                        <div className="h-full w-1/3 animate-pulse rounded-full bg-[var(--color-accent)]" />
+                      </div>
+                    </div>
+                  )}
+                  {isDownloading && progress && progress.phase === "downloading" && (
                     <div className="px-4 pt-2 pb-2 ml-8">
                       <div className="mb-1 flex justify-between text-[10px] text-[var(--color-text-muted)]">
                         <span>
@@ -463,6 +484,23 @@ function ChevronIcon() {
       strokeLinejoin="round"
     >
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function CancelIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 2l8 8M10 2l-8 8" />
     </svg>
   );
 }

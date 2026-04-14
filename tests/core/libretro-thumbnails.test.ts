@@ -46,6 +46,18 @@ const MOCK_BOXARTS_TREE = {
       path: "Kirby's Adventure (1993-03-26)(Nintendo)(US).png",
       type: "blob",
     },
+    {
+      path: "The Legend of Zelda - Breath of the Wild.png",
+      type: "blob",
+    },
+    {
+      path: "Mario Kart 8 Deluxe.png",
+      type: "blob",
+    },
+    {
+      path: "Pokemon - Emerald Version.png",
+      type: "blob",
+    },
   ],
   truncated: false,
 };
@@ -272,5 +284,82 @@ describe("LibretroThumbnails", () => {
       "Nintendo_-_Super_Nintendo_Entertainment_System"
     );
     expect(thumbs.getSystemLibretroName("unknown")).toBeUndefined();
+  });
+
+  describe("fuzzy matching tiers", () => {
+    const files = MOCK_BOXARTS_TREE.tree.map((e) => e.path);
+
+    it("tier 1: exact case-insensitive match", () => {
+      const match = thumbs.findBestMatch("Metroid (USA).nes", files);
+      expect(match).toBe("Metroid (1986-08-06)(Nintendo)(JP).png");
+    });
+
+    it("tier 2: normalized match (underscores → spaces)", () => {
+      const match = thumbs.findBestMatch("super_mario_bros.nes", files);
+      expect(match).toBe(
+        "Super Mario Bros. (1985-09-13)(Nintendo)(JP-US).png"
+      );
+    });
+
+    it("tier 2: normalized match (camelCase split)", () => {
+      const match = thumbs.findBestMatch("SuperMarioBros.nes", files);
+      expect(match).toBe(
+        "Super Mario Bros. (1985-09-13)(Nintendo)(JP-US).png"
+      );
+    });
+
+    it("tier 3: prefix match (ROM title is prefix of Libretro name)", () => {
+      const match = thumbs.findBestMatch("Mario Kart 8.nsp", files);
+      expect(match).toBe("Mario Kart 8 Deluxe.png");
+    });
+
+    it("tier 4: token containment (camelCase ROM vs full Libretro name)", () => {
+      const match = thumbs.findBestMatch("BreathOfTheWild.nsp", files);
+      expect(match).toBe(
+        "The Legend of Zelda - Breath of the Wild.png"
+      );
+    });
+
+    it("tier 4: token containment (partial name)", () => {
+      const match = thumbs.findBestMatch("pokemon emerald.gba", files);
+      expect(match).toBe("Pokemon - Emerald Version.png");
+    });
+
+    it("tier 5: substring match for short distinctive names", () => {
+      // "metroid" (7 chars normalized) is a substring of "metroid"
+      // But this will actually match tier 1/2 first. Let's test a unique scenario.
+      const customFiles = [
+        "Super Metroid - Special Edition.png",
+      ];
+      const match = thumbs.findBestMatch("Metroid Special.nes", customFiles);
+      // "metroid special" tokens: [metroid, special]
+      // Libretro tokens: [super, metroid, special, edition]
+      // All ROM tokens found → tier 4 match
+      expect(match).toBe("Super Metroid - Special Edition.png");
+    });
+
+    it("returns null when no tier matches", () => {
+      const match = thumbs.findBestMatch("Totally Unknown Game.nes", files);
+      expect(match).toBeNull();
+    });
+
+    it("prefers clean files over [h]/[b]/[t] tagged files", () => {
+      const taggedFiles = [
+        "TestGame [h].png",
+        "TestGame [b].png",
+        "TestGame.png",
+      ];
+      const match = thumbs.findBestMatch("TestGame.nes", taggedFiles);
+      expect(match).toBe("TestGame.png");
+    });
+
+    it("picks shortest match within tier", () => {
+      const multiFiles = [
+        "Metroid (1986-08-06)(Nintendo)(JP).png",
+        "Metroid.png",
+      ];
+      const match = thumbs.findBestMatch("Metroid.nes", multiFiles);
+      expect(match).toBe("Metroid.png");
+    });
   });
 });

@@ -21,6 +21,10 @@ export function FolderRow({ setting, ctx, focused }: Props) {
     setDraft(initial);
   }, [initial]);
 
+  const hintPath = setting.hint?.(ctx);
+  // Only show the hint when it differs from the value the user sees.
+  const showHint = hintPath && hintPath !== draft;
+
   function commit() {
     if (disabled) return;
     if (draft !== initial) {
@@ -38,6 +42,16 @@ export function FolderRow({ setting, ctx, focused }: Props) {
       }
     } catch (err) {
       console.warn("pickFolder failed:", err);
+    }
+  }
+
+  async function openFolder() {
+    const target = hintPath || draft;
+    if (!target) return;
+    try {
+      await window.electronAPI.openFolder(target);
+    } catch (err) {
+      console.warn("openFolder failed:", err);
     }
   }
 
@@ -72,7 +86,23 @@ export function FolderRow({ setting, ctx, focused }: Props) {
         >
           Browse…
         </button>
+        {setting.openable && (
+          <button
+            type="button"
+            onClick={openFolder}
+            disabled={disabled}
+            title="Abrir carpeta"
+            className="rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:border-white hover:bg-surface-2 disabled:opacity-50"
+          >
+            📂
+          </button>
+        )}
       </div>
+      {showHint && (
+        <div className="mt-1.5 truncate text-xs text-muted opacity-70">
+          {hintPath}
+        </div>
+      )}
     </div>
   );
 }

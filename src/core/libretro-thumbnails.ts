@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MetadataCache } from "./metadata-cache.js";
+import { normalizeTitle, tokenize } from "./title-utils.js";
 import type {
   DiscoveredRom,
   CoverFetchProgress,
@@ -115,38 +116,86 @@ export class LibretroThumbnails {
   }
 
   /**
+   * Strip a Libretro thumbnail filename to its bare title:
+   * remove .png extension, parenthesized tags, and bracketed tags.
+   */
+  private static stripLibretroName(f: string): string {
+    return f
+      .replace(/\.png$/i, "")
+      .replace(/\s*\([^)]*\)\s*/g, "")
+      .replace(/\s*\[[^\]]*\]\s*/g, "")
+      .trim();
+  }
+
+  /**
    * Find the best matching thumbnail filename for a ROM.
-   * Matches by title prefix (ignoring region/date/publisher tags).
-   * Prefers the base version (shortest name that starts with the title).
+   * Uses a 5-tier cascade — the first tier that produces matches wins:
+   *   1. Exact case-insensitive match
+   *   2. Normalized exact match (handles camelCase, underscores, punctuation)
+   *   3. Normalized prefix match (ROM title is a prefix of Libretro name)
+   *   4. Token containment (all ROM tokens appear in Libretro tokens, ≥2 tokens)
+   *   5. Substring match (normalized ROM title ≥6 chars found inside Libretro name)
+   *
+   * Within the winning tier: prefer files without [h]/[b]/[t] tags, then shortest name.
    */
   findBestMatch(romFileName: string, availableFiles: string[]): string | null {
     const title = this.extractTitle(romFileName);
     if (!title) return null;
 
     const titleLower = title.toLowerCase();
+    const titleNorm = normalizeTitle(title);
+    const titleTokens = tokenize(title);
 
-    // Find all files whose title matches (before the first parenthesis)
-    const matches = availableFiles.filter((f) => {
-      const fTitle = f
-        .replace(/\.png$/i, "")
-        .replace(/\s*\([^)]*\)\s*/g, "")
-        .replace(/\s*\[[^\]]*\]\s*/g, "")
-        .trim()
-        .toLowerCase();
-      return fTitle === titleLower;
+    // Pre-compute stripped/normalized entries
+    const entries = availableFiles.map((f) => {
+      const stripped = LibretroThumbnails.stripLibretroName(f);
+      return {
+        file: f,
+        lower: stripped.toLowerCase(),
+        norm: normalizeTitle(stripped),
+        tokens: tokenize(stripped),
+      };
     });
+
+    // Tier 1 — Exact case-insensitive
+    let matches = entries.filter((e) => e.lower === titleLower);
+
+    // Tier 2 — Normalized exact
+    if (matches.length === 0) {
+      matches = entries.filter((e) => e.norm === titleNorm);
+    }
+
+    // Tier 3 — Normalized prefix (ROM title is prefix of Libretro name)
+    if (matches.length === 0) {
+      matches = entries.filter((e) => e.norm.startsWith(titleNorm));
+    }
+
+    // Tier 4 — Token containment (≥2 ROM tokens required)
+    if (matches.length === 0 && titleTokens.length >= 2) {
+      matches = entries.filter((e) =>
+        titleTokens.every((t) => e.tokens.includes(t))
+      );
+    }
+
+    // Tier 5 — Substring (normalized ROM title ≥6 chars)
+    if (matches.length === 0 && titleNorm.length >= 6) {
+      matches = entries.filter((e) => e.norm.includes(titleNorm));
+    }
 
     if (matches.length === 0) return null;
 
     // Prefer files without [h] (hack) or [b] (bad dump) or [t] (trainer) tags
     const clean = matches.filter(
-      (f) => !f.includes("[h]") && !f.includes("[b]") && !f.includes("[t]")
+      (m) =>
+        !m.file.includes("[h]") &&
+        !m.file.includes("[b]") &&
+        !m.file.includes("[t]")
     );
 
     // Pick the shortest match from clean files, or from all matches
     const candidates = clean.length > 0 ? clean : matches;
-    candidates.sort((a, b) => a.length - b.length);
-    return candidates[0];
+    candidates.sort((a, b) => a.file.length - b.file.length);
+    return candidates[0].file;
   }
 
   /**

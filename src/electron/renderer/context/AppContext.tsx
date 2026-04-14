@@ -46,6 +46,19 @@ export interface LaunchingGameState {
   coverDataUrl: string | null;
 }
 
+export interface DisambiguationFile {
+  filePath: string;
+  fileName: string;
+  systems: Array<{ id: string; name: string }>;
+  selectedSystemId: string | null;
+}
+
+export interface DisambiguationState {
+  files: DisambiguationFile[];
+  /** Unambiguous entries already resolved, waiting to be copied together */
+  readyEntries: Array<{ filePath: string; systemId: string }>;
+}
+
 interface AppState {
   config: AppConfig | null;
   systems: SystemDefinition[];
@@ -85,6 +98,10 @@ interface AppState {
   emulatorDownloadProgress: EmulatorDownloadProgress | null;
   updateInfo: UpdateInfo | null;
   isUpdateModalOpen: boolean;
+  isScanning: boolean;
+  isAddingRoms: boolean;
+  disambiguationPending: DisambiguationState | null;
+  resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
 }
 
 interface AppActions {
@@ -95,7 +112,7 @@ interface AppActions {
   refreshScan: () => Promise<void>;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
   detectEmulators: () => Promise<void>;
-  launchGame: (rom: DiscoveredRom) => Promise<void>;
+  launchGame: (rom: DiscoveredRom, emulatorId?: string) => Promise<void>;
   loadAllMetadata: () => Promise<void>;
   startScraping: () => Promise<void>;
   startFetchingCovers: () => Promise<void>;
@@ -129,8 +146,12 @@ interface AppActions {
   downloadEmulator: (
     emulatorId: string
   ) => Promise<{ success: boolean; installPath: string; error?: string }>;
+  cancelEmulatorDownload: () => void;
   checkForUpdates: () => Promise<void>;
   dismissUpdateModal: () => void;
+  addRomsFlow: () => Promise<void>;
+  resolveDisambiguation: (selections: Array<{ filePath: string; systemId: string }>) => Promise<void>;
+  cancelDisambiguation: () => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -208,6 +229,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<EmulatorDownloadProgress | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isAddingRoms, setIsAddingRoms] = useState(false);
+  const [disambiguationPending, setDisambiguationPending] =
+    useState<DisambiguationState | null>(null);
+  const [resolvedPaths, setResolvedPaths] = useState<{
+    romsPath: string;
+    emulatorsPath: string;
+  } | null>(null);
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -216,6 +245,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .then(setEmulatorDefs)
       .catch((err) => console.error("Failed to load emulator defs:", err));
   }, []);
+
+  // Load resolved config paths (absolute) and refresh when config changes.
+  useEffect(() => {
+    window.electronAPI
+      .resolveConfigPaths()
+      .then(setResolvedPaths)
+      .catch((err) => console.error("Failed to resolve config paths:", err));
+  }, [config]);
 
   // Fullscreen sync
   useEffect(() => {
@@ -333,7 +370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshScan = useCallback(async () => {
-    setIsLoading(true);
+    setIsScanning(true);
     try {
       const scan = await window.electronAPI.scanRoms();
       setScanResult(scan);
@@ -368,7 +405,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Failed to scan ROMs:", err);
     } finally {
-      setIsLoading(false);
+      setIsScanning(false);
     }
   }, []);
 
@@ -460,6 +497,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [detectEmulators]
   );
 
+  const cancelEmulatorDownloadAction = useCallback(() => {
+    if (downloadingEmulatorId) {
+      window.electronAPI.cancelEmulatorDownload(downloadingEmulatorId);
+    }
+  }, [downloadingEmulatorId]);
+
   // ── Auto-update ──────────────────────────────────────────────────
   const checkForUpdates = useCallback(async () => {
     try {
@@ -475,6 +518,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const dismissUpdateModal = useCallback(() => {
     setIsUpdateModalOpen(false);
+  }, []);
+
+  // ── Add ROMs flow ──────────────────────────────────────────────────
+  const addRomsFlow = useCallback(async () => {
+    try {
+      const filePaths = await window.electronAPI.pickRomFiles();
+      if (!filePaths || filePaths.length === 0) return;
+
+      const resolved = await window.electronAPI.resolveRomSystems(filePaths);
+
+      const unambiguous: Array<{ filePath: string; systemId: string }> = [];
+      const ambiguous: DisambiguationFile[] = [];
+
+      for (const entry of resolved) {
+        if (entry.systems.length === 1) {
+          unambiguous.push({ filePath: entry.filePath, systemId: entry.systems[0].id });
+        } else if (entry.systems.length > 1) {
+          ambiguous.push({ ...entry, selectedSystemId: null });
+        }
+        // systems.length === 0 → skip silently (no matching system)
+      }
+
+      if (ambiguous.length > 0) {
+        setDisambiguationPending({ files: ambiguous, readyEntries: unambiguous });
+        return;
+      }
+
+      if (unambiguous.length === 0) return;
+
+      setIsAddingRoms(true);
+      try {
+        await window.electronAPI.addRoms(unambiguous);
+        await refreshScan();
+      } finally {
+        setIsAddingRoms(false);
+      }
+    } catch (err) {
+      console.error("Failed to add ROMs:", err);
+    }
+  }, [refreshScan]);
+
+  const resolveDisambiguation = useCallback(
+    async (selections: Array<{ filePath: string; systemId: string }>) => {
+      if (!disambiguationPending) return;
+      const allEntries = [...disambiguationPending.readyEntries, ...selections];
+      setDisambiguationPending(null);
+      if (allEntries.length === 0) return;
+
+      setIsAddingRoms(true);
+      try {
+        await window.electronAPI.addRoms(allEntries);
+        await refreshScan();
+      } catch (err) {
+        console.error("Failed to add ROMs:", err);
+      } finally {
+        setIsAddingRoms(false);
+      }
+    },
+    [disambiguationPending, refreshScan]
+  );
+
+  const cancelDisambiguation = useCallback(() => {
+    setDisambiguationPending(null);
   }, []);
 
   // Listen for the main-process startup trigger
@@ -506,8 +612,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fallbackLaunch = useCallback(
-    async (rom: DiscoveredRom) => {
-      const result = await window.electronAPI.launchGame(rom);
+    async (rom: DiscoveredRom, emulatorId?: string) => {
+      const result = await window.electronAPI.launchGame(rom, emulatorId);
       setLastLaunchResult(result);
       if (result.success) updatePlayStats(rom);
     },
@@ -515,7 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const doLaunch = useCallback(
-    async (rom: DiscoveredRom) => {
+    async (rom: DiscoveredRom, emulatorId?: string) => {
       // Show the loading overlay immediately so the user has instant
       // visual feedback. Look up the cover (cached in metadata) and read
       // it as a data URL so the overlay can paint it onto the 3D cube
@@ -555,7 +661,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         console.log("[renderer] calling launchGameEmbedded...");
         const embeddedResult =
-          await window.electronAPI.launchGameEmbedded(rom);
+          await window.electronAPI.launchGameEmbedded(rom, emulatorId);
         console.log("[renderer] embeddedResult:", JSON.stringify(embeddedResult));
         if (embeddedResult.success) {
           updatePlayStats(rom);
@@ -573,7 +679,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // emit game-session-started, so clear the overlay manually when
       // the IPC resolves — success or failure.
       try {
-        await fallbackLaunch(rom);
+        await fallbackLaunch(rom, emulatorId);
       } catch (err) {
         console.error("Failed to launch game:", err);
       } finally {
@@ -584,7 +690,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const launchGame = useCallback(
-    async (rom: DiscoveredRom) => {
+    async (rom: DiscoveredRom, emulatorId?: string) => {
       // Wii U: verify Cemu keys.txt exists before launching. If missing,
       // stop here and show an explanatory error modal with a button that
       // directs the user to Settings, where they can paste the keys. The
@@ -603,7 +709,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      await doLaunch(rom);
+      await doLaunch(rom, emulatorId);
     },
     [doLaunch]
   );
@@ -906,10 +1012,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissCemuKeysError,
     refreshDriveEmulators,
     downloadEmulator: downloadEmulatorAction,
+    cancelEmulatorDownload: cancelEmulatorDownloadAction,
     updateInfo,
     isUpdateModalOpen,
     checkForUpdates,
     dismissUpdateModal,
+    isScanning,
+    isAddingRoms,
+    disambiguationPending,
+    addRomsFlow,
+    resolveDisambiguation,
+    cancelDisambiguation,
+    resolvedPaths,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

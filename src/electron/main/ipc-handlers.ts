@@ -5,6 +5,7 @@ import os from "node:os";
 import {
   readFileSync,
   writeFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   rmSync,
@@ -60,6 +61,10 @@ import {
   RecentlyPlayedLimitSchema,
   ForceRefreshSchema,
   UrlSchema,
+  FilePathsSchema,
+  AddRomsSchema,
+  OptionalEmulatorIdSchema,
+  FolderPathSchema,
 } from "./ipc-validators.js";
 
 function getDataPath(): string {
@@ -171,7 +176,20 @@ export function registerIpcHandlers(
     const configManager = new ConfigManager(getProjectRoot());
     configManager.update(validated);
     configManager.save();
+    if (validated.romsPath || validated.emulatorsPath) {
+      configManager.ensureDirectories();
+    }
     return configManager.get();
+  });
+
+  ipcMain.handle("resolve-config-paths", () => {
+    const cm = new ConfigManager(getProjectRoot());
+    return { romsPath: cm.getRomsPath(), emulatorsPath: cm.getEmulatorsPath() };
+  });
+
+  ipcMain.handle("open-folder", async (_event, folderPath: unknown) => {
+    const validated = FolderPathSchema.parse(folderPath);
+    await shell.openPath(validated);
   });
 
   ipcMain.handle("config-exists", () => {
@@ -191,13 +209,27 @@ export function registerIpcHandlers(
     return scanner.scan(configManager.getRomsPath());
   });
 
-  ipcMain.handle("launch-game", (_event, rom: unknown) => {
+  ipcMain.handle("get-emulators-for-system", (_event, systemId: unknown) => {
+    const validated = SystemIdSchema.parse(systemId);
+    const configManager = new ConfigManager(getProjectRoot());
+    const mapper = new EmulatorMapper(getEmulatorsPath());
+    const emulatorsPath = configManager.getEmulatorsPath();
+    return mapper.resolveAll(validated, emulatorsPath).map((r) => ({
+      emulatorId: r.definition.id,
+      emulatorName: r.definition.name,
+    }));
+  });
+
+  ipcMain.handle("launch-game", (_event, rom: unknown, emulatorId?: unknown) => {
     const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
+    const validatedEmuId = OptionalEmulatorIdSchema.parse(emulatorId);
     const configManager = new ConfigManager(getProjectRoot());
     const mapper = new EmulatorMapper(getEmulatorsPath());
     const launcher = new GameLauncher(mapper);
     const emulatorsPath = configManager.getEmulatorsPath();
-    const resolved = mapper.resolve(validated.systemId, emulatorsPath);
+    const resolved = validatedEmuId
+      ? mapper.resolveById(validatedEmuId, validated.systemId, emulatorsPath)
+      : mapper.resolve(validated.systemId, emulatorsPath);
     if (resolved) {
       runPerEmulatorSetup(
         resolved.definition.id,
@@ -206,7 +238,7 @@ export function registerIpcHandlers(
         configManager.getRomsPath()
       );
     }
-    const result = launcher.launch(validated, emulatorsPath);
+    const result = launcher.launch(validated, emulatorsPath, validatedEmuId);
     if (result.success) {
       const lib = new UserLibrary(getProjectRoot());
       lib.recordPlay(validated.systemId, validated.fileName);
@@ -294,21 +326,39 @@ export function registerIpcHandlers(
     }
   );
 
+  // Active download AbortControllers, keyed by emulatorId.
+  const activeDownloads = new Map<string, AbortController>();
+
   ipcMain.handle(
     "download-emulator",
     async (event, emulatorId: unknown) => {
       const validatedId = EmulatorIdSchema.parse(emulatorId);
+      const controller = new AbortController();
+      activeDownloads.set(validatedId, controller);
       const configManager = new ConfigManager(getProjectRoot());
       const downloader = new EmulatorDownloader(getProjectRoot());
-      return await downloader.download(
-        validatedId,
-        configManager.getEmulatorsPath(),
-        (progress) => {
-          event.sender.send("emulator-download-progress", progress);
-        }
-      );
+      try {
+        return await downloader.download(
+          validatedId,
+          configManager.getEmulatorsPath(),
+          (progress) => {
+            event.sender.send("emulator-download-progress", progress);
+          },
+          controller.signal
+        );
+      } finally {
+        activeDownloads.delete(validatedId);
+      }
     }
   );
+
+  ipcMain.handle("cancel-emulator-download", (_event, emulatorId: unknown) => {
+    const validatedId = EmulatorIdSchema.parse(emulatorId);
+    const controller = activeDownloads.get(validatedId);
+    if (controller) {
+      controller.abort();
+    }
+  });
 
   ipcMain.handle("get-all-metadata", () => {
     const cache = new MetadataCache(getProjectRoot());
@@ -608,8 +658,9 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "launch-game-embedded",
-    async (_event: IpcMainInvokeEvent, rom: unknown) => {
+    async (_event: IpcMainInvokeEvent, rom: unknown, emulatorId?: unknown) => {
       const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
+      const validatedEmuId = OptionalEmulatorIdSchema.parse(emulatorId);
       console.log("[ipc] launch-game-embedded called for:", validated.fileName);
       const ov = getOrCreateOverlay();
       if (!ov) {
@@ -626,7 +677,9 @@ export function registerIpcHandlers(
       const mapper = new EmulatorMapper(getEmulatorsPath());
       const launcher = new GameLauncher(mapper);
       const emulatorsPath = configManager.getEmulatorsPath();
-      const resolved = mapper.resolve(validated.systemId, emulatorsPath);
+      const resolved = validatedEmuId
+        ? mapper.resolveById(validatedEmuId, validated.systemId, emulatorsPath)
+        : mapper.resolve(validated.systemId, emulatorsPath);
 
       if (!resolved) {
         return {
@@ -863,6 +916,93 @@ export function registerIpcHandlers(
         : dialog.showOpenDialog(options));
       if (result.canceled || result.filePaths.length === 0) return null;
       return result.filePaths[0];
+    }
+  );
+
+  // ── Add ROMs handlers ───────────────────────────────────────────────
+
+  ipcMain.handle("dialog:pick-roms", async () => {
+    const registry = new SystemsRegistry(getSystemsPath());
+    const allSystems = registry.getAll();
+    const extSet = new Set<string>();
+    for (const sys of allSystems) {
+      for (const ext of sys.extensions) {
+        // extensions in systems.json have leading dot, strip it for the dialog filter
+        extSet.add(ext.replace(/^\./, ""));
+      }
+    }
+    const win = getMainWindow();
+    const options: Electron.OpenDialogOptions = {
+      properties: ["openFile", "multiSelections"],
+      filters: [{ name: "ROM files", extensions: [...extSet] }],
+    };
+    const result = await (win
+      ? dialog.showOpenDialog(win, options)
+      : dialog.showOpenDialog(options));
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths;
+  });
+
+  ipcMain.handle(
+    "resolve-rom-systems",
+    (_event: IpcMainInvokeEvent, filePaths: unknown) => {
+      const validated = FilePathsSchema.parse(filePaths);
+      const registry = new SystemsRegistry(getSystemsPath());
+      return validated.map((fp) => {
+        const ext = path.extname(fp).toLowerCase();
+        const systems = registry.getByExtension(ext);
+        return {
+          filePath: fp,
+          fileName: path.basename(fp),
+          systems: systems.map((s) => ({ id: s.id, name: s.name })),
+        };
+      });
+    }
+  );
+
+  ipcMain.handle(
+    "add-roms",
+    (_event: IpcMainInvokeEvent, entries: unknown) => {
+      const validated = AddRomsSchema.parse(entries);
+      const configManager = new ConfigManager(getProjectRoot());
+      const registry = new SystemsRegistry(getSystemsPath());
+      const romsPath = configManager.getRomsPath();
+      const projectRoot = getProjectRoot();
+
+      return validated.map((entry) => {
+        const { filePath, systemId } = entry;
+        const fileName = path.basename(filePath);
+        try {
+          const system = registry.getById(systemId);
+          if (!system) {
+            return { filePath, fileName, systemId, success: false, error: `Unknown system: ${systemId}` };
+          }
+          if (!existsSync(filePath)) {
+            return { filePath, fileName, systemId, success: false, error: "Source file not found" };
+          }
+
+          const destDir = path.join(romsPath, system.romFolder);
+          const destFile = path.join(destDir, fileName);
+
+          // Path traversal check
+          const resolvedDest = path.resolve(destFile);
+          if (!resolvedDest.startsWith(path.resolve(romsPath) + path.sep)) {
+            logSecurityEvent({
+              type: "PATH_TRAVERSAL_BLOCKED",
+              channel: "add-roms",
+              detail: `Blocked dest: ${destFile}`,
+              severity: "warn",
+            });
+            return { filePath, fileName, systemId, success: false, error: "Invalid destination path" };
+          }
+
+          mkdirSync(destDir, { recursive: true });
+          copyFileSync(filePath, resolvedDest);
+          return { filePath, fileName, systemId, success: true };
+        } catch (err) {
+          return { filePath, fileName, systemId, success: false, error: String(err) };
+        }
+      });
     }
   );
 

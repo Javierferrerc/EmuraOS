@@ -69,8 +69,10 @@ export class GameLauncher {
     return { exe, args };
   }
 
-  launch(rom: DiscoveredRom, emulatorsPath?: string): LaunchResult {
-    const resolved = this.mapper.resolve(rom.systemId, emulatorsPath);
+  launch(rom: DiscoveredRom, emulatorsPath?: string, emulatorId?: string): LaunchResult {
+    const resolved = emulatorId
+      ? this.mapper.resolveById(emulatorId, rom.systemId, emulatorsPath)
+      : this.mapper.resolve(rom.systemId, emulatorsPath);
 
     if (!resolved) {
       return {

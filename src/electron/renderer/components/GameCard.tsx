@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import "./GameCard.css";
@@ -179,6 +180,52 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     [toggleFavorite, rom.systemId, rom.fileName]
   );
 
+  // ── Context menu (right-click "Open with…") ──────────────────────
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    emulators: Array<{ emulatorId: string; emulatorName: string }>;
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const emulators =
+          await window.electronAPI.getEmulatorsForSystem(rom.systemId);
+        if (emulators.length <= 1) {
+          // 0-1 emulators — just launch directly
+          launchGame(rom);
+          return;
+        }
+        setContextMenu({ x: e.clientX, y: e.clientY, emulators });
+      } catch (err) {
+        console.error("Failed to get emulators for system:", err);
+      }
+    },
+    [rom, launchGame]
+  );
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  // Close context menu on Escape or outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener("keydown", handleKey);
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, [contextMenu]);
+
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
   const [systemLight, systemDark] = SYSTEM_COLORS[rom.systemId] ?? ["#718096", "#4A5568"];
   const hasCover = coverDataUrl && !imgError;
@@ -235,6 +282,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       ref={cardRef}
       data-grid-index={gridIndex}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       onMouseMove={tiltEnabled ? handleMouseMove : undefined}
       onMouseLeave={tiltEnabled ? handleMouseLeave : undefined}
       className={outerCardClass}
@@ -309,6 +357,34 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
           </p>
         )}
       </div>
+
+      {/* Context menu portal */}
+      {contextMenu &&
+        createPortal(
+          <div
+            className="fixed z-50 min-w-[180px] rounded-lg border border-white/10 bg-gray-900/95 py-1 shadow-xl backdrop-blur-sm"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 truncate max-w-[240px]">
+              {displayName}
+            </div>
+            <div className="mx-2 my-1 border-t border-white/10" />
+            {contextMenu.emulators.map((emu) => (
+              <button
+                key={emu.emulatorId}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-200 hover:bg-white/10 transition-colors"
+                onClick={() => {
+                  closeContextMenu();
+                  launchGame(rom, emu.emulatorId);
+                }}
+              >
+                Abrir con {emu.emulatorName}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

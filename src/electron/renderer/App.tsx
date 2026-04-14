@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "./context/AppContext";
 import { useNavigation } from "./navigation/NavigationContext";
 import { Layout } from "./components/Layout";
@@ -9,8 +9,10 @@ import { CemuKeysModal } from "./components/CemuKeysModal";
 import { CemuKeysMissingModal } from "./components/CemuKeysMissingModal";
 import { GameLoadingOverlay } from "./components/GameLoadingOverlay";
 import { UpdateModal } from "./components/UpdateModal";
+import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
+import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
 import type { SettingsContext as ISettingsContext } from "./schemas/settings-schema-types";
 
@@ -18,6 +20,8 @@ export default function App() {
   const app = useApp();
   const navigation = useNavigation();
   const [showWizard, setShowWizard] = useState(false);
+  const [showAddRomWizard, setShowAddRomWizard] = useState(false);
+  const addRomWizardShownRef = useRef(false);
 
   const {
     currentView,
@@ -81,6 +85,39 @@ export default function App() {
     }
   }, [app.config]);
 
+  // AddRomWizard — show when setup is done but no ROMs found
+  useEffect(() => {
+    if (
+      !showWizard &&
+      app.config?.firstRunCompleted &&
+      app.scanResult &&
+      app.scanResult.totalRoms === 0 &&
+      !addRomWizardShownRef.current
+    ) {
+      addRomWizardShownRef.current = true;
+      setShowAddRomWizard(true);
+    }
+  }, [showWizard, app.config?.firstRunCompleted, app.scanResult]);
+
+  // Auto-close AddRomWizard when ROMs appear
+  useEffect(() => {
+    if (showAddRomWizard && app.scanResult && app.scanResult.totalRoms > 0) {
+      setTimeout(() => setShowAddRomWizard(false), 300);
+    }
+  }, [showAddRomWizard, app.scanResult]);
+
+  // Systems available for AddRomWizard (derived from detected emulators)
+  const availableSystems = useMemo(() => {
+    if (!app.lastDetection?.detected) return [];
+    const systemIds = new Set<string>();
+    for (const emu of app.lastDetection.detected) {
+      for (const sysId of emu.systems) systemIds.add(sysId);
+    }
+    return app.systems
+      .filter((s) => systemIds.has(s.id))
+      .map((s) => ({ id: s.id, name: s.name }));
+  }, [app.lastDetection, app.systems]);
+
   // Minimal SettingsContext for the wizard (full ctx lives in SettingsRoot)
   const wizardCtx: ISettingsContext = useMemo(
     () => ({
@@ -121,6 +158,7 @@ export default function App() {
       toggleFullscreen: app.toggleFullscreen,
       isGameRunning: app.isGameRunning,
       currentGameFileName: app.currentGame?.rom?.fileName ?? null,
+      resolvedPaths: app.resolvedPaths ?? undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -134,6 +172,7 @@ export default function App() {
       app.emulatorDownloadProgress,
       app.emulatorDefs,
       app.gamepadConnected,
+      app.resolvedPaths,
     ]
   );
 
@@ -145,7 +184,7 @@ export default function App() {
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
     } else {
-      page = <Layout inputDisabled={showWizard || isGameRunning} />;
+      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning} />;
     }
   } else {
     switch (currentView) {
@@ -159,7 +198,7 @@ export default function App() {
         page = <GameModeView />;
         break;
       default:
-        page = <Layout inputDisabled={showWizard || isGameRunning} />;
+        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning} />;
     }
   }
 
@@ -171,6 +210,15 @@ export default function App() {
         <FirstRunWizard
           ctx={wizardCtx}
           onComplete={() => { setTimeout(() => setShowWizard(false), 300); }}
+        />
+      )}
+      {showAddRomWizard && (
+        <AddRomWizard
+          onComplete={() => { setTimeout(() => setShowAddRomWizard(false), 300); }}
+          onAddRoms={app.addRomsFlow}
+          availableSystems={availableSystems}
+          gamepadConnected={app.gamepadConnected}
+          isAddingRoms={app.isAddingRoms}
         />
       )}
       {isCemuKeysModalOpen && (
@@ -188,6 +236,7 @@ export default function App() {
       {isUpdateModalOpen && updateInfo && (
         <UpdateModal updateInfo={updateInfo} onDismiss={dismissUpdateModal} />
       )}
+      <DisambiguationDialog />
       {/* Launch loading overlay — mounted last so DOM order + z-index 9999
           + isolation guarantee it wins stacking over any modal. Conditional
           on `launchingGame` inside the component itself. */}

@@ -7,8 +7,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   configExists: () => ipcRenderer.invoke("config-exists"),
   getSystems: () => ipcRenderer.invoke("get-systems"),
   scanRoms: () => ipcRenderer.invoke("scan-roms"),
-  launchGame: (rom: Record<string, unknown>) =>
-    ipcRenderer.invoke("launch-game", rom),
+  getEmulatorsForSystem: (systemId: string) =>
+    ipcRenderer.invoke("get-emulators-for-system", systemId),
+  launchGame: (rom: Record<string, unknown>, emulatorId?: string) =>
+    ipcRenderer.invoke("launch-game", rom, emulatorId),
   detectEmulators: () => ipcRenderer.invoke("detect-emulators"),
   getAllMetadata: () => ipcRenderer.invoke("get-all-metadata"),
   getMetadata: (systemId: string, romFileName: string) =>
@@ -72,8 +74,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Embedded overlay
-  launchGameEmbedded: (rom: Record<string, unknown>) =>
-    ipcRenderer.invoke("launch-game-embedded", rom),
+  launchGameEmbedded: (rom: Record<string, unknown>, emulatorId?: string) =>
+    ipcRenderer.invoke("launch-game-embedded", rom, emulatorId),
   stopEmbeddedGame: () => ipcRenderer.invoke("stop-embedded-game"),
   isGameRunning: () => ipcRenderer.invoke("is-game-running"),
   setGameAreaBounds: (bounds: {
@@ -124,6 +126,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("list-drive-emulators", forceRefresh),
   downloadEmulator: (emulatorId: string) =>
     ipcRenderer.invoke("download-emulator", emulatorId),
+  cancelEmulatorDownload: (emulatorId: string) =>
+    ipcRenderer.invoke("cancel-emulator-download", emulatorId),
   onEmulatorDownloadProgress: (callback: (progress: unknown) => void) => {
     const listener = (_: unknown, progress: unknown) => callback(progress);
     ipcRenderer.on("emulator-download-progress", listener);
@@ -138,6 +142,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
   pickFile: (
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null> => ipcRenderer.invoke("dialog:pick-file", filters),
+  pickRomFiles: (): Promise<string[] | null> =>
+    ipcRenderer.invoke("dialog:pick-roms"),
+  resolveRomSystems: (
+    filePaths: string[]
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      systems: Array<{ id: string; name: string }>;
+    }>
+  > => ipcRenderer.invoke("resolve-rom-systems", filePaths),
+  addRoms: (
+    entries: Array<{ filePath: string; systemId: string }>
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      systemId: string;
+      success: boolean;
+      error?: string;
+    }>
+  > => ipcRenderer.invoke("add-roms", entries),
 
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache: () => ipcRenderer.invoke("clear-metadata-cache"),
@@ -150,6 +176,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   openAppConfigFile: () => ipcRenderer.invoke("open-app-config-file"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
+  resolveConfigPaths: () =>
+    ipcRenderer.invoke("resolve-config-paths") as Promise<{
+      romsPath: string;
+      emulatorsPath: string;
+    }>,
+  openFolder: (folderPath: string) =>
+    ipcRenderer.invoke("open-folder", folderPath),
 
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
