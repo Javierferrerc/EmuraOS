@@ -28,5 +28,5 @@ nsis:
   installerHeader: assets/installer/installerHeader.bmp
   license: LICENSE
   perMachine: true
-  menuCategory: true
+  menuCategory: EmuraOS
   include: build/installer.nsh

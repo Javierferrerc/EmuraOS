@@ -1,4 +1,4 @@
-!macro preInit
+!macro customInit
   StrCpy $INSTDIR "$PROGRAMFILES64\EmuraOS"
 !macroend
 
