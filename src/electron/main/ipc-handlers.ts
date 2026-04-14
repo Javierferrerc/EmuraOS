@@ -1,6 +1,7 @@
 import { ipcMain, app, BrowserWindow, dialog, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
+import os from "node:os";
 import {
   readFileSync,
   writeFileSync,
@@ -82,7 +83,7 @@ function getSchemasPath(): string {
 
 function getProjectRoot(): string {
   if (app.isPackaged) {
-    return path.dirname(app.getPath("exe"));
+    return path.join(os.homedir(), "EmuraOS");
   }
   return app.getAppPath();
 }

@@ -1,5 +1,4 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { cpSync } from "node:fs";
@@ -32,7 +31,6 @@ const config: ForgeConfig = {
     },
   },
   makers: [
-    new MakerSquirrel({ name: "emuraos", setupIcon: "assets/icon.ico" }),
     new MakerZIP({}, ["win32"]),
   ],
   plugins: [

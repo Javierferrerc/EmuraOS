@@ -29,3 +29,4 @@ nsis:
   license: LICENSE
   perMachine: true
   menuCategory: true
+  include: build/installer.nsh

@@ -1,8 +1,10 @@
 import "dotenv/config";
 import { app, BrowserWindow, globalShortcut, Menu, session } from "electron";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
+import { migrateDataIfNeeded } from "./data-migrator.js";
 import { isGameActive, claimF10Fire } from "./game-state.js";
 import { setSecurityLogDir } from "../../core/security-logger.js";
 
@@ -132,6 +134,13 @@ app.whenReady().then(() => {
       },
     });
   });
+
+  // Migrate user data from install dir to %USERPROFILE%\EmuraOS\
+  if (app.isPackaged) {
+    const oldRoot = path.dirname(app.getPath("exe"));
+    const newRoot = path.join(os.homedir(), "EmuraOS");
+    migrateDataIfNeeded(oldRoot, newRoot);
+  }
 
   registerIpcHandlers(() => mainWindow);
   createWindow();
