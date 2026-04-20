@@ -1,4 +1,58 @@
-import type { SettingsSection } from "../../../schemas/settings-schema-types";
+import type {
+  SettingsSection,
+  SettingsContext,
+  InfoSetting,
+} from "../../../schemas/settings-schema-types";
+import { formatPlayTime } from "../../../utils/formatPlayTime";
+
+/**
+ * Helper: parse "systemId:fileName" key and return the rom display name
+ * (strip extension) and systemId.
+ */
+function parsePlayKey(key: string): { systemId: string; name: string } {
+  const idx = key.indexOf(":");
+  const systemId = key.slice(0, idx);
+  const fileName = key.slice(idx + 1);
+  const lastDot = fileName.lastIndexOf(".");
+  const name = lastDot > 0 ? fileName.substring(0, lastDot) : fileName;
+  return { systemId, name };
+}
+
+function buildTopTimeRows(): InfoSetting[] {
+  return Array.from({ length: 5 }, (_, i): InfoSetting => ({
+    id: `bib.top-time-${i}`,
+    kind: "info",
+    label: `#${i + 1}`,
+    value: (ctx: SettingsContext) => {
+      const entries = Object.entries(ctx.playHistory)
+        .filter(([, r]) => (r.totalPlayTime ?? 0) > 0)
+        .sort((a, b) => (b[1].totalPlayTime ?? 0) - (a[1].totalPlayTime ?? 0));
+      const entry = entries[i];
+      if (!entry) return "---";
+      const { name } = parsePlayKey(entry[0]);
+      return `${name} — ${formatPlayTime(entry[1].totalPlayTime ?? 0)}`;
+    },
+    tone: "default",
+  }));
+}
+
+function buildTopSessionRows(): InfoSetting[] {
+  return Array.from({ length: 5 }, (_, i): InfoSetting => ({
+    id: `bib.top-sessions-${i}`,
+    kind: "info",
+    label: `#${i + 1}`,
+    value: (ctx: SettingsContext) => {
+      const entries = Object.entries(ctx.playHistory)
+        .filter(([, r]) => r.playCount > 0)
+        .sort((a, b) => b[1].playCount - a[1].playCount);
+      const entry = entries[i];
+      if (!entry) return "---";
+      const { name } = parsePlayKey(entry[0]);
+      return `${name} — ${entry[1].playCount} ${entry[1].playCount === 1 ? "partida" : "partidas"}`;
+    },
+    tone: "default",
+  }));
+}
 
 export const bibliotecaSection: SettingsSection = {
   id: "biblioteca",
@@ -35,6 +89,26 @@ export const bibliotecaSection: SettingsSection = {
           ],
         },
         {
+          id: "bib-sorting-interaction",
+          title: "Interacción",
+          rows: [
+            {
+              id: "bib.click-action",
+              kind: "dropdown",
+              label: "Acción al hacer doble clic",
+              description: "Elegir si el doble clic en un juego lo lanza directamente o abre la ficha de detalle.",
+              options: [
+                { value: "launch", label: "Lanzar juego" },
+                { value: "detail", label: "Abrir ficha del juego" },
+              ],
+              get: (ctx) => ctx.config?.cardClickAction ?? "launch",
+              set: async (value, ctx) => {
+                await ctx.updateConfig({ cardClickAction: value as "launch" | "detail" });
+              },
+            },
+          ],
+        },
+        {
           id: "bib-sorting-systems",
           title: "Consolas",
           rows: [
@@ -63,7 +137,8 @@ export const bibliotecaSection: SettingsSection = {
       label: "Estadísticas",
       groups: [
         {
-          id: "bib-stats-g",
+          id: "bib-stats-summary",
+          title: "Resumen",
           rows: [
             {
               id: "bib.favorites-count",
@@ -80,7 +155,7 @@ export const bibliotecaSection: SettingsSection = {
               tone: "default",
             },
             {
-              id: "bib.total-playtime",
+              id: "bib.total-sessions",
               kind: "info",
               label: "Partidas totales",
               value: (ctx) => {
@@ -93,10 +168,69 @@ export const bibliotecaSection: SettingsSection = {
               tone: "default",
             },
             {
+              id: "bib.total-playtime",
+              kind: "info",
+              label: "Tiempo total jugado",
+              value: (ctx) => {
+                const total = Object.values(ctx.playHistory).reduce(
+                  (sum, r) => sum + (r.totalPlayTime ?? 0),
+                  0
+                );
+                return formatPlayTime(total) || "0m";
+              },
+              tone: "default",
+            },
+            {
               id: "bib.collections-count",
               kind: "info",
               label: "Colecciones",
               value: (ctx) => `${ctx.collections.length}`,
+              tone: "default",
+            },
+          ],
+        },
+        {
+          id: "bib-stats-top-time",
+          title: "Top juegos (por tiempo)",
+          collapsible: true,
+          rows: buildTopTimeRows(),
+        },
+        {
+          id: "bib-stats-top-sessions",
+          title: "Top juegos (por partidas)",
+          collapsible: true,
+          rows: buildTopSessionRows(),
+        },
+        {
+          id: "bib-stats-time-by-system",
+          title: "Tiempo por consola",
+          collapsible: true,
+          rows: [
+            {
+              id: "bib.time-by-system",
+              kind: "info",
+              label: "Desglose",
+              column: true,
+              value: (ctx) => {
+                const bySystem = new Map<string, number>();
+                for (const [key, record] of Object.entries(ctx.playHistory)) {
+                  const time = record.totalPlayTime ?? 0;
+                  if (time <= 0) continue;
+                  const { systemId } = parsePlayKey(key);
+                  bySystem.set(systemId, (bySystem.get(systemId) ?? 0) + time);
+                }
+                if (bySystem.size === 0) return "Sin datos";
+                // Sort by time descending
+                const sorted = [...bySystem.entries()].sort(
+                  (a, b) => b[1] - a[1]
+                );
+                return sorted
+                  .map(
+                    ([sysId, secs]) =>
+                      `${sysId.toUpperCase()}: ${formatPlayTime(secs)}`
+                  )
+                  .join("\n");
+              },
               tone: "default",
             },
           ],

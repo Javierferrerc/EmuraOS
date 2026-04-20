@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { deriveSystemColors } from "../utils/colorUtils";
+import { formatPlayTime } from "../utils/formatPlayTime";
 import "./GameCard.css";
 
 const SYSTEM_COLORS: Record<string, [string, string]> = {
@@ -69,6 +70,7 @@ interface GameCardProps {
 export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const {
     launchGame,
+    openGameDetail,
     getMetadataForRom,
     toggleFavorite,
     isFavorite,
@@ -179,6 +181,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const favorited = isFavorite(rom.systemId, rom.fileName);
   const key = `${rom.systemId}:${rom.fileName}`;
   const playCount = playHistory[key]?.playCount ?? 0;
+  const totalPlayTime = playHistory[key]?.totalPlayTime ?? 0;
 
   useEffect(() => {
     if (metadata?.coverPath) {
@@ -189,8 +192,20 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   }, [metadata?.coverPath]);
 
   const handleDoubleClick = useCallback(() => {
-    launchGame(rom);
-  }, [launchGame, rom]);
+    if ((config?.cardClickAction ?? "launch") === "detail") {
+      openGameDetail(rom);
+    } else {
+      launchGame(rom);
+    }
+  }, [launchGame, openGameDetail, rom, config?.cardClickAction]);
+
+  const handleInfoClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      openGameDetail(rom);
+    },
+    [openGameDetail, rom]
+  );
 
   const handleToggleFavorite = useCallback(
     (e: React.MouseEvent) => {
@@ -345,6 +360,28 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         coverContent
       )}
 
+      {/* Info button — top-left */}
+      <button
+        onClick={handleInfoClick}
+        className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 ${isFocused ? "opacity-100" : ""}`}
+        title="Ver ficha del juego"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+      </button>
+
       {/* Favorite heart — top-right */}
       <button
         onClick={handleToggleFavorite}
@@ -386,6 +423,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         {playCount > 0 && (
           <p className="mt-0.5 text-xs text-secondary">
             Played {playCount} {playCount === 1 ? "time" : "times"}
+            {totalPlayTime > 0 && <span> &middot; {formatPlayTime(totalPlayTime)}</span>}
           </p>
         )}
       </div>

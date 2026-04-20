@@ -179,6 +179,17 @@ export class UserLibrary {
     return limit ? recent.slice(0, limit) : recent;
   }
 
+  addPlayTime(systemId: string, fileName: string, seconds: number): void {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    const data = this.load();
+    const record = data.playHistory[key];
+    if (record) {
+      record.totalPlayTime = (record.totalPlayTime ?? 0) + seconds;
+      data.playHistory[key] = record;
+      this.save(data);
+    }
+  }
+
   getPlayRecord(
     systemId: string,
     fileName: string

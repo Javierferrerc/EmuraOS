@@ -69,6 +69,7 @@ export interface AppConfig {
   backgroundBrightness?: number;
   backgroundBlur?: number;
   backgroundOpacity?: number;
+  cardClickAction?: "launch" | "detail";
 }
 
 export interface EmulatorDefinition {
@@ -188,6 +189,7 @@ export interface RomReference {
 export interface PlayRecord {
   lastPlayed: string;
   playCount: number;
+  totalPlayTime?: number; // accumulated seconds (optional for backward compat)
 }
 
 export interface Collection {
@@ -210,6 +212,7 @@ export interface EmbeddedLaunchResult {
 export interface GameSessionEvent {
   rom: DiscoveredRom;
   emulatorId: string;
+  sessionStartedAt?: number; // Date.now() epoch ms
 }
 
 export interface CoreDownloadProgress {
