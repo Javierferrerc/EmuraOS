@@ -4,7 +4,7 @@ import type {
   SettingsGroup,
 } from "../../../schemas/settings-schema-types";
 import { rutasSection } from "../sections/rutas";
-import { coverArtSection } from "../sections/cover-art";
+import { coverSourcesGroups } from "../sections/portadas/cover-settings";
 import { WizardEmulatorStep } from "./WizardEmulatorStep";
 
 /** Props passed to custom wizard step components for gamepad/keyboard focus. */
@@ -54,8 +54,8 @@ export const WIZARD_STEPS: WizardStep[] = [
   {
     id: "paths",
     label: "Rutas",
-    // Reuse the "Directorios" tab groups from Rutas section
-    groups: rutasSection.tabs?.[0]?.groups ?? [],
+    // Reuse the groups from Rutas section
+    groups: rutasSection.groups ?? [],
   },
   {
     id: "detect",
@@ -66,9 +66,9 @@ export const WIZARD_STEPS: WizardStep[] = [
   {
     id: "covers",
     label: "Covers",
-    // Reuse the "Fuentes" tab groups from Cover Art section + recommendation info
+    // Reuse the Fuentes groups from cover-settings + recommendation info
     groups: [
-      ...(coverArtSection.tabs?.[0]?.groups ?? []),
+      ...coverSourcesGroups,
       {
         id: "wiz-covers-tip",
         description:

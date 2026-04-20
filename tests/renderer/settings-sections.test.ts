@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { generalSection } from "../../src/electron/renderer/components/settings/sections/general";
+import { aparienciaSection } from "../../src/electron/renderer/components/settings/sections/apariencia";
 import { rutasSection } from "../../src/electron/renderer/components/settings/sections/rutas";
 import { bibliotecaSection } from "../../src/electron/renderer/components/settings/sections/biblioteca";
-import { coverArtSection } from "../../src/electron/renderer/components/settings/sections/cover-art";
-import { controlesSection } from "../../src/electron/renderer/components/settings/sections/controles";
 import { avanzadoSection } from "../../src/electron/renderer/components/settings/sections/avanzado";
+import {
+  coverSourcesGroups,
+  coverCredentialsGroups,
+  coverActionsGroups,
+} from "../../src/electron/renderer/components/settings/sections/portadas/cover-settings";
 import type {
   SettingsContext,
   SettingsGroup,
@@ -75,26 +79,34 @@ function allGroups(section: SettingsSection): SettingsGroup[] {
 
 const ALL_SECTIONS = [
   generalSection,
-  rutasSection,
+  aparienciaSection,
   bibliotecaSection,
-  coverArtSection,
-  controlesSection,
+  rutasSection,
   avanzadoSection,
 ];
 
 describe("PR2 real SettingsSections", () => {
-  it("all 6 sections have groups (via tabs or flat groups)", () => {
+  it("all sections have groups (via tabs or flat groups)", () => {
     for (const s of ALL_SECTIONS) {
       const groups = allGroups(s);
       expect(groups.length).toBeGreaterThan(0);
     }
   });
 
-  it("all 6 sections use tabs", () => {
-    for (const s of ALL_SECTIONS) {
-      expect(s.tabs).toBeDefined();
-      expect(s.tabs!.length).toBeGreaterThan(0);
-    }
+  it("General and Rutas use flat groups (no tabs)", () => {
+    expect(generalSection.tabs).toBeUndefined();
+    expect(generalSection.groups).toBeDefined();
+    expect(rutasSection.tabs).toBeUndefined();
+    expect(rutasSection.groups).toBeDefined();
+  });
+
+  it("Apariencia, Biblioteca, and Avanzado use tabs", () => {
+    expect(aparienciaSection.tabs).toBeDefined();
+    expect(aparienciaSection.tabs!.length).toBeGreaterThan(0);
+    expect(bibliotecaSection.tabs).toBeDefined();
+    expect(bibliotecaSection.tabs!.length).toBeGreaterThan(0);
+    expect(avanzadoSection.tabs).toBeDefined();
+    expect(avanzadoSection.tabs!.length).toBeGreaterThan(0);
   });
 
   it("every section has a /settings/* path", () => {
@@ -129,8 +141,8 @@ describe("PR2 real SettingsSections", () => {
     expect(folderRows.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("Cover Art section has path rows for credentials", () => {
-    const rows = allGroups(coverArtSection).flatMap((g) => g.rows);
+  it("Cover settings have path rows for credentials", () => {
+    const rows = coverCredentialsGroups.flatMap((g) => g.rows);
     const pathRows = rows.filter((r) => r.kind === "path");
     expect(pathRows.length).toBeGreaterThanOrEqual(2); // SGDB key + SS creds
   });
@@ -143,7 +155,29 @@ describe("PR2 real SettingsSections", () => {
     expect(dangerBtns.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("Avanzado section has gamepad status info row", () => {
+    const rows = allGroups(avanzadoSection).flatMap((g) => g.rows);
+    const gamepadRow = rows.find((r) => r.id === "adv.gamepad-status");
+    expect(gamepadRow).toBeDefined();
+    expect(gamepadRow!.kind).toBe("info");
+  });
+
+  it("Apariencia section has 4 tabs (Efectos, Fondo, Colores, Sonidos)", () => {
+    expect(aparienciaSection.tabs!.length).toBe(4);
+    const tabIds = aparienciaSection.tabs!.map((t) => t.id);
+    expect(tabIds).toContain("ap-effects");
+    expect(tabIds).toContain("ap-background");
+    expect(tabIds).toContain("ap-colors");
+    expect(tabIds).toContain("ap-sounds");
+  });
+
+  it("Biblioteca section has Ordenación tab as first tab", () => {
+    expect(bibliotecaSection.tabs![0].id).toBe("bib-sorting");
+    expect(bibliotecaSection.tabs![0].label).toBe("Ordenación");
+  });
+
   it("every getter runs without throwing given fakeCtx", () => {
+    // Test section-level settings
     for (const s of ALL_SECTIONS) {
       for (const g of allGroups(s)) {
         for (const r of g.rows) {
@@ -169,6 +203,28 @@ describe("PR2 real SettingsSections", () => {
               expect(typeof r.run).toBe("function");
               break;
           }
+        }
+      }
+    }
+
+    // Test cover settings groups
+    const coverGroups = [...coverSourcesGroups, ...coverCredentialsGroups, ...coverActionsGroups];
+    for (const g of coverGroups) {
+      for (const r of g.rows) {
+        switch (r.kind) {
+          case "toggle":
+            expect(typeof r.get(fakeCtx)).toBe("boolean");
+            break;
+          case "dropdown":
+            expect(r.options.length).toBeGreaterThan(0);
+            r.get(fakeCtx);
+            break;
+          case "path":
+            expect(typeof r.get(fakeCtx)).toBe("string");
+            break;
+          case "button":
+            expect(typeof r.run).toBe("function");
+            break;
         }
       }
     }

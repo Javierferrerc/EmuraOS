@@ -30,10 +30,10 @@ export const KNOWN_ROUTES: RouteInfo[] = [
   { path: "/game", label: "Juego", isSettings: false },
   { path: "/settings", label: "Ajustes", isSettings: true },
   { path: "/settings/general", label: "General", isSettings: true },
+  { path: "/settings/apariencia", label: "Apariencia", isSettings: true },
+  { path: "/settings/biblioteca", label: "Biblioteca", isSettings: true },
+  { path: "/settings/portadas", label: "Portadas", isSettings: true },
   { path: "/settings/rutas", label: "Rutas", isSettings: true },
   { path: "/settings/emuladores", label: "Emuladores", isSettings: true },
-  { path: "/settings/biblioteca", label: "Biblioteca", isSettings: true },
-  { path: "/settings/cover-art", label: "Cover Art", isSettings: true },
-  { path: "/settings/controles", label: "Controles", isSettings: true },
   { path: "/settings/avanzado", label: "Avanzado", isSettings: true },
 ];

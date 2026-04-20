@@ -1,5 +1,6 @@
 import type { SettingsSection } from "../../../../schemas/settings-schema-types";
 import { PortadasView } from "./PortadasView";
+import { coverSourcesGroups, coverCredentialsGroups, coverActionsGroups } from "./cover-settings";
 
 export const portadasSection: SettingsSection = {
   id: "portadas",
@@ -16,4 +17,10 @@ export const portadasSection: SettingsSection = {
     }
     return total;
   },
+  tabs: [
+    { id: "port-galeria", label: "Galería", groups: [] },
+    { id: "port-fuentes", label: "Fuentes", groups: coverSourcesGroups },
+    { id: "port-credenciales", label: "Credenciales", groups: coverCredentialsGroups },
+    { id: "port-acciones", label: "Acciones", groups: coverActionsGroups },
+  ],
 };

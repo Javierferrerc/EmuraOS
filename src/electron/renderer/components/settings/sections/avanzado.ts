@@ -39,6 +39,30 @@ export const avanzadoSection: SettingsSection = {
             },
           ],
         },
+        {
+          id: "adv-gamepad",
+          title: "Mando",
+          rows: [
+            {
+              id: "adv.gamepad-status",
+              kind: "info",
+              label: "Mando conectado",
+              value: (ctx) => (ctx.gamepadConnected ? "Sí" : "No"),
+              tone: "default",
+            },
+            {
+              id: "adv.remap-placeholder",
+              kind: "button",
+              label: "Remapear controles",
+              description: "Próximamente.",
+              variant: "ghost",
+              disabled: true,
+              run: () => {
+                /* placeholder — not implemented yet */
+              },
+            },
+          ],
+        },
       ],
     },
     {

@@ -7,6 +7,58 @@ export const bibliotecaSection: SettingsSection = {
   icon: "📚",
   tabs: [
     {
+      id: "bib-sorting",
+      label: "Ordenación",
+      groups: [
+        {
+          id: "bib-sorting-games",
+          title: "Juegos",
+          rows: [
+            {
+              id: "bib.game-sort",
+              kind: "dropdown",
+              label: "Orden de juegos",
+              description: "Criterio de ordenación de los juegos en la cuadrícula.",
+              options: [
+                { value: "alpha-asc", label: "Alfabético A→Z" },
+                { value: "alpha-desc", label: "Alfabético Z→A" },
+                { value: "recent", label: "Últimos jugados" },
+                { value: "added", label: "Últimos añadidos" },
+              ],
+              get: (ctx) => ctx.config?.gameSortOrder ?? "alpha-asc",
+              set: async (value, ctx) => {
+                await ctx.updateConfig({
+                  gameSortOrder: value as "alpha-asc" | "alpha-desc" | "recent" | "added",
+                });
+              },
+            },
+          ],
+        },
+        {
+          id: "bib-sorting-systems",
+          title: "Consolas",
+          rows: [
+            {
+              id: "bib.system-sort",
+              kind: "dropdown",
+              label: "Orden de consolas",
+              description: "Criterio de ordenación de las consolas en el slider.",
+              options: [
+                { value: "default", label: "Por defecto" },
+                { value: "recent", label: "Recientes primero" },
+              ],
+              get: (ctx) => ctx.config?.systemSortOrder ?? "default",
+              set: async (value, ctx) => {
+                await ctx.updateConfig({
+                  systemSortOrder: value as "default" | "recent" | "custom",
+                });
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
       id: "bib-stats",
       label: "Estadísticas",
       groups: [

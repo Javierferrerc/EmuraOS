@@ -19,22 +19,20 @@ import type {
   SettingsSection,
 } from "../../schemas/settings-schema-types";
 import { generalSection } from "./sections/general";
-import { rutasSection } from "./sections/rutas";
-import { emuladoresSection } from "./sections/emuladores/index";
+import { aparienciaSection } from "./sections/apariencia";
 import { bibliotecaSection } from "./sections/biblioteca";
 import { portadasSection } from "./sections/portadas/index";
-import { coverArtSection } from "./sections/cover-art";
-import { controlesSection } from "./sections/controles";
+import { rutasSection } from "./sections/rutas";
+import { emuladoresSection } from "./sections/emuladores/index";
 import { avanzadoSection } from "./sections/avanzado";
 
 const SECTIONS: SettingsSection[] = [
   generalSection,
-  rutasSection,
-  emuladoresSection,
+  aparienciaSection,
   bibliotecaSection,
   portadasSection,
-  coverArtSection,
-  controlesSection,
+  rutasSection,
+  emuladoresSection,
   avanzadoSection,
 ];
 import { SettingsLayout } from "./shell/SettingsLayout";
@@ -243,8 +241,16 @@ export function SettingsRoot() {
     return [];
   }, [activeSection, focus.tabIndex]);
 
+  // When a section has both tabs and customComponent, the customComponent is
+  // only rendered for tabs with empty groups (e.g. Portadas > Galería). Tabs
+  // with groups use the standard SettingsListView.
+  const isCustomTabActive = Boolean(
+    activeSection.customComponent &&
+    (!activeSection.tabs || activeGroups.length === 0)
+  );
+
   // For custom components, use the declared item count; otherwise count visible rows.
-  if (activeSection.customComponent && activeSection.customListCount != null) {
+  if (isCustomTabActive && activeSection.customListCount != null) {
     listCountRef.current =
       typeof activeSection.customListCount === "function"
         ? activeSection.customListCount(ctx)
@@ -342,6 +348,8 @@ export function SettingsRoot() {
   isInsideSubPathRef.current = isInsideSubPath;
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
+  const isCustomTabActiveRef = useRef(isCustomTabActive);
+  isCustomTabActiveRef.current = isCustomTabActive;
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
 
@@ -401,6 +409,7 @@ export function SettingsRoot() {
   const handleGridListNav = useCallback(
     (dir: "up" | "down" | "left" | "right"): boolean => {
       if (isInsideSubPathRef.current) return false;
+      if (!isCustomTabActiveRef.current) return false;
       const sec = activeSectionRef.current;
       const cols = sec.customListColumns;
       if (!cols || !sec.customComponent) return false;
@@ -641,7 +650,7 @@ export function SettingsRoot() {
       bottomBar={
         app.gamepadConnected ? (
           <footer className="flex items-center justify-end gap-6 px-4 pt-2 pb-4 text-[16px] font-medium text-gray-600">
-            {navigation.currentPath.match(/^\/settings\/emuladores\/.+/) && (
+            {(navigation.currentPath.match(/^\/settings\/emuladores\/.+/) || tabCount > 0) && (
               <span className="flex items-center gap-1.5">
                 <span className="rounded bg-gray-700 px-1.5 py-0.5 text-xs font-bold text-gray-300">L1/R1</span>
                 Tabs
@@ -667,7 +676,7 @@ export function SettingsRoot() {
         ) : undefined
       }
     >
-      {activeSection.customComponent ? (
+      {isCustomTabActive && activeSection.customComponent ? (
         <activeSection.customComponent
           ctx={ctx}
           focusIndex={focus.listIndex}

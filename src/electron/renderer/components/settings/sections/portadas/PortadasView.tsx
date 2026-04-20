@@ -11,6 +11,10 @@ function metaKey(fileName: string): string {
 /**
  * Grid of all discovered ROMs with their current cover art.
  * Click a card → pick a new image.  Click the reset button → restore original.
+ *
+ * Rendered by SettingsRoot only when the "Galería" tab is active (the tab
+ * with empty groups). The other Portadas tabs (Fuentes, Credenciales, Acciones)
+ * are standard settings lists rendered by SettingsRoot directly.
  */
 export function PortadasView({
   ctx,
@@ -187,7 +191,7 @@ export function PortadasView({
   if (flatRoms.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-        <span className="text-4xl">🎮</span>
+        <span className="text-4xl">{"\uD83C\uDFAE"}</span>
         <p className="text-sm text-[var(--color-text-muted)]">
           No se encontraron ROMs. Escanea tu biblioteca primero.
         </p>
@@ -222,7 +226,7 @@ export function PortadasView({
                       : "bg-[var(--color-accent)]"
                   }`}
                 >
-                  {badgeType === "saved" ? "✓ Guardado" : "↩ Restaurado"}
+                  {badgeType === "saved" ? "\u2713 Guardado" : "\u21A9 Restaurado"}
                 </span>
               )}
 
@@ -238,7 +242,7 @@ export function PortadasView({
                   }}
                   className="absolute top-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
-                  ↩
+                  {"\u21A9"}
                 </span>
               )}
 
@@ -252,7 +256,7 @@ export function PortadasView({
                     draggable={false}
                   />
                 ) : (
-                  <span className="text-3xl opacity-40">🎮</span>
+                  <span className="text-3xl opacity-40">{"\uD83C\uDFAE"}</span>
                 )}
               </div>
 

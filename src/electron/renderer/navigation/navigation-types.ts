@@ -14,9 +14,9 @@
  *   /settings/emuladores/:emulatorId/configuracion
  *   /settings/emuladores/:emulatorId/descarga
  *   /settings/emuladores/:emulatorId/avanzado
+ *   /settings/apariencia
  *   /settings/biblioteca
- *   /settings/cover-art
- *   /settings/controles
+ *   /settings/portadas
  *   /settings/avanzado
  */
 
