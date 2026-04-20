@@ -44,6 +44,16 @@ export interface ElectronAPI {
     romFileName: string
   ): Promise<string | null>;
   readCoverDataUrl(coverPath: string): Promise<string | null>;
+  setCustomCover(
+    systemId: string,
+    romFileName: string,
+    sourcePath: string
+  ): Promise<{ success: boolean; coverPath?: string; error?: string }>;
+  resetCustomCover(
+    systemId: string,
+    romFileName: string
+  ): Promise<{ success: boolean; error?: string }>;
+  readBackgroundDataUrl(imagePath: string): Promise<string | null>;
   onScrapeProgress(callback: (progress: ScrapeProgress) => void): void;
   removeScrapeProgressListener(): void;
   fetchCovers(): Promise<CoverFetchResult>;
@@ -76,6 +86,7 @@ export interface ElectronAPI {
     fileName: string
   ): Promise<void>;
   getRecentlyPlayed(limit?: number): Promise<string[]>;
+  getRomAddedDates(): Promise<Record<string, string>>;
 
   // Embedded overlay
   launchGameEmbedded(rom: DiscoveredRom, emulatorId?: string): Promise<EmbeddedLaunchResult>;
@@ -132,7 +143,7 @@ export interface ElectronAPI {
   pickFile(
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null>;
-  pickRomFiles(): Promise<string[] | null>;
+  pickRomFiles(systemId?: string): Promise<string[] | null>;
   resolveRomSystems(
     filePaths: string[]
   ): Promise<

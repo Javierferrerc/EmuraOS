@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   DropdownSetting,
   SettingsContext,
@@ -18,8 +18,13 @@ export function DropdownRow({ setting, ctx, focused }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef(0);
   highlightRef.current = highlightIdx;
+
+  // Position of the fixed panel, computed from the button's bounding rect.
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
 
   const currentLabel =
     setting.options.find((o) => String(o.value) === String(value))?.label ??
@@ -36,6 +41,17 @@ export function DropdownRow({ setting, ctx, focused }: Props) {
       highlightRef.current = i;
     }
   }, [isOpen, value, setting.options]);
+
+  // Compute the panel position when it opens, anchored below the trigger button.
+  useLayoutEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setPanelPos({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, [isOpen]);
 
   // Close when row loses focus
   useEffect(() => {
@@ -94,7 +110,11 @@ export function DropdownRow({ setting, ctx, focused }: Props) {
   useEffect(() => {
     if (!isOpen) return;
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        panelRef.current && !panelRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
@@ -123,10 +143,12 @@ export function DropdownRow({ setting, ctx, focused }: Props) {
         </div>
 
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => { if (!disabled) setIsOpen((o) => !o); }}
           disabled={disabled}
-          className="flex min-w-[140px] items-center justify-between rounded-md border border-white/10 bg-surface-0 px-3 py-1.5 text-sm text-primary outline-none transition-colors hover:border-white focus:border-[var(--color-accent)]"
+          className="flex min-w-[140px] items-center justify-between rounded-md border bg-surface-0 px-3 py-1.5 text-sm text-primary outline-none transition-colors focus:border-[var(--color-accent)]"
+          style={{ borderColor: "var(--color-border)" }}
         >
           <span className="truncate">{currentLabel}</span>
           <svg
@@ -146,11 +168,18 @@ export function DropdownRow({ setting, ctx, focused }: Props) {
         </button>
       </div>
 
-      {/* Options panel — absolute, floats over content below */}
+      {/* Options panel — fixed so it escapes overflow containers */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 z-50 mt-2 rounded-[var(--radius-md)] border border-white/10 py-1 shadow-xl"
-          style={{ background: "#2c2e60" }}
+          ref={panelRef}
+          className="fixed z-[9999] rounded-[var(--radius-md)] border py-1 shadow-xl shadow-themed"
+          style={{
+            top: panelPos.top,
+            left: panelPos.left,
+            minWidth: panelPos.width,
+            background: "var(--color-dropdown-bg)",
+            borderColor: "var(--color-border)",
+          }}
         >
           {setting.options.map((opt, i) => (
             <div

@@ -1,5 +1,6 @@
 import type { SystemDefinition } from "../../../core/types";
 import { SYSTEM_GROUPS, getGroupForSystem } from "./systemGroups";
+import { deriveSystemColors } from "./colorUtils";
 
 import nesIcon from "../assets/icons/consoles/nes.svg";
 import snesIcon from "../assets/icons/consoles/snes.svg";
@@ -31,7 +32,9 @@ export interface SliderItem {
   icon: string | null; // URL or null
 }
 
-const SYSTEM_COLORS: Record<string, { color: string; darkColor: string; iconColor: string }> = {
+type SystemColorEntry = { color: string; darkColor: string; iconColor: string };
+
+export const SYSTEM_COLORS: Record<string, SystemColorEntry> = {
   nes:          { color: "#e53e3e", darkColor: "#7b1a1a", iconColor: "#ff5555" },
   snes:         { color: "#c53030", darkColor: "#63171b", iconColor: "#ef4444" },
   n64:          { color: "#1CEA61", darkColor: "#108436", iconColor: "#34ff7a" },
@@ -47,6 +50,25 @@ const SYSTEM_COLORS: Record<string, { color: string; darkColor: string; iconColo
   psx:          { color: "#a0aec0", darkColor: "#4a5568", iconColor: "#cbd5e1" },
   ps2:          { color: "#4299e1", darkColor: "#1a365d", iconColor: "#6bb5ff" },
   psp:          { color: "#a0aec0", darkColor: "#4a5568", iconColor: "#cbd5e1" },
+};
+
+// Darker / more saturated palette that pops on a light background.
+const SYSTEM_COLORS_LIGHT: Record<string, SystemColorEntry> = {
+  nes:          { color: "#dc2626", darkColor: "#7f1d1d", iconColor: "#b91c1c" },
+  snes:         { color: "#b91c1c", darkColor: "#641414", iconColor: "#991b1b" },
+  n64:          { color: "#16a34a", darkColor: "#0d5c2a", iconColor: "#15803d" },
+  gb:           { color: "#15803d", darkColor: "#0a4d24", iconColor: "#166534" },
+  gbc:          { color: "#7c3aed", darkColor: "#4c1d95", iconColor: "#6d28d9" },
+  gba:          { color: "#4f46e5", darkColor: "#312e81", iconColor: "#4338ca" },
+  nds:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
+  gamecube:     { color: "#7e22ce", darkColor: "#4a1576", iconColor: "#6b21a8" },
+  wii:          { color: "#0891b2", darkColor: "#0e4f63", iconColor: "#0e7490" },
+  megadrive:    { color: "#2563eb", darkColor: "#1e3a8a", iconColor: "#1d4ed8" },
+  mastersystem: { color: "#1d4ed8", darkColor: "#1e3a7a", iconColor: "#1e40af" },
+  dreamcast:    { color: "#0284c7", darkColor: "#0c4a6e", iconColor: "#0369a1" },
+  psx:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
+  ps2:          { color: "#1d4ed8", darkColor: "#1e3a5f", iconColor: "#1e40af" },
+  psp:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
 };
 
 const SYSTEM_ICONS: Record<string, string> = {
@@ -86,17 +108,29 @@ const SHORT_LABELS: Record<string, string> = {
 };
 
 export function buildSliderItems(
-  systemsWithRoms: SystemDefinition[]
+  systemsWithRoms: SystemDefinition[],
+  theme: "dark" | "light" | "retro-crt" = "dark",
+  customColors?: Record<string, string>
 ): SliderItem[] {
+  const palette = theme === "light" ? SYSTEM_COLORS_LIGHT : SYSTEM_COLORS;
+  const fallback: SystemColorEntry = theme === "light"
+    ? { color: "#475569", darkColor: "#1e293b", iconColor: "#334155" }
+    : { color: "#718096", darkColor: "#4a5568", iconColor: "#cbd5e1" };
+
+  // "All" chip uses inverted colors on light theme for visibility
+  const allColor = theme === "light" ? "#334155" : "#FFFFFF";
+  const allDark = theme === "light" ? "#1e293b" : "#999999";
+  const allIconColor = theme === "light" ? "#334155" : "#FFFFFF";
+
   const items: SliderItem[] = [
     {
       key: "all",
       systemId: null,
       label: "All Systems",
       shortLabel: "ALL",
-      color: "#FFFFFF",
-      darkColor: "#999999",
-      iconColor: "#FFFFFF",
+      color: allColor,
+      darkColor: allDark,
+      iconColor: allIconColor,
       icon: libraryIcon,
     },
   ];
@@ -113,10 +147,11 @@ export function buildSliderItems(
       emittedGroups.add(group.id);
 
       // Reuse the primary member's colors/icon as the group's visual identity.
-      // Falls back to sys.id if the primary isn't in the SYSTEM_COLORS table.
-      const colors =
-        SYSTEM_COLORS[group.primaryMember] ??
-        SYSTEM_COLORS[sys.id] ?? { color: "#718096", darkColor: "#4a5568", iconColor: "#cbd5e1" };
+      // Falls back to sys.id if the primary isn't in the palette table.
+      const customHex = customColors?.[group.primaryMember] ?? customColors?.[sys.id];
+      const colors = customHex
+        ? deriveSystemColors(customHex)
+        : palette[group.primaryMember] ?? palette[sys.id] ?? fallback;
       const icon = SYSTEM_ICONS[group.primaryMember] ?? SYSTEM_ICONS[sys.id] ?? null;
 
       items.push({
@@ -132,7 +167,10 @@ export function buildSliderItems(
       continue;
     }
 
-    const colors = SYSTEM_COLORS[sys.id] ?? { color: "#718096", darkColor: "#4a5568", iconColor: "#cbd5e1" };
+    const customHex = customColors?.[sys.id];
+    const colors = customHex
+      ? deriveSystemColors(customHex)
+      : palette[sys.id] ?? fallback;
     items.push({
       key: `sys-${sys.id}`,
       systemId: sys.id,

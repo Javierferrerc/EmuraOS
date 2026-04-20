@@ -7,7 +7,7 @@ interface Props {
 
 export function SettingsHeader({ title, breadcrumb, canGoBack, onBack }: Props) {
   return (
-    <header className="flex items-center gap-3 border-b border-white/5 bg-surface-0 px-6 py-3">
+    <header className="flex items-center gap-3 border-b bg-surface-0 px-6 py-3" style={{ borderColor: "var(--color-border-subtle)" }}>
       <button
         type="button"
         onClick={onBack}

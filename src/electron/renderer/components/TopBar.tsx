@@ -3,13 +3,13 @@ import { useApp, type ActiveFilter } from "../context/AppContext";
 import logoEmura from "../assets/logo-emura.svg";
 import "./TopBar.css";
 
-export const TOPBAR_ITEM_COUNT = 6;
+export const TOPBAR_ITEM_COUNT = 5; // was 6 — profile temporarily disabled
 export const TOPBAR_INDEX_SEARCH = 0;
 export const TOPBAR_INDEX_ADD_ROM = 1;
 export const TOPBAR_INDEX_RESCAN = 2;
 export const TOPBAR_INDEX_FAVORITES = 3;
-export const TOPBAR_INDEX_PROFILE = 4;
-export const TOPBAR_INDEX_SETTINGS = 5;
+// export const TOPBAR_INDEX_PROFILE = 4; // temporarily disabled
+export const TOPBAR_INDEX_SETTINGS = 4; // was 5
 
 interface TopBarProps {
   focusedIndex: number;
@@ -83,7 +83,7 @@ export function TopBar({
 
   const isFocused = (idx: number) => focusActive && focusedIndex === idx;
   const focusRingClass = (idx: number) =>
-    isFocused(idx) ? "ring-2 ring-blue-500" : "";
+    isFocused(idx) ? "ring-2 ring-focus" : "";
 
   return (
     <header className="flex items-center gap-4 px-5 py-5">
@@ -117,10 +117,10 @@ export function TopBar({
             if (textInputMode) onExitTextInput();
           }}
           placeholder="Search ROMs..."
-          className="w-full bg-transparent px-4 py-2 pl-9 text-sm text-gray-100 placeholder-gray-500 outline-none"
+          className="w-full bg-transparent px-4 py-2 pl-9 text-sm text-primary placeholder-[var(--color-text-muted)] outline-none"
         />
         <svg
-          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"
+          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -138,7 +138,7 @@ export function TopBar({
               setLocalQuery("");
               setSearchQuery("");
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary"
           >
             ✕
           </button>
@@ -161,7 +161,7 @@ export function TopBar({
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
             <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" />
           </svg>
-          <span className="text-sm font-medium text-gray-300">Añadir ROM</span>
+          <span className="text-sm font-medium text-secondary">Añadir ROM</span>
         </button>
 
         {/* Re-scan */}
@@ -197,8 +197,8 @@ export function TopBar({
           </svg>
         </button>
 
-        {/* User profile */}
-        <button
+        {/* User profile — temporarily disabled */}
+        {/* <button
           data-topbar-index={TOPBAR_INDEX_PROFILE}
           className={`topbar-icon-btn p-2.5 ${focusRingClass(
             TOPBAR_INDEX_PROFILE
@@ -208,7 +208,7 @@ export function TopBar({
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
             <path d="M230.93,220a8,8,0,0,1-6.93,4H32a8,8,0,0,1-6.92-12c15.23-26.33,38.7-45.21,66.09-54.16a72,72,0,1,1,73.66,0c27.39,8.95,50.86,27.83,66.09,54.16A8,8,0,0,1,230.93,220Z" />
           </svg>
-        </button>
+        </button> */}
 
         {/* Settings */}
         <button

@@ -30,6 +30,8 @@ export function GameGrid({
     favorites,
     recentlyPlayed,
     collections,
+    config,
+    romAddedDates,
   } = useApp();
 
   // Mutable ref to the current grid element (used for scroll-into-view).
@@ -122,7 +124,42 @@ export function GameGrid({
       );
     }
 
-    roms.sort((a, b) => a.fileName.localeCompare(b.fileName));
+    const sortOrder = config?.gameSortOrder ?? "alpha-asc";
+    switch (sortOrder) {
+      case "alpha-desc":
+        roms.sort((a, b) => b.fileName.localeCompare(a.fileName));
+        break;
+      case "recent": {
+        const recentIndex = new Map<string, number>();
+        for (let i = 0; i < recentlyPlayed.length; i++) {
+          recentIndex.set(recentlyPlayed[i], i);
+        }
+        roms.sort((a, b) => {
+          const ka = `${a.systemId}:${a.fileName}`;
+          const kb = `${b.systemId}:${b.fileName}`;
+          const ia = recentIndex.get(ka) ?? Infinity;
+          const ib = recentIndex.get(kb) ?? Infinity;
+          if (ia !== ib) return ia - ib;
+          return a.fileName.localeCompare(b.fileName);
+        });
+        break;
+      }
+      case "added": {
+        roms.sort((a, b) => {
+          const ka = `${a.systemId}:${a.fileName}`;
+          const kb = `${b.systemId}:${b.fileName}`;
+          const da = romAddedDates[ka] ?? "";
+          const db = romAddedDates[kb] ?? "";
+          if (da !== db) return db.localeCompare(da); // newest first
+          return a.fileName.localeCompare(b.fileName);
+        });
+        break;
+      }
+      case "alpha-asc":
+      default:
+        roms.sort((a, b) => a.fileName.localeCompare(b.fileName));
+        break;
+    }
     return roms;
   }, [
     allRoms,
@@ -132,6 +169,8 @@ export function GameGrid({
     favorites,
     recentlyPlayed,
     collections,
+    config?.gameSortOrder,
+    romAddedDates,
   ]);
 
   // Report filtered roms and item count to parent
@@ -201,7 +240,7 @@ export function GameGrid({
 
   if (!scanResult) {
     return (
-      <div className="flex h-full items-center justify-center text-gray-600">
+      <div className="flex h-full items-center justify-center text-muted">
         <p>No scan data available. Check your configuration.</p>
       </div>
     );
@@ -209,7 +248,7 @@ export function GameGrid({
 
   if (filteredRoms.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-gray-600">
+      <div className="flex h-full flex-col items-center justify-center text-muted">
         <div className="mb-3 text-5xl">
           {activeFilter.type === "favorites"
             ? "\u2605"

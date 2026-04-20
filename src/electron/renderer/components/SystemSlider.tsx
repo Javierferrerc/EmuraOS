@@ -186,8 +186,8 @@ export function SystemSlider({
             }}
             data-slider-index={idx}
             onClick={() => onSelect(idx)}
-            className={`slider-btn flex items-center justify-center text-xs font-bold text-white ${
-              isFocused ? "ring-2 ring-blue-500 scale-105" : ""
+            className={`slider-btn flex items-center justify-center text-xs font-bold ${
+              isFocused ? "ring-2 ring-focus scale-105" : ""
             } ${isActive ? "scale-105" : ""}`}
             style={{
               "--slider-color": item.color,

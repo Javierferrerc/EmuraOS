@@ -48,7 +48,8 @@ export function SettingsSidebar({
       {/* Floating card */}
       <nav
         aria-label="Settings sections"
-        className="flex flex-col gap-0.5 overflow-y-auto rounded-[var(--radius-lg)] border border-white/[0.06] bg-surface-0 p-2 shadow-lg shadow-black/20"
+        className="flex flex-col gap-0.5 overflow-y-auto rounded-[var(--radius-lg)] border bg-surface-0 p-2 shadow-lg shadow-black/20"
+        style={{ borderColor: "var(--color-border-subtle)" }}
       >
         {sections.map((section, idx) => {
           const isActive = section.id === activeId;

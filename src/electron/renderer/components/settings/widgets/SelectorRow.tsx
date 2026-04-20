@@ -109,7 +109,7 @@ export function SelectorRow({ setting, ctx, focused }: Props) {
         )}
       </div>
 
-      <div className="flex items-center gap-0.5 rounded-md border border-white/10 bg-surface-0 px-1 py-1 overflow-hidden">
+      <div className="flex items-center gap-0.5 rounded-md border bg-surface-0 px-1 py-1 overflow-hidden" style={{ borderColor: "var(--color-border)" }}>
         {/* Left arrow */}
         <button
           type="button"

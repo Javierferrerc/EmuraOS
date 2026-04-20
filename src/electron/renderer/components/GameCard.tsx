@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
+import { deriveSystemColors } from "../utils/colorUtils";
 import "./GameCard.css";
 
 const SYSTEM_COLORS: Record<string, [string, string]> = {
@@ -20,6 +21,25 @@ const SYSTEM_COLORS: Record<string, [string, string]> = {
   psx: ["#94A3B8", "#4A5568"],
   ps2: ["#3B82F6", "#1E3A5F"],
   psp: ["#6B7280", "#374151"],
+};
+
+// Darker, more saturated colors that pop on a light background.
+const SYSTEM_COLORS_LIGHT: Record<string, [string, string]> = {
+  nes: ["#dc2626", "#7f1d1d"],
+  snes: ["#b91c1c", "#641414"],
+  n64: ["#16a34a", "#0d5c2a"],
+  gb: ["#15803d", "#0a4d24"],
+  gbc: ["#7c3aed", "#4c1d95"],
+  gba: ["#4f46e5", "#312e81"],
+  nds: ["#64748b", "#334155"],
+  gamecube: ["#7e22ce", "#4a1576"],
+  wii: ["#0891b2", "#0e4f63"],
+  megadrive: ["#2563eb", "#1e3a8a"],
+  mastersystem: ["#1d4ed8", "#1e3a7a"],
+  dreamcast: ["#0284c7", "#0c4a6e"],
+  psx: ["#64748b", "#334155"],
+  ps2: ["#1d4ed8", "#1e3a5f"],
+  psp: ["#4b5563", "#1f2937"],
 };
 
 const SYSTEM_NAMES: Record<string, string> = {
@@ -227,7 +247,19 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   }, [contextMenu]);
 
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
-  const [systemLight, systemDark] = SYSTEM_COLORS[rom.systemId] ?? ["#718096", "#4A5568"];
+  const theme = config?.theme ?? "dark";
+  const customHex = config?.customSystemColors?.[rom.systemId];
+  const colorMap = theme === "light" ? SYSTEM_COLORS_LIGHT : SYSTEM_COLORS;
+  let systemLight: string, systemDark: string;
+  if (customHex) {
+    const derived = deriveSystemColors(customHex);
+    systemLight = derived.color;
+    systemDark = derived.darkColor;
+  } else {
+    [systemLight, systemDark] = colorMap[rom.systemId] ?? ["#718096", "#4A5568"];
+  }
+  // Light theme needs higher alpha on badges for contrast against white bg
+  const badgeAlpha = theme === "light" ? "cc" : "8c";
   const hasCover = coverDataUrl && !imgError;
 
   // Outer card className — branch between 3D tilt (new) and legacy scale.
@@ -246,8 +278,8 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     ? `game-card group relative h-full cursor-pointer rounded-2xl${
         isFocused ? " is-focused" : ""
       }${isMouseTilting ? " is-mouse-tilting" : ""}`
-    : `group relative h-full cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 ${
-        isFocused ? "scale-105 ring-2 ring-blue-500" : "hover:scale-[1.03]"
+    : `game-card-legacy group relative h-full cursor-pointer overflow-hidden rounded-2xl transition-all duration-200 ${
+        isFocused ? "scale-105 ring-2 ring-focus" : "hover:scale-[1.03]"
       }`;
 
   // Bottom overlay — legacy uses `transition-opacity`; new owns its transitions
@@ -342,17 +374,17 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       <div className={overlayClass}>
         <div className="flex items-center gap-2">
           <span
-            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold leading-none text-white flex items-center justify-center"
-            style={{ background: `linear-gradient(135deg, ${systemLight}8c 0%, ${systemDark}8c 100%)` }}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold leading-none text-primary flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${systemLight}${badgeAlpha} 0%, ${systemDark}${badgeAlpha} 100%)` }}
           >
             {SYSTEM_NAMES[rom.systemId] ?? rom.systemId.toUpperCase()}
           </span>
-          <span className="truncate text-sm font-medium text-white">
+          <span className="truncate text-sm font-medium text-primary">
             {displayName}
           </span>
         </div>
         {playCount > 0 && (
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="mt-0.5 text-xs text-secondary">
             Played {playCount} {playCount === 1 ? "time" : "times"}
           </p>
         )}
@@ -362,18 +394,18 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       {contextMenu &&
         createPortal(
           <div
-            className="fixed z-50 min-w-[180px] rounded-lg border border-white/10 bg-gray-900/95 py-1 shadow-xl backdrop-blur-sm"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            className="ctx-menu-panel fixed z-50 min-w-[180px] rounded-lg border py-1 shadow-xl backdrop-blur-sm"
+            style={{ left: contextMenu.x, top: contextMenu.y, background: "var(--color-ctx-bg)", borderColor: "var(--color-ctx-border)" }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 truncate max-w-[240px]">
+            <div className="px-3 py-1.5 text-xs font-medium text-muted truncate max-w-[240px]">
               {displayName}
             </div>
-            <div className="mx-2 my-1 border-t border-white/10" />
+            <div className="mx-2 my-1 border-t" style={{ borderColor: "var(--color-ctx-border)" }} />
             {contextMenu.emulators.map((emu) => (
               <button
                 key={emu.emulatorId}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-gray-200 hover:bg-white/10 transition-colors"
+                className="ctx-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-sm text-secondary transition-colors"
                 onClick={() => {
                   closeContextMenu();
                   launchGame(rom, emu.emulatorId);

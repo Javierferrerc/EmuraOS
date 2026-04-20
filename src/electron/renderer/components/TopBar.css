@@ -1,9 +1,10 @@
 .topbar-search {
   background:
-    linear-gradient(335deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 100%);
+    linear-gradient(335deg, var(--color-glass-bg) 0%, transparent 100%);
   position: relative;
   border-radius: 999px;
   isolation: isolate;
+  box-shadow: var(--shadow-element);
 }
 
 .topbar-search::before {
@@ -12,7 +13,7 @@
   inset: 0;
   border-radius: inherit;
   border: 1px solid transparent;
-  background: linear-gradient(95deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  background: linear-gradient(95deg, var(--color-glass-border) 0%, transparent 100%) border-box;
   -webkit-mask:
     linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);
@@ -27,10 +28,16 @@
 
 .topbar-icon-btn {
   background:
-    linear-gradient(166deg, transparent 0%, rgba(255, 255, 255, 0.3) 100%);
+    linear-gradient(166deg, transparent 0%, var(--color-glass-bg) 100%);
   position: relative;
   border-radius: 50%;
   isolation: isolate;
+  box-shadow: var(--shadow-element);
+  transition: box-shadow 0.2s ease-out;
+}
+
+.topbar-icon-btn:hover {
+  box-shadow: var(--shadow-element-hover);
 }
 
 .topbar-icon-btn::before {
@@ -39,7 +46,7 @@
   inset: 0;
   border-radius: inherit;
   border: 1px solid transparent;
-  background: linear-gradient(134deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  background: linear-gradient(134deg, var(--color-glass-border) 0%, transparent 100%) border-box;
   -webkit-mask:
     linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);

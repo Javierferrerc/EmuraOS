@@ -102,6 +102,7 @@ interface AppState {
   isAddingRoms: boolean;
   disambiguationPending: DisambiguationState | null;
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
+  romAddedDates: Record<string, string>;
 }
 
 interface AppActions {
@@ -237,6 +238,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     romsPath: string;
     emulatorsPath: string;
   } | null>(null);
+  const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -315,12 +317,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        const [cfg, sys, scan, metadata, userLib] = await Promise.all([
+        const [cfg, sys, scan, metadata, userLib, addedDates] = await Promise.all([
           window.electronAPI.getConfig(),
           window.electronAPI.getSystems(),
           window.electronAPI.scanRoms(),
           window.electronAPI.getAllMetadata(),
           window.electronAPI.getUserLibrary(),
+          window.electronAPI.getRomAddedDates(),
         ]);
         setConfig(cfg);
         setSystems(sys);
@@ -330,6 +333,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCollections(userLib.collections);
         setRecentlyPlayed(userLib.recentlyPlayed);
         setPlayHistory(userLib.playHistory);
+        setRomAddedDates(addedDates);
 
         // Auto-fetch covers from Libretro if there are ROMs without covers
         const hasRomsWithoutCovers = scan.systems.some((system) =>
@@ -374,6 +378,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const scan = await window.electronAPI.scanRoms();
       setScanResult(scan);
+
+      // Reload romAddedDates (scan-roms records new additions)
+      const addedDates = await window.electronAPI.getRomAddedDates();
+      setRomAddedDates(addedDates);
 
       // Reload metadata for any new ROMs
       const metadata = await window.electronAPI.getAllMetadata();
@@ -523,7 +531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Add ROMs flow ──────────────────────────────────────────────────
   const addRomsFlow = useCallback(async () => {
     try {
-      const filePaths = await window.electronAPI.pickRomFiles();
+      const selectedSystemId = activeFilter.type === "system" ? activeFilter.systemId : undefined;
+      const filePaths = await window.electronAPI.pickRomFiles(selectedSystemId);
       if (!filePaths || filePaths.length === 0) return;
 
       const resolved = await window.electronAPI.resolveRomSystems(filePaths);
@@ -557,7 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Failed to add ROMs:", err);
     }
-  }, [refreshScan]);
+  }, [refreshScan, activeFilter]);
 
   const resolveDisambiguation = useCallback(
     async (selections: Array<{ filePath: string; systemId: string }>) => {
@@ -1024,6 +1033,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     resolveDisambiguation,
     cancelDisambiguation,
     resolvedPaths,
+    romAddedDates,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

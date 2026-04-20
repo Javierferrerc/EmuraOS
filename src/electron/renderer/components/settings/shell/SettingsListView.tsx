@@ -12,6 +12,7 @@ import { ButtonRow } from "../widgets/ButtonRow";
 import { InfoRow } from "../widgets/InfoRow";
 import { FolderRow } from "../widgets/FolderRow";
 import { PathRow } from "../widgets/PathRow";
+import { ColorRow } from "../widgets/ColorRow";
 
 interface Props {
   groups: SettingsGroup[];
@@ -108,6 +109,18 @@ export function SettingsListView({
           };
         }
         break;
+      case "color":
+        activateRef.current = () => {
+          // Trigger click on the hidden color input for the focused row
+          const swatchBtns = document.querySelectorAll<HTMLButtonElement>('[title="Elegir color"]');
+          const visibleIdx = allVisible.findIndex((v) => v.flatIndex === focusedRowIndex);
+          let colorIdx = 0;
+          for (let i = 0; i < visibleIdx; i++) {
+            if (allVisible[i].row.kind === "color") colorIdx++;
+          }
+          swatchBtns[colorIdx]?.click();
+        };
+        break;
       default:
         activateRef.current = null;
     }
@@ -141,7 +154,7 @@ export function SettingsListView({
                 </h2>
               )}
               {group.description && (
-                <p className="mb-3 text-xs text-muted">
+                <p className="mb-3 text-xs text-muted" style={{ whiteSpace: "pre-line" }}>
                   {renderDescription(group.description)}
                 </p>
               )}
@@ -213,6 +226,8 @@ function renderRow(
       return <FolderRow setting={row} ctx={ctx} focused={focused} />;
     case "path":
       return <PathRow setting={row} ctx={ctx} focused={focused} />;
+    case "color":
+      return <ColorRow setting={row} ctx={ctx} focused={focused} />;
     default: {
       // Exhaustiveness check
       const _never: never = row;

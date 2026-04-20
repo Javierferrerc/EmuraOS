@@ -78,6 +78,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCemuKeysError, pendingCemuKeysLaunch]);
 
+  // Apply theme to <html> so CSS [data-theme] selectors work globally
+  useEffect(() => {
+    const theme = app.config?.theme ?? "dark";
+    if (theme === "dark") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+  }, [app.config?.theme]);
+
   // First-run wizard — only show when the user hasn't completed setup yet
   useEffect(() => {
     if (NEW_SETTINGS_ENABLED && app.config && !app.config.firstRunCompleted) {
@@ -176,6 +186,25 @@ export default function App() {
     ]
   );
 
+  // ── Background image layer ─────────────────────────────────────────
+  const [backgroundDataUrl, setBackgroundDataUrl] = useState<string | null>(null);
+  const bgImagePath = app.config?.backgroundImage;
+  useEffect(() => {
+    if (!bgImagePath) {
+      setBackgroundDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI.readBackgroundDataUrl(bgImagePath).then((url) => {
+      if (!cancelled) setBackgroundDataUrl(url);
+    });
+    return () => { cancelled = true; };
+  }, [bgImagePath]);
+
+  const bgBrightness = app.config?.backgroundBrightness ?? 100;
+  const bgBlur = app.config?.backgroundBlur ?? 0;
+  const bgOpacity = app.config?.backgroundOpacity ?? 30;
+
   let page;
   if (NEW_SETTINGS_ENABLED) {
     const path = navigation.currentPath;
@@ -204,6 +233,19 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col">
+      {backgroundDataUrl && (
+        <div
+          className="pointer-events-none fixed inset-0"
+          style={{
+            backgroundImage: `url(${backgroundDataUrl})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            filter: `brightness(${bgBrightness / 100}) blur(${bgBlur}px)`,
+            opacity: bgOpacity / 100,
+            zIndex: 0,
+          }}
+        />
+      )}
       <div className="flex-1 overflow-hidden">{page}</div>
       {/* <StatusBar /> */}
       {showWizard && (

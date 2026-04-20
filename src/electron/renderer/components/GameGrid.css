@@ -23,7 +23,7 @@
 }
 
 .game-grid-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-scrollbar-thumb);
   background-clip: content-box;
   border-right: 6px solid transparent;
   border-top: 2px solid transparent;

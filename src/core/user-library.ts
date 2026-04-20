@@ -187,6 +187,39 @@ export class UserLibrary {
     return this.load().playHistory[key] ?? null;
   }
 
+  // --- ROM Added Dates ---
+
+  /**
+   * Record the added-date for ROMs that don't have one yet.
+   * Accepts an array of {systemId, fileName} and performs a single
+   * load/save cycle to avoid blocking the main process with per-ROM I/O.
+   */
+  recordRomAddedBatch(
+    roms: Array<{ systemId: string; fileName: string }>
+  ): void {
+    if (roms.length === 0) return;
+    const data = this.load();
+    if (!data.romAddedDates) {
+      data.romAddedDates = {};
+    }
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const { systemId, fileName } of roms) {
+      const key = UserLibrary.makeKey(systemId, fileName);
+      if (!data.romAddedDates[key]) {
+        data.romAddedDates[key] = now;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.save(data);
+    }
+  }
+
+  getRomAddedDates(): Record<string, string> {
+    return this.load().romAddedDates ?? {};
+  }
+
   // --- Bulk ---
 
   getAll(): UserLibraryFile {

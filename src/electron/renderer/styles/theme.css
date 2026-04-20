@@ -1,12 +1,8 @@
 /**
- * Phase 13 theme variables.
+ * Theme variables.
  *
- * PR1 defines every token used by the new Settings shell. Only new
- * components consume these variables — Layout/TopBar/SystemSlider/GameGrid
- * still use Tailwind classes until the PR2 mechanical sweep.
- *
- * PR3+ (Phase 14) introduces theme switching by swapping the values of
- * these variables on a `[data-theme]` attribute.
+ * :root defines the Dark theme (default). Additional themes are activated
+ * via `[data-theme]` attribute on <html>.
  */
 
 :root {
@@ -34,6 +30,35 @@
   --color-warn: #eab308;
   --color-bad: #ef4444;
 
+  /* Scrollbar */
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+
+  /* Glass overlays (TopBar, cards) */
+  --color-glass-bg: rgba(255, 255, 255, 0.3);
+  --color-glass-border: rgba(255, 255, 255, 0.36);
+
+  /* Card glow */
+  --color-card-glow: rgba(96, 165, 250, 0.3);
+  --color-card-border-start: #60a5fa;
+  --color-card-border-end: #a855f7;
+
+  /* Context menu */
+  --color-ctx-bg: rgba(17, 24, 39, 0.95);
+  --color-ctx-border: rgba(255, 255, 255, 0.1);
+  --color-ctx-hover: rgba(255, 255, 255, 0.1);
+
+  /* Borders (inputs, panels, dividers) */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.4);
+
+  /* Dropdown panel */
+  --color-dropdown-bg: #2c2e60;
+
+  /* Element shadows (cards, buttons, panels) */
+  --shadow-element: none;
+  --shadow-element-hover: none;
+
   /* Radii */
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -52,6 +77,93 @@
 
   /* Focus ring */
   --focus-ring-width: 2px;
+}
+
+/* ── Light theme ───────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  --color-bg: #f0f2f5;
+  --color-bg-gradient: linear-gradient(135deg, #e8edf2 0%, #f0f2f5 100%);
+
+  --color-surface-0: rgba(255, 255, 255, 0.7);
+  --color-surface-1: rgba(230, 232, 240, 0.85);
+  --color-surface-2: rgba(210, 215, 225, 0.9);
+
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  --color-accent: #2563eb;
+  --color-accent-hover: #3b82f6;
+  --color-focus-ring: #3b82f6;
+
+  --color-good: #16a34a;
+  --color-warn: #ca8a04;
+  --color-bad: #dc2626;
+
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.18);
+
+  --color-glass-bg: rgba(0, 0, 0, 0.06);
+  --color-glass-border: rgba(0, 0, 0, 0.1);
+
+  --color-card-glow: rgba(37, 99, 235, 0.2);
+  --color-card-border-start: #3b82f6;
+  --color-card-border-end: #8b5cf6;
+
+  --color-ctx-bg: rgba(255, 255, 255, 0.95);
+  --color-ctx-border: rgba(0, 0, 0, 0.1);
+  --color-ctx-hover: rgba(0, 0, 0, 0.06);
+
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-subtle: rgba(0, 0, 0, 0.08);
+  --color-border-hover: rgba(0, 0, 0, 0.3);
+
+  --color-dropdown-bg: rgba(255, 255, 255, 0.98);
+
+  --shadow-element: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-element-hover: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Retro CRT theme ──────────────────────────────────────────── */
+
+[data-theme="retro-crt"] {
+  --color-bg: #0a0a0a;
+  --color-bg-gradient: linear-gradient(135deg, #0d1a0d 0%, #0a0a0a 100%);
+
+  --color-surface-0: rgba(13, 26, 13, 0.5);
+  --color-surface-1: rgba(20, 40, 20, 0.7);
+  --color-surface-2: rgba(30, 60, 30, 0.8);
+
+  --color-text-primary: #33ff33;
+  --color-text-secondary: #22cc22;
+  --color-text-muted: #1a9a1a;
+
+  --color-accent: #33ff33;
+  --color-accent-hover: #66ff66;
+  --color-focus-ring: #33ff33;
+
+  --color-good: #33ff33;
+  --color-warn: #ffcc00;
+  --color-bad: #ff3333;
+
+  --color-scrollbar-thumb: rgba(51, 255, 51, 0.2);
+
+  --color-glass-bg: rgba(51, 255, 51, 0.08);
+  --color-glass-border: rgba(51, 255, 51, 0.2);
+
+  --color-card-glow: rgba(51, 255, 51, 0.25);
+  --color-card-border-start: #33ff33;
+  --color-card-border-end: #22cc22;
+
+  --color-ctx-bg: rgba(10, 10, 10, 0.95);
+  --color-ctx-border: rgba(51, 255, 51, 0.15);
+  --color-ctx-hover: rgba(51, 255, 51, 0.1);
+
+  --color-border: rgba(51, 255, 51, 0.15);
+  --color-border-subtle: rgba(51, 255, 51, 0.08);
+  --color-border-hover: rgba(51, 255, 51, 0.35);
+
+  --color-dropdown-bg: rgba(10, 20, 10, 0.98);
 }
 
 @layer utilities {
@@ -82,6 +194,12 @@
   .ring-focus {
     box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring);
   }
+  .shadow-themed {
+    box-shadow: var(--shadow-element);
+  }
+  .shadow-themed-hover:hover {
+    box-shadow: var(--shadow-element-hover);
+  }
 }
 
 /* Wizard scrollbar — matches GameGrid */
@@ -94,7 +212,7 @@
 }
 
 .wizard-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-scrollbar-thumb);
   background-clip: content-box;
   border-right: 6px solid transparent;
   border-top: 2px solid transparent;
@@ -104,9 +222,10 @@
 
 /* Glassmorphic card — matches TopBar icon buttons */
 .info-row-glass {
-  background: linear-gradient(171deg, transparent 0%, rgba(255, 255, 255, 0.15) 100%);
+  background: linear-gradient(171deg, transparent 0%, var(--color-glass-bg) 100%);
   position: relative;
   isolation: isolate;
+  box-shadow: var(--shadow-element);
 }
 
 /* Folder row variant — slightly dimmer glass */
@@ -114,6 +233,7 @@
   background: linear-gradient(171deg, transparent 0%, rgb(209 209 209 / 10%) 100%);
   position: relative;
   isolation: isolate;
+  box-shadow: var(--shadow-element);
 }
 
 .folder-row-glass::before {
@@ -122,7 +242,7 @@
   inset: 0;
   border-radius: inherit;
   border: 1px solid transparent;
-  background: linear-gradient(134deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  background: linear-gradient(134deg, var(--color-glass-border) 0%, transparent 100%) border-box;
   -webkit-mask:
     linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);
@@ -141,7 +261,7 @@
   inset: 0;
   border-radius: inherit;
   border: 1px solid transparent;
-  background: linear-gradient(134deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 100%) border-box;
+  background: linear-gradient(134deg, var(--color-glass-border) 0%, transparent 100%) border-box;
   -webkit-mask:
     linear-gradient(#fff 0 0) padding-box,
     linear-gradient(#fff 0 0);

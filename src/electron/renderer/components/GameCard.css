@@ -26,6 +26,7 @@
      on the edge of the card or its mask-based gradient border. */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  box-shadow: var(--shadow-element);
   transition:
     transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 0.35s ease-out;
@@ -84,7 +85,7 @@
  */
 .game-card:hover,
 .game-card.is-focused {
-  box-shadow: 0 0 30px 1px rgba(96, 165, 250, 0.3);
+  box-shadow: var(--shadow-element-hover), 0 0 30px 1px var(--color-card-glow);
 }
 
 /*
@@ -109,7 +110,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 2px;
-  background: linear-gradient(163deg, #60a5fa 0%, #a855f7 100%);
+  background: linear-gradient(163deg, var(--color-card-border-start) 0%, var(--color-card-border-end) 100%);
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -232,4 +233,22 @@
   .game-card.is-focused .game-card__overlay {
     transform: none;
   }
+}
+
+/* Legacy card (tilt disabled) — themed shadow */
+.game-card-legacy {
+  box-shadow: var(--shadow-element);
+}
+.game-card-legacy:hover {
+  box-shadow: var(--shadow-element-hover);
+}
+
+/* Context menu item hover — themed */
+.ctx-menu-item:hover {
+  background: var(--color-ctx-hover);
+}
+
+/* Context menu panel shadow — themed */
+.ctx-menu-panel {
+  box-shadow: var(--shadow-element-hover);
 }

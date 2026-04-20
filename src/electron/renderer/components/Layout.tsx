@@ -6,7 +6,7 @@ import {
   TOPBAR_INDEX_FAVORITES,
   TOPBAR_INDEX_ADD_ROM,
   TOPBAR_INDEX_RESCAN,
-  TOPBAR_INDEX_PROFILE,
+  // TOPBAR_INDEX_PROFILE, // temporarily disabled
   TOPBAR_INDEX_SETTINGS,
 } from "./TopBar";
 import { SystemSlider } from "./SystemSlider";
@@ -46,6 +46,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     config,
     addRomsFlow,
     refreshScan,
+    recentlyPlayed,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -86,9 +87,46 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     return systems.filter((s) => systemCounts.has(s.id));
   }, [scanResult, systems]);
 
+  // Reorder systems based on systemSortOrder config
+  const orderedSystems = useMemo(() => {
+    const sortOrder = config?.systemSortOrder ?? "default";
+    if (sortOrder === "recent") {
+      // Extract unique system IDs from recentlyPlayed, preserving recency
+      const recentSystemIds: string[] = [];
+      for (const key of recentlyPlayed) {
+        const systemId = key.substring(0, key.indexOf(":"));
+        if (!recentSystemIds.includes(systemId)) {
+          recentSystemIds.push(systemId);
+        }
+      }
+      const recentSet = new Set(recentSystemIds);
+      const recentSystems = recentSystemIds
+        .map((id) => systemsWithRoms.find((s) => s.id === id))
+        .filter(Boolean) as typeof systemsWithRoms;
+      const rest = systemsWithRoms.filter((s) => !recentSet.has(s.id));
+      return [...recentSystems, ...rest];
+    }
+    if (sortOrder === "custom" && config?.customSystemOrder) {
+      const order = config.customSystemOrder;
+      const orderMap = new Map<string, number>();
+      for (let i = 0; i < order.length; i++) {
+        orderMap.set(order[i], i);
+      }
+      return [...systemsWithRoms].sort((a, b) => {
+        const ia = orderMap.get(a.id) ?? Infinity;
+        const ib = orderMap.get(b.id) ?? Infinity;
+        return ia - ib;
+      });
+    }
+    return systemsWithRoms;
+  }, [systemsWithRoms, config?.systemSortOrder, config?.customSystemOrder, recentlyPlayed]);
+
+  const theme = config?.theme ?? "dark";
+
+  const customSystemColors = config?.customSystemColors;
   const sliderItems = useMemo(
-    () => buildSliderItems(systemsWithRoms),
-    [systemsWithRoms]
+    () => buildSliderItems(orderedSystems, theme, customSystemColors),
+    [orderedSystems, theme, customSystemColors]
   );
 
   // Track which slider index is active (matches current filter)
@@ -281,9 +319,8 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
               case TOPBAR_INDEX_RESCAN:
                 refreshScan();
                 break;
-              case TOPBAR_INDEX_PROFILE:
-                // Placeholder — profile action not yet implemented
-                break;
+              // case TOPBAR_INDEX_PROFILE: // temporarily disabled
+              //   break;
               case TOPBAR_INDEX_SETTINGS:
                 setCurrentView("settings");
                 break;
@@ -468,7 +505,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
           <img src={logoEmura} alt="Emura OS" className="mx-auto mb-6 h-14" />
-          <p className="text-lg text-gray-500">Cargando...</p>
+          <p className="text-lg text-muted">Cargando...</p>
         </div>
       </div>
     );

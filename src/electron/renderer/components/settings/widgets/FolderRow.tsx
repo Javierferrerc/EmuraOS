@@ -76,13 +76,15 @@ export function FolderRow({ setting, ctx, focused }: Props) {
           onBlur={commit}
           disabled={disabled}
           tabIndex={disabled ? -1 : 0}
-          className="flex-1 rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
+          className="flex-1 rounded-md border bg-surface-transparent px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
+          style={{ borderColor: "var(--color-border)" }}
         />
         <button
           type="button"
           onClick={browse}
           disabled={disabled}
-          className="rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:border-white hover:bg-surface-2 disabled:opacity-50"
+          className="rounded-md border bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+            style={{ borderColor: "var(--color-border)" }}
         >
           Browse…
         </button>
@@ -92,7 +94,8 @@ export function FolderRow({ setting, ctx, focused }: Props) {
             onClick={openFolder}
             disabled={disabled}
             title="Abrir carpeta"
-            className="rounded-md border border-white/10 bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:border-white hover:bg-surface-2 disabled:opacity-50"
+            className="rounded-md border bg-surface-transparent px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+            style={{ borderColor: "var(--color-border)" }}
           >
             📂
           </button>
