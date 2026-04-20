@@ -47,6 +47,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     addRomsFlow,
     refreshScan,
     recentlyPlayed,
+    openGameDetail,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -356,6 +357,15 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
           break;
         }
 
+        case "SECONDARY_ACTION": {
+          focusDispatch(action);
+          if (focusState.region === "grid") {
+            const rom = filteredRomsRef.current[focusState.gridIndex];
+            if (rom) openGameDetail(rom);
+          }
+          break;
+        }
+
         case "OPEN_SETTINGS":
           focusDispatch(action);
           setCurrentView(currentView === "settings" ? "library" : "settings");
@@ -420,6 +430,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
       setCurrentView,
       toggleFavorite,
       toggleFullscreen,
+      openGameDetail,
       handleToggleFavoritesFilter,
       addRomsFlow,
       refreshScan,

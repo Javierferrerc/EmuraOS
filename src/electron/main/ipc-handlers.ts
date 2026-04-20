@@ -147,16 +147,48 @@ export function registerIpcHandlers(
   // when the renderer passes forceRefresh=true to `list-drive-emulators`.
   let cachedDriveListing: Record<string, DriveEmulatorMapping> | null = null;
 
+  // Play-time tracking for embedded sessions
+  let sessionStartedAt: number | null = null;
+  let sessionRom: { systemId: string; fileName: string } | null = null;
+
   function getOrCreateOverlay(): EmulatorOverlay | null {
     const win = getMainWindow();
     if (!win) return null;
     if (!overlay) {
       overlay = new EmulatorOverlay(win, {
         onSessionStarted: (event) => {
+          sessionStartedAt = Date.now();
+          sessionRom = event.rom
+            ? { systemId: event.rom.systemId, fileName: event.rom.fileName }
+            : null;
           win.setFullScreen(true);
-          win.webContents.send("game-session-started", event);
+          win.webContents.send("game-session-started", {
+            ...event,
+            sessionStartedAt,
+          });
         },
         onSessionEnded: () => {
+          // Persist accumulated play time
+          if (sessionStartedAt && sessionRom) {
+            const durationSeconds = Math.round(
+              (Date.now() - sessionStartedAt) / 1000
+            );
+            if (durationSeconds > 0) {
+              try {
+                const lib = new UserLibrary(getProjectRoot());
+                lib.addPlayTime(
+                  sessionRom.systemId,
+                  sessionRom.fileName,
+                  durationSeconds
+                );
+              } catch (err) {
+                console.warn("[play-time] failed to persist:", err);
+              }
+            }
+          }
+          sessionStartedAt = null;
+          sessionRom = null;
+
           if (win.isFullScreen()) win.setFullScreen(false);
           win.webContents.send("game-session-ended");
           overlay = null;
@@ -823,6 +855,19 @@ export function registerIpcHandlers(
     const lib = new UserLibrary(getProjectRoot());
     return lib.getRomAddedDates();
   });
+
+  ipcMain.handle(
+    "record-play-time",
+    (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown, seconds: unknown) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
+      const validatedSeconds = typeof seconds === "number" && seconds > 0 ? Math.round(seconds) : 0;
+      if (validatedSeconds > 0) {
+        const lib = new UserLibrary(getProjectRoot());
+        lib.addPlayTime(validatedSystem, validatedFile, validatedSeconds);
+      }
+    }
+  );
 
   // --- Embedded overlay handlers ---
 

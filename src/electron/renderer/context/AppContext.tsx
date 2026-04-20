@@ -103,6 +103,7 @@ interface AppState {
   disambiguationPending: DisambiguationState | null;
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
+  detailModalRom: DiscoveredRom | null;
 }
 
 interface AppActions {
@@ -153,6 +154,8 @@ interface AppActions {
   addRomsFlow: () => Promise<void>;
   resolveDisambiguation: (selections: Array<{ filePath: string; systemId: string }>) => Promise<void>;
   cancelDisambiguation: () => void;
+  openGameDetail: (rom: DiscoveredRom) => void;
+  closeGameDetail: () => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -239,6 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     emulatorsPath: string;
   } | null>(null);
   const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
+  const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -285,6 +289,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsGameRunning(false);
       setCurrentGame(null);
       setCurrentView("library");
+      // Refresh to pick up totalPlayTime persisted by main process
+      window.electronAPI.getUserLibrary().then((lib) => {
+        setPlayHistory(lib.playHistory);
+      });
     });
     return () => {
       window.electronAPI.removeGameSessionStartedListener();
@@ -592,6 +600,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDisambiguationPending(null);
   }, []);
 
+  const openGameDetail = useCallback((rom: DiscoveredRom) => {
+    setDetailModalRom(rom);
+  }, []);
+
+  const closeGameDetail = useCallback(() => {
+    setDetailModalRom(null);
+  }, []);
+
   // Listen for the main-process startup trigger
   useEffect(() => {
     const unsubscribe = window.electronAPI.onStartupUpdateCheck(() => {
@@ -615,6 +631,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         [key]: {
           lastPlayed: new Date().toISOString(),
           playCount: (existing?.playCount ?? 0) + 1,
+          totalPlayTime: existing?.totalPlayTime ?? 0,
         },
       };
     });
@@ -1034,6 +1051,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cancelDisambiguation,
     resolvedPaths,
     romAddedDates,
+    detailModalRom,
+    openGameDetail,
+    closeGameDetail,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

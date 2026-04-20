@@ -10,6 +10,7 @@ import { CemuKeysMissingModal } from "./components/CemuKeysMissingModal";
 import { GameLoadingOverlay } from "./components/GameLoadingOverlay";
 import { UpdateModal } from "./components/UpdateModal";
 import { DisambiguationDialog } from "./components/DisambiguationDialog";
+import { GameDetailModal } from "./components/GameDetailModal";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
@@ -213,7 +214,7 @@ export default function App() {
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
     } else {
-      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning} />;
+      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom} />;
     }
   } else {
     switch (currentView) {
@@ -227,7 +228,7 @@ export default function App() {
         page = <GameModeView />;
         break;
       default:
-        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning} />;
+        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom} />;
     }
   }
 
@@ -279,6 +280,16 @@ export default function App() {
         <UpdateModal updateInfo={updateInfo} onDismiss={dismissUpdateModal} />
       )}
       <DisambiguationDialog />
+      {app.detailModalRom && (
+        <GameDetailModal
+          rom={app.detailModalRom}
+          onClose={app.closeGameDetail}
+          onLaunch={(rom) => {
+            app.closeGameDetail();
+            app.launchGame(rom);
+          }}
+        />
+      )}
       {/* Launch loading overlay — mounted last so DOM order + z-index 9999
           + isolation guarantee it wins stacking over any modal. Conditional
           on `launchingGame` inside the component itself. */}

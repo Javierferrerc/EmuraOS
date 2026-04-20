@@ -16,7 +16,7 @@ export function BottomBar() {
       </span>
       <span className="flex items-center gap-1.5">
         <img src={squareIcon} alt="" className="h-5 w-5" />
-        Game Options
+        Game Info
       </span>
       <span className="flex items-center gap-1.5">
         <img src={navigateIcon} alt="" className="h-5 w-5" />

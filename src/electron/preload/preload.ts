@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-recently-played", limit),
 
   getRomAddedDates: () => ipcRenderer.invoke("get-rom-added-dates"),
+  recordPlayTime: (systemId: string, fileName: string, seconds: number) =>
+    ipcRenderer.invoke("record-play-time", systemId, fileName, seconds),
 
   onCoreDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("core-download-progress", (_event, progress) =>

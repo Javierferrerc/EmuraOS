@@ -9,6 +9,7 @@ const KEY_MAP: Record<string, FocusAction> = {
   Enter: { type: "ACTIVATE" },
   " ": { type: "ACTIVATE" },
   Escape: { type: "BACK" },
+  Tab: { type: "SECONDARY_ACTION" },
 };
 
 export function useKeyboardNav(options: {
