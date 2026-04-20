@@ -36,12 +36,17 @@
      which produces a natural damped lag identical to a low-mass spring.
      When the mouse leaves, the inline styles are cleared and the same
      transition animates each chip back to 114px. */
+  box-shadow: var(--shadow-element);
   will-change: width, height;
   transition:
     width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
     height 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
     transform 0.2s ease-out,
     box-shadow 0.25s ease-out;
+}
+
+.slider-btn:hover {
+  box-shadow: var(--shadow-element-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

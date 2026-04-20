@@ -67,8 +67,24 @@ export const AppConfigPartialSchema = z
     cardTiltEnabled: z.boolean().optional(),
     gameLoadingOverlayEnabled: z.boolean().optional(),
     systemSliderMagnificationEnabled: z.boolean().optional(),
+    theme: z.enum(["dark", "light", "retro-crt"]).optional(),
     devMode: z.boolean().optional(),
     citraGamepadAutoConfigured: z.boolean().optional(),
+    gameSortOrder: z
+      .enum(["alpha-asc", "alpha-desc", "recent", "added"])
+      .optional(),
+    systemSortOrder: z.enum(["default", "recent", "custom"]).optional(),
+    customSystemOrder: z.array(z.string()).optional(),
+    customSystemColors: z
+      .record(
+        z.string().regex(/^[a-z0-9-]+$/),
+        z.string().regex(/^#[0-9a-fA-F]{6}$/)
+      )
+      .optional(),
+    backgroundImage: z.string().max(500).optional(),
+    backgroundBrightness: z.number().min(0).max(200).optional(),
+    backgroundBlur: z.number().min(0).max(20).optional(),
+    backgroundOpacity: z.number().min(0).max(100).optional(),
   })
   .strict();
 

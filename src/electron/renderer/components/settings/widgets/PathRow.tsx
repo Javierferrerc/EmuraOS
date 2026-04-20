@@ -47,7 +47,8 @@ export function PathRow({ setting, ctx, focused }: Props) {
         onBlur={commit}
         disabled={disabled}
         tabIndex={disabled ? -1 : 0}
-        className="w-full rounded-md border border-white/10 bg-surface-0 px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
+        className="w-full rounded-md border bg-surface-0 px-3 py-1.5 text-sm text-primary outline-none focus:border-[var(--color-accent)]"
+        style={{ borderColor: "var(--color-border)" }}
       />
     </div>
   );

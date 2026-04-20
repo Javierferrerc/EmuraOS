@@ -61,20 +61,33 @@ export const coverArtSection: SettingsSection = {
           id: "cover-sgdb",
           title: "SteamGridDB",
           description:
-            "Fuente de respaldo para carátulas de Switch y sistemas modernos. Requiere API key gratuita.",
+            "Fuente de carátulas para Switch, sistemas modernos y más. Requiere una API key gratuita.\n\nCómo obtener tu API Key:\n1. Crea una cuenta en steamgriddb.com\n2. Ve a Preferencias > API\n3. Copia tu API Key y pégala aquí abajo",
           rows: [
             {
               id: "cov.sgdb-key",
               kind: "path",
               label: "SteamGridDB API Key",
               description:
-                "Obtén tu key en steamgriddb.com/profile/preferences/api",
+                "Pega aquí la API Key obtenida desde tu perfil de SteamGridDB.",
               secret: true,
               get: (ctx) => ctx.config?.steamGridDbApiKey ?? "",
               set: async (value, ctx) => {
                 await ctx.updateConfig({
                   steamGridDbApiKey: value || undefined,
                 });
+              },
+            },
+            {
+              id: "cov.sgdb-open-site",
+              kind: "button",
+              label: "Abrir SteamGridDB",
+              description:
+                "Abre steamgriddb.com en tu navegador para crear tu cuenta y obtener la API Key.",
+              variant: "ghost",
+              run: async (_ctx) => {
+                await window.electronAPI.openExternal(
+                  "https://www.steamgriddb.com/profile/preferences/api"
+                );
               },
             },
           ],

@@ -206,7 +206,19 @@ export function registerIpcHandlers(
     const configManager = new ConfigManager(getProjectRoot());
     const registry = new SystemsRegistry(getSystemsPath());
     const scanner = new RomScanner(registry);
-    return scanner.scan(configManager.getRomsPath());
+    const result = scanner.scan(configManager.getRomsPath());
+
+    // Record added dates for newly discovered ROMs (single load/save)
+    const lib = new UserLibrary(getProjectRoot());
+    const allRoms: Array<{ systemId: string; fileName: string }> = [];
+    for (const sys of result.systems) {
+      for (const rom of sys.roms) {
+        allRoms.push({ systemId: rom.systemId, fileName: rom.fileName });
+      }
+    }
+    lib.recordRomAddedBatch(allRoms);
+
+    return result;
   });
 
   ipcMain.handle("get-emulators-for-system", (_event, systemId: unknown) => {
@@ -469,8 +481,161 @@ export function registerIpcHandlers(
       try {
         const data = readFileSync(resolved);
         const ext = path.extname(resolved).toLowerCase();
-        const mime =
-          ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+        const mimeMap: Record<string, string> = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp" };
+        const mime = mimeMap[ext] ?? "image/png";
+        return `data:${mime};base64,${data.toString("base64")}`;
+      } catch {
+        return null;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "set-custom-cover",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown,
+      sourcePath: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(romFileName);
+      const validatedSource = FolderPathSchema.parse(sourcePath);
+
+      // Validate file extension
+      const ext = path.extname(validatedSource).toLowerCase();
+      const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+      if (!allowedExts.includes(ext)) {
+        return { success: false, error: "Unsupported image format. Use jpg, png, or webp." };
+      }
+
+      // Validate source file exists
+      if (!existsSync(validatedSource)) {
+        return { success: false, error: "Source image file not found." };
+      }
+
+      const cache = new MetadataCache(getProjectRoot());
+      const destPath = cache.getCoverPath(validatedSystem, validatedFile);
+
+      // Security check: destination must be inside config/metadata/
+      const projectRoot = getProjectRoot();
+      const metadataRoot = path.resolve(projectRoot, "config", "metadata");
+      const resolvedDest = path.resolve(destPath);
+      if (!resolvedDest.startsWith(metadataRoot + path.sep)) {
+        logSecurityEvent({
+          type: "PATH_TRAVERSAL_BLOCKED",
+          channel: "set-custom-cover",
+          detail: `Blocked dest: ${destPath}`,
+          severity: "warn",
+        });
+        return { success: false, error: "Invalid destination path." };
+      }
+
+      try {
+        // Ensure the cover directory exists
+        cache.ensureDirectories(validatedSystem);
+
+        // Copy the image to the covers directory
+        copyFileSync(validatedSource, resolvedDest);
+
+        // Update metadata cache
+        const existing = cache.getMetadata(validatedSystem, validatedFile);
+        if (existing) {
+          existing.coverPath = resolvedDest;
+          existing.coverSource = "custom";
+          cache.setMetadata(validatedSystem, validatedFile, existing);
+        } else {
+          // Create minimal metadata entry
+          cache.setMetadata(validatedSystem, validatedFile, {
+            title: "",
+            description: "",
+            year: "",
+            genre: "",
+            publisher: "",
+            developer: "",
+            players: "",
+            rating: "",
+            coverPath: resolvedDest,
+            coverSource: "custom",
+            screenshotPath: "",
+            screenScraperId: "",
+            lastScraped: "",
+          });
+        }
+
+        return { success: true, coverPath: resolvedDest };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "reset-custom-cover",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(romFileName);
+
+      const cache = new MetadataCache(getProjectRoot());
+      const coverPath = cache.getCoverPath(validatedSystem, validatedFile);
+      const resolvedCover = path.resolve(coverPath);
+
+      // Security check
+      const projectRoot = getProjectRoot();
+      const metadataRoot = path.resolve(projectRoot, "config", "metadata");
+      if (!resolvedCover.startsWith(metadataRoot + path.sep)) {
+        logSecurityEvent({
+          type: "PATH_TRAVERSAL_BLOCKED",
+          channel: "reset-custom-cover",
+          detail: `Blocked path: ${coverPath}`,
+          severity: "warn",
+        });
+        return { success: false, error: "Invalid path." };
+      }
+
+      try {
+        // Delete the cover file if it exists
+        if (existsSync(resolvedCover)) {
+          rmSync(resolvedCover, { force: true });
+        }
+
+        // Clear coverPath and coverSource from metadata
+        const existing = cache.getMetadata(validatedSystem, validatedFile);
+        if (existing) {
+          existing.coverPath = "";
+          existing.coverSource = undefined;
+          cache.setMetadata(validatedSystem, validatedFile, existing);
+        }
+
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "read-background-data-url",
+    (_event: IpcMainInvokeEvent, imagePath: string) => {
+      if (!imagePath || typeof imagePath !== "string") return null;
+      const resolved = path.resolve(imagePath);
+      const ext = path.extname(resolved).toLowerCase();
+      const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+      if (!allowedExts.includes(ext)) return null;
+      if (!existsSync(resolved)) return null;
+      try {
+        const data = readFileSync(resolved);
+        const mimeMap: Record<string, string> = {
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".png": "image/png",
+          ".webp": "image/webp",
+        };
+        const mime = mimeMap[ext] ?? "image/png";
         return `data:${mime};base64,${data.toString("base64")}`;
       } catch {
         return null;
@@ -653,6 +818,11 @@ export function registerIpcHandlers(
       return lib.getRecentlyPlayed(validatedLimit);
     }
   );
+
+  ipcMain.handle("get-rom-added-dates", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getRomAddedDates();
+  });
 
   // --- Embedded overlay handlers ---
 
@@ -921,7 +1091,7 @@ export function registerIpcHandlers(
 
   // ── Add ROMs handlers ───────────────────────────────────────────────
 
-  ipcMain.handle("dialog:pick-roms", async () => {
+  ipcMain.handle("dialog:pick-roms", async (_event: IpcMainInvokeEvent, systemId?: string) => {
     const registry = new SystemsRegistry(getSystemsPath());
     const allSystems = registry.getAll();
     const extSet = new Set<string>();
@@ -931,8 +1101,24 @@ export function registerIpcHandlers(
         extSet.add(ext.replace(/^\./, ""));
       }
     }
+
+    // Resolve defaultPath to the selected system's ROM folder (or the general roms folder)
+    const configManager = new ConfigManager(getProjectRoot());
+    const romsPath = configManager.getRomsPath();
+    let defaultPath = romsPath;
+    if (systemId) {
+      const system = registry.getById(systemId);
+      if (system) {
+        const systemFolder = path.join(romsPath, system.romFolder);
+        if (existsSync(systemFolder)) {
+          defaultPath = systemFolder;
+        }
+      }
+    }
+
     const win = getMainWindow();
     const options: Electron.OpenDialogOptions = {
+      defaultPath,
       properties: ["openFile", "multiSelections"],
       filters: [{ name: "ROM files", extensions: [...extSet] }],
     };

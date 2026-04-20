@@ -57,12 +57,12 @@ export function GameModeView() {
   const systemName = currentGame?.rom.systemName || "";
 
   return (
-    <div className="flex h-screen flex-col bg-gray-900 text-gray-100">
+    <div className="flex h-screen flex-col text-primary" style={{ background: "var(--color-bg)" }}>
       {/* Top bar — hidden in fullscreen */}
       {!isFullscreen && (
-        <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
+        <header className="flex items-center justify-between border-b px-4 py-2 bg-surface-1 shadow-themed" style={{ borderColor: "var(--color-ctx-border)" }}>
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold" style={{ background: "var(--color-accent)" }}>
               {"\u25B6"}
             </div>
             <div>
@@ -70,21 +70,21 @@ export function GameModeView() {
                 {displayName}
               </h1>
               {systemName && (
-                <p className="text-xs text-gray-400">{systemName}</p>
+                <p className="text-xs text-muted">{systemName}</p>
               )}
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleFullscreen}
-              className="rounded-lg bg-gray-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-gray-500"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors bg-surface-2 shadow-themed shadow-themed-hover"
               title="Toggle Fullscreen (F10)"
             >
               Fullscreen
             </button>
             <button
               onClick={stopGame}
-              className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+              className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500 shadow-themed shadow-themed-hover"
             >
               Stop Game
             </button>
@@ -98,7 +98,7 @@ export function GameModeView() {
         className="flex flex-1 items-center justify-center bg-black"
       >
         {/* Content behind the emulator overlay, visible during loading */}
-        <p className="text-sm text-gray-600">Loading emulator...</p>
+        <p className="text-sm text-muted">Loading emulator...</p>
       </div>
     </div>
   );

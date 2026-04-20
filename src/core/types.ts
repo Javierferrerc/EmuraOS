@@ -54,12 +54,21 @@ export interface AppConfig {
   // When false, the slider behaves like a normal flat list with no mouse
   // tracking.
   systemSliderMagnificationEnabled?: boolean;
+  theme?: "dark" | "light" | "retro-crt";
   devMode?: boolean;
   // One-shot flag: set to true after we auto-apply the Citra gamepad
   // profile on the first 3DS launch. Prevents re-patching qt-config.ini
   // on every subsequent launch and keeps the user in control if they
   // later customize their bindings inside Citra.
   citraGamepadAutoConfigured?: boolean;
+  gameSortOrder?: "alpha-asc" | "alpha-desc" | "recent" | "added";
+  systemSortOrder?: "default" | "recent" | "custom";
+  customSystemOrder?: string[];
+  customSystemColors?: Record<string, string>;
+  backgroundImage?: string;
+  backgroundBrightness?: number;
+  backgroundBlur?: number;
+  backgroundOpacity?: number;
 }
 
 export interface EmulatorDefinition {
@@ -113,7 +122,7 @@ export interface GameMetadata {
   players: string;
   rating: string;
   coverPath: string;
-  coverSource?: "libretro" | "screenscraper" | "steamgriddb";
+  coverSource?: "libretro" | "screenscraper" | "steamgriddb" | "custom";
   screenshotPath: string;
   screenScraperId: string;
   lastScraped: string;
@@ -248,6 +257,7 @@ export interface UserLibraryFile {
   collections: Collection[];
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
+  romAddedDates?: Record<string, string>; // "systemId:fileName" → ISO date
 }
 
 // ── Emulator Configuration System ──────────────────────────────────

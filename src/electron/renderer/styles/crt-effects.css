@@ -1,0 +1,71 @@
+/**
+ * CRT visual effects — only active with [data-theme="retro-crt"].
+ *
+ * - Scanlines: static repeating horizontal lines via ::after on body
+ * - Scan band: bright horizontal bar that sweeps down via ::before
+ * - Vignette: radial-gradient overlay darkening edges (combined into ::before)
+ * - Glow: text-shadow on primary text elements
+ */
+
+/* Register the custom property so it can be animated with @keyframes. */
+@property --crt-scan-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -10%;
+}
+
+/* Static scanlines overlay */
+[data-theme="retro-crt"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+}
+
+/* Vignette + moving scan band */
+[data-theme="retro-crt"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  pointer-events: none;
+  background:
+    /* Sweeping bright band */
+    linear-gradient(
+      to bottom,
+      transparent calc(var(--crt-scan-y) - 1%),
+      rgba(255, 255, 255, 0.03) var(--crt-scan-y),
+      rgba(255, 255, 255, 0.06) calc(var(--crt-scan-y) + 4%),
+      rgba(255, 255, 255, 0.03) calc(var(--crt-scan-y) + 8%),
+      transparent calc(var(--crt-scan-y) + 9%)
+    ),
+    /* Vignette */
+    radial-gradient(
+      ellipse at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.5) 100%
+    );
+  animation: crt-scan-sweep 6s linear infinite;
+}
+
+@keyframes crt-scan-sweep {
+  0%   { --crt-scan-y: -10%; }
+  100% { --crt-scan-y: 110%; }
+}
+
+/* Text glow on primary text */
+[data-theme="retro-crt"] .text-primary {
+  text-shadow: 0 0 8px currentColor;
+}
+
+[data-theme="retro-crt"] .text-secondary {
+  text-shadow: 0 0 6px currentColor;
+}

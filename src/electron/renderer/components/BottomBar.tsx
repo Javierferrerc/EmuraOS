@@ -5,7 +5,7 @@ import navigateIcon from "../assets/icons/controls/navigate.svg";
 
 export function BottomBar() {
   return (
-    <footer className="flex items-center justify-end gap-6 px-4 pt-2 pb-4 text-[16px] font-medium text-gray-600">
+    <footer className="flex items-center justify-end gap-6 px-4 pt-2 pb-4 text-[16px] font-medium text-muted">
       <span className="flex items-center gap-1.5">
         <img src={xIcon} alt="" className="h-5 w-5" />
         Select Game

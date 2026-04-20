@@ -12,6 +12,7 @@ import type {
   GameMetadata,
   PlayRecord,
   ReadinessReport,
+  ScanResult,
   ScrapeProgress,
   ScrapeResult,
 } from "../../../core/types";
@@ -43,6 +44,9 @@ export interface SettingsContext {
   // --- Config + persistence ---
   config: AppConfig | null;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
+  /** Bypass the staging layer — persists immediately and updates app state.
+   *  Use for settings that need real-time visual feedback (e.g. background). */
+  liveUpdateConfig?: (partial: Partial<AppConfig>) => Promise<void>;
 
   // --- Navigation (for buttons that jump to sub-sections) ---
   navigation: NavigationApi;
@@ -53,6 +57,10 @@ export interface SettingsContext {
   playHistory: Record<string, PlayRecord>;
   collections: Collection[];
   metadataMap: Record<string, Record<string, GameMetadata>>;
+
+  // --- Scan result ---
+  scanResult: ScanResult | null;
+  loadAllMetadata: () => Promise<void>;
 
   // --- Scan / scrape / cover fetch ---
   isLoading: boolean;
@@ -180,6 +188,14 @@ export interface PathSetting extends BaseSetting {
   secret?: boolean;
 }
 
+export interface ColorSetting extends BaseSetting {
+  kind: "color";
+  get: (ctx: SettingsContext) => string;
+  set: (value: string, ctx: SettingsContext) => Promise<void> | void;
+  /** Default color shown as a "reset" option. */
+  defaultValue: string;
+}
+
 export type Setting =
   | ToggleSetting
   | DropdownSetting
@@ -187,7 +203,8 @@ export type Setting =
   | ButtonSetting
   | InfoSetting
   | FolderSetting
-  | PathSetting;
+  | PathSetting
+  | ColorSetting;
 
 export interface SettingsGroup {
   id: string;

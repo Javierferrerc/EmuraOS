@@ -22,6 +22,7 @@ import { generalSection } from "./sections/general";
 import { rutasSection } from "./sections/rutas";
 import { emuladoresSection } from "./sections/emuladores/index";
 import { bibliotecaSection } from "./sections/biblioteca";
+import { portadasSection } from "./sections/portadas/index";
 import { coverArtSection } from "./sections/cover-art";
 import { controlesSection } from "./sections/controles";
 import { avanzadoSection } from "./sections/avanzado";
@@ -31,6 +32,7 @@ const SECTIONS: SettingsSection[] = [
   rutasSection,
   emuladoresSection,
   bibliotecaSection,
+  portadasSection,
   coverArtSection,
   controlesSection,
   avanzadoSection,
@@ -86,9 +88,14 @@ export function SettingsRoot() {
       // Config + persistence (staged)
       config: mergedConfig,
       updateConfig: stagingUpdateConfig,
+      liveUpdateConfig: app.updateConfig,
 
       // Navigation
       navigation,
+
+      // Scan result
+      scanResult: app.scanResult,
+      loadAllMetadata: app.loadAllMetadata,
 
       // Library state
       favorites: app.favorites,
@@ -144,6 +151,8 @@ export function SettingsRoot() {
       mergedConfig,
       stagingUpdateConfig,
       navigation,
+      app.scanResult,
+      app.loadAllMetadata,
       app.favorites,
       app.recentlyPlayed,
       app.playHistory,
@@ -602,6 +611,7 @@ export function SettingsRoot() {
 
   return (
     <SettingsLayout
+      transparent={!!app.config?.backgroundImage}
       sidebar={
         <SettingsSidebar
           sections={sections}

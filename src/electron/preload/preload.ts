@@ -28,6 +28,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeScrapeProgressListener: () => {
     ipcRenderer.removeAllListeners("scrape-progress");
   },
+  setCustomCover: (systemId: string, romFileName: string, sourcePath: string) =>
+    ipcRenderer.invoke("set-custom-cover", systemId, romFileName, sourcePath),
+  resetCustomCover: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("reset-custom-cover", systemId, romFileName),
+  readBackgroundDataUrl: (imagePath: string) =>
+    ipcRenderer.invoke("read-background-data-url", imagePath),
   fetchCovers: () => ipcRenderer.invoke("fetch-covers"),
   onCoverFetchProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("cover-fetch-progress", (_event, progress) =>
@@ -63,6 +69,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("remove-from-collection", collectionId, systemId, fileName),
   getRecentlyPlayed: (limit?: number) =>
     ipcRenderer.invoke("get-recently-played", limit),
+
+  getRomAddedDates: () => ipcRenderer.invoke("get-rom-added-dates"),
 
   onCoreDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("core-download-progress", (_event, progress) =>
@@ -142,8 +150,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   pickFile: (
     filters?: Array<{ name: string; extensions: string[] }>
   ): Promise<string | null> => ipcRenderer.invoke("dialog:pick-file", filters),
-  pickRomFiles: (): Promise<string[] | null> =>
-    ipcRenderer.invoke("dialog:pick-roms"),
+  pickRomFiles: (systemId?: string): Promise<string[] | null> =>
+    ipcRenderer.invoke("dialog:pick-roms", systemId),
   resolveRomSystems: (
     filePaths: string[]
   ): Promise<
