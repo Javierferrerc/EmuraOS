@@ -32,7 +32,11 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ["electron", "koffi"],
+      // sharp ships platform-specific .node native addons; bundling it
+      // through rollup/commonjs breaks its dynamic require of those
+      // binaries at runtime. Keep it external so Node loads it straight
+      // from node_modules at startup. Same reasoning as koffi.
+      external: ["electron", "koffi", "sharp"],
     },
   },
 });

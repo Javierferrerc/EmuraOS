@@ -1,0 +1,28 @@
+name: Publish Release to Blog
+
+on:
+  release:
+    types: [published, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-to-blog:
+    if: github.event.release.prerelease == false && github.event.release.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Publish release to Supabase blog
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_JSON: ${{ toJSON(github.event.release) }}
+          REPO: ${{ github.repository }}
+        run: node .github/scripts/publish-release-to-blog.mjs
