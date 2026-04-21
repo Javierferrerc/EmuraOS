@@ -17,11 +17,24 @@ export const generalSection: SettingsSection = {
           options: [
             { value: "dark", label: "Oscuro" },
             { value: "light", label: "Claro" },
-            { value: "retro-crt", label: "Retro CRT" },
+            { value: "retro-crt", label: "Retro CRT verde" },
+            { value: "crt-amber", label: "CRT Ámbar" },
+            { value: "gameboy-green", label: "Game Boy verde" },
+            { value: "snes-purple", label: "SNES púrpura" },
+            { value: "synthwave", label: "Neon Synthwave" },
           ],
           get: (ctx) => ctx.config?.theme ?? "dark",
           set: async (value, ctx) => {
-            await ctx.updateConfig({ theme: value as "dark" | "light" | "retro-crt" });
+            await ctx.updateConfig({
+              theme: value as
+                | "dark"
+                | "light"
+                | "retro-crt"
+                | "crt-amber"
+                | "gameboy-green"
+                | "snes-purple"
+                | "synthwave",
+            });
           },
         },
         {

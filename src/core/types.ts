@@ -54,7 +54,14 @@ export interface AppConfig {
   // When false, the slider behaves like a normal flat list with no mouse
   // tracking.
   systemSliderMagnificationEnabled?: boolean;
-  theme?: "dark" | "light" | "retro-crt";
+  theme?:
+    | "dark"
+    | "light"
+    | "retro-crt"
+    | "crt-amber"
+    | "gameboy-green"
+    | "snes-purple"
+    | "synthwave";
   devMode?: boolean;
   // One-shot flag: set to true after we auto-apply the Citra gamepad
   // profile on the first 3DS launch. Prevents re-patching qt-config.ini

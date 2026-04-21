@@ -67,7 +67,17 @@ export const AppConfigPartialSchema = z
     cardTiltEnabled: z.boolean().optional(),
     gameLoadingOverlayEnabled: z.boolean().optional(),
     systemSliderMagnificationEnabled: z.boolean().optional(),
-    theme: z.enum(["dark", "light", "retro-crt"]).optional(),
+    theme: z
+      .enum([
+        "dark",
+        "light",
+        "retro-crt",
+        "crt-amber",
+        "gameboy-green",
+        "snes-purple",
+        "synthwave",
+      ])
+      .optional(),
     devMode: z.boolean().optional(),
     citraGamepadAutoConfigured: z.boolean().optional(),
     gameSortOrder: z

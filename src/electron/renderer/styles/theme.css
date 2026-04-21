@@ -124,6 +124,154 @@
   --shadow-element-hover: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
+/* ── CRT Amber ────────────────────────────────────────────────── */
+
+[data-theme="crt-amber"] {
+  --color-bg: #0a0705;
+  --color-bg-gradient: linear-gradient(135deg, #1a130a 0%, #0a0705 100%);
+
+  --color-surface-0: rgba(26, 19, 10, 0.5);
+  --color-surface-1: rgba(40, 28, 16, 0.7);
+  --color-surface-2: rgba(60, 42, 22, 0.8);
+
+  --color-text-primary: #ffb000;
+  --color-text-secondary: #cc8800;
+  --color-text-muted: #8a5c00;
+
+  --color-accent: #ffb000;
+  --color-accent-hover: #ffcc33;
+  --color-focus-ring: #ffb000;
+
+  --color-good: #ffcc33;
+  --color-warn: #ff9900;
+  --color-bad: #ff3333;
+
+  --color-scrollbar-thumb: rgba(255, 176, 0, 0.2);
+  --color-glass-bg: rgba(255, 176, 0, 0.08);
+  --color-glass-border: rgba(255, 176, 0, 0.2);
+  --color-card-glow: rgba(255, 176, 0, 0.25);
+  --color-card-border-start: #ffb000;
+  --color-card-border-end: #cc8800;
+  --color-ctx-bg: rgba(10, 7, 5, 0.95);
+  --color-ctx-border: rgba(255, 176, 0, 0.15);
+  --color-ctx-hover: rgba(255, 176, 0, 0.1);
+  --color-border: rgba(255, 176, 0, 0.15);
+  --color-border-subtle: rgba(255, 176, 0, 0.08);
+  --color-border-hover: rgba(255, 176, 0, 0.35);
+  --color-dropdown-bg: rgba(20, 14, 8, 0.98);
+}
+
+/* ── Game Boy Green ───────────────────────────────────────────── */
+
+[data-theme="gameboy-green"] {
+  --color-bg: #0f380f;
+  --color-bg-gradient: linear-gradient(135deg, #306230 0%, #0f380f 100%);
+
+  --color-surface-0: rgba(48, 98, 48, 0.45);
+  --color-surface-1: rgba(88, 135, 70, 0.65);
+  --color-surface-2: rgba(139, 172, 15, 0.35);
+
+  --color-text-primary: #9bbc0f;
+  --color-text-secondary: #8bac0f;
+  --color-text-muted: #306230;
+
+  --color-accent: #9bbc0f;
+  --color-accent-hover: #c5e36a;
+  --color-focus-ring: #9bbc0f;
+
+  --color-good: #9bbc0f;
+  --color-warn: #e0a800;
+  --color-bad: #e74c3c;
+
+  --color-scrollbar-thumb: rgba(155, 188, 15, 0.25);
+  --color-glass-bg: rgba(155, 188, 15, 0.1);
+  --color-glass-border: rgba(155, 188, 15, 0.25);
+  --color-card-glow: rgba(155, 188, 15, 0.3);
+  --color-card-border-start: #9bbc0f;
+  --color-card-border-end: #306230;
+  --color-ctx-bg: rgba(15, 56, 15, 0.95);
+  --color-ctx-border: rgba(155, 188, 15, 0.2);
+  --color-ctx-hover: rgba(155, 188, 15, 0.12);
+  --color-border: rgba(155, 188, 15, 0.2);
+  --color-border-subtle: rgba(155, 188, 15, 0.1);
+  --color-border-hover: rgba(155, 188, 15, 0.4);
+  --color-dropdown-bg: rgba(15, 56, 15, 0.98);
+}
+
+/* ── SNES Purple ──────────────────────────────────────────────── */
+
+[data-theme="snes-purple"] {
+  --color-bg: #1a0f2e;
+  --color-bg-gradient: linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%);
+
+  --color-surface-0: rgba(45, 27, 78, 0.5);
+  --color-surface-1: rgba(68, 41, 112, 0.7);
+  --color-surface-2: rgba(95, 57, 156, 0.8);
+
+  --color-text-primary: #f5e9ff;
+  --color-text-secondary: #d6bff5;
+  --color-text-muted: #9f7ec7;
+
+  --color-accent: #b388ff;
+  --color-accent-hover: #d0a8ff;
+  --color-focus-ring: #b388ff;
+
+  --color-good: #66ffcc;
+  --color-warn: #ffcc33;
+  --color-bad: #ff5577;
+
+  --color-scrollbar-thumb: rgba(179, 136, 255, 0.2);
+  --color-glass-bg: rgba(179, 136, 255, 0.1);
+  --color-glass-border: rgba(179, 136, 255, 0.25);
+  --color-card-glow: rgba(179, 136, 255, 0.3);
+  --color-card-border-start: #b388ff;
+  --color-card-border-end: #6e44b2;
+  --color-ctx-bg: rgba(26, 15, 46, 0.95);
+  --color-ctx-border: rgba(179, 136, 255, 0.18);
+  --color-ctx-hover: rgba(179, 136, 255, 0.12);
+  --color-border: rgba(179, 136, 255, 0.18);
+  --color-border-subtle: rgba(179, 136, 255, 0.1);
+  --color-border-hover: rgba(179, 136, 255, 0.4);
+  --color-dropdown-bg: rgba(30, 18, 54, 0.98);
+}
+
+/* ── Neon Synthwave ───────────────────────────────────────────── */
+
+[data-theme="synthwave"] {
+  --color-bg: #0a0a1a;
+  --color-bg-gradient: linear-gradient(180deg, #1f0b3a 0%, #3a0b4a 50%, #0a0a1a 100%);
+
+  --color-surface-0: rgba(31, 11, 58, 0.5);
+  --color-surface-1: rgba(58, 11, 74, 0.7);
+  --color-surface-2: rgba(95, 20, 115, 0.8);
+
+  --color-text-primary: #ff71ce;
+  --color-text-secondary: #b967ff;
+  --color-text-muted: #7a5a99;
+
+  --color-accent: #01cdfe;
+  --color-accent-hover: #05ffa1;
+  --color-focus-ring: #01cdfe;
+
+  --color-good: #05ffa1;
+  --color-warn: #fffb96;
+  --color-bad: #ff71ce;
+
+  --color-scrollbar-thumb: rgba(1, 205, 254, 0.3);
+  --color-glass-bg: rgba(1, 205, 254, 0.08);
+  --color-glass-border: rgba(255, 113, 206, 0.3);
+  --color-card-glow: rgba(255, 113, 206, 0.4);
+  --color-card-border-start: #ff71ce;
+  --color-card-border-end: #01cdfe;
+  --color-ctx-bg: rgba(10, 10, 26, 0.95);
+  --color-ctx-border: rgba(255, 113, 206, 0.2);
+  --color-ctx-hover: rgba(1, 205, 254, 0.12);
+  --color-border: rgba(255, 113, 206, 0.2);
+  --color-border-subtle: rgba(255, 113, 206, 0.1);
+  --color-border-hover: rgba(1, 205, 254, 0.45);
+  --color-dropdown-bg: rgba(20, 10, 40, 0.98);
+}
+
 /* ── Retro CRT theme ──────────────────────────────────────────── */
 
 [data-theme="retro-crt"] {
@@ -272,6 +420,81 @@
   mask-composite: exclude;
   pointer-events: none;
   transform: translateZ(0);
+}
+
+/* View fade — short opacity rise when a view mounts. Applied to the
+   outer wrapper in App.tsx so Library/Settings/GameMode transitions are
+   perceptibly smoother without changing layout. */
+@keyframes view-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.view-fade-enter {
+  animation: view-fade var(--duration-base) var(--ease-standard) both;
+}
+
+/* Cover skeleton loader — shimmer that runs while a thumbnail fetches.
+   Tiles over an empty cover slot so the grid layout stabilises even
+   before images resolve, and telegraphs that content is coming. */
+@keyframes cover-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.cover-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-1) 0%,
+    var(--color-surface-2) 50%,
+    var(--color-surface-1) 100%
+  );
+  background-size: 200% 100%;
+  animation: cover-shimmer 1.6s ease-in-out infinite;
+}
+
+/* Favourite heart pop — tiny scale bounce on toggle. The container adds
+   `.fav-pop` briefly after a click; the keyframe pulses scale so the user
+   gets instant feedback even when the state change is remote. */
+@keyframes fav-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.fav-pop {
+  animation: fav-pop 320ms var(--ease-standard);
+}
+
+/* Indeterminate progress bar — slides a short highlight left→right.
+   Used by GlobalProgress when a task reports no numeric progress. */
+@keyframes global-progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.global-progress-indeterminate {
+  width: 25%;
+  animation: global-progress-indeterminate 1.4s var(--ease-standard) infinite;
+}
+
+/* Respect the OS-level reduced-motion preference: kill long loops and
+   decorative transitions while keeping fades quick enough to not feel
+   broken. Scoped to explicit decorative classes so we don't globally
+   nerf transitions that carry semantic meaning (e.g. accordion opens). */
+@media (prefers-reduced-motion: reduce) {
+  .global-progress-indeterminate,
+  .cover-skeleton,
+  .fav-pop {
+    animation: none !important;
+  }
+  .global-progress-indeterminate {
+    width: 100%;
+  }
+  .view-fade-enter,
+  .save-bar-enter {
+    animation-duration: 1ms !important;
+  }
 }
 
 /* Save bar slide-up animation */
