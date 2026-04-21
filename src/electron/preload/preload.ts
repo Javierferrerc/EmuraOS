@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-cover-path", systemId, romFileName),
   readCoverDataUrl: (coverPath: string) =>
     ipcRenderer.invoke("read-cover-data-url", coverPath),
+  readThumbnailDataUrl: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("read-thumbnail-data-url", systemId, romFileName),
+  rebuildThumbnails: () => ipcRenderer.invoke("rebuild-thumbnails"),
   onScrapeProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("scrape-progress", (_event, progress) =>
       callback(progress)
@@ -59,6 +62,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCollections: () => ipcRenderer.invoke("get-collections"),
   createCollection: (name: string) =>
     ipcRenderer.invoke("create-collection", name),
+  createSmartCollection: (name: string, filter: unknown) =>
+    ipcRenderer.invoke("create-smart-collection", name, filter),
+  updateSmartCollectionFilter: (id: string, filter: unknown) =>
+    ipcRenderer.invoke("update-smart-collection-filter", id, filter),
   renameCollection: (id: string, name: string) =>
     ipcRenderer.invoke("rename-collection", id, name),
   deleteCollection: (id: string) =>

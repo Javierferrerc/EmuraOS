@@ -139,6 +139,16 @@ export const ExecutablePathSchema = z.string().min(1).max(500);
 
 export const CollectionNameSchema = z.string().min(1).max(100);
 
+export const SmartCollectionFilterSchema = z.object({
+  systems: z.array(SystemIdSchema).max(30).optional(),
+  genre: z.string().max(100).optional(),
+  minRating: z.number().min(0).max(10).optional(),
+  decade: z.string().max(20).optional(),
+  onlyFavorites: z.boolean().optional(),
+  onlyRecent: z.boolean().optional(),
+  hasCover: z.enum(["yes", "no"]).optional(),
+});
+
 export const RecentlyPlayedLimitSchema = z.number().int().positive().optional();
 
 export const ForceRefreshSchema = z.boolean().optional();

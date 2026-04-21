@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { deriveSystemColors } from "../utils/colorUtils";
 import { formatPlayTime } from "../utils/formatPlayTime";
+import { hasDetectedEmulatorForSystem } from "../utils/emulatorStatus";
 import "./GameCard.css";
 
 const SYSTEM_COLORS: Record<string, [string, string]> = {
@@ -76,7 +77,19 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     isFavorite,
     playHistory,
     config,
+    lastDetection,
+    bulkSelectTarget,
+    bulkSelectedRoms,
+    toggleBulkSelectRom,
   } = useApp();
+  const inBulkSelect = bulkSelectTarget !== null;
+  const isBulkSelected = bulkSelectedRoms.has(
+    `${rom.systemId}:${rom.fileName}`
+  );
+  const emulatorMissing = !hasDetectedEmulatorForSystem(
+    lastDetection,
+    rom.systemId
+  );
   const tiltEnabled = config?.cardTiltEnabled ?? true;
   const [imgError, setImgError] = useState(false);
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
@@ -185,19 +198,40 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
 
   useEffect(() => {
     if (metadata?.coverPath) {
-      window.electronAPI.readCoverDataUrl(metadata.coverPath).then((url) => {
-        if (url) setCoverDataUrl(url);
-      });
+      // Grid cards use the 200px thumbnail — falls back to the full cover
+      // inside the handler if the thumbnail hasn't been generated yet.
+      window.electronAPI
+        .readThumbnailDataUrl(rom.systemId, rom.fileName)
+        .then((url) => {
+          if (url) setCoverDataUrl(url);
+        });
     }
-  }, [metadata?.coverPath]);
+  }, [metadata?.coverPath, rom.systemId, rom.fileName]);
 
   const handleDoubleClick = useCallback(() => {
+    if (inBulkSelect) {
+      toggleBulkSelectRom(rom.systemId, rom.fileName);
+      return;
+    }
     if ((config?.cardClickAction ?? "launch") === "detail") {
       openGameDetail(rom);
     } else {
       launchGame(rom);
     }
-  }, [launchGame, openGameDetail, rom, config?.cardClickAction]);
+  }, [
+    launchGame,
+    openGameDetail,
+    rom,
+    config?.cardClickAction,
+    inBulkSelect,
+    toggleBulkSelectRom,
+  ]);
+
+  const handleSingleClick = useCallback(() => {
+    if (inBulkSelect) {
+      toggleBulkSelectRom(rom.systemId, rom.fileName);
+    }
+  }, [inBulkSelect, toggleBulkSelectRom, rom.systemId, rom.fileName]);
 
   const handleInfoClick = useCallback(
     (e: React.MouseEvent) => {
@@ -328,12 +362,19 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     <div
       ref={cardRef}
       data-grid-index={gridIndex}
+      onClick={inBulkSelect ? handleSingleClick : undefined}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onMouseMove={tiltEnabled ? handleMouseMove : undefined}
       onMouseLeave={tiltEnabled ? handleMouseLeave : undefined}
-      className={outerCardClass}
-      title={`Double-click to launch\n${rom.filePath}`}
+      className={`${outerCardClass}${
+        inBulkSelect && isBulkSelected ? " ring-2 ring-[var(--color-accent)]" : ""
+      }`}
+      title={
+        inBulkSelect
+          ? "Click para seleccionar"
+          : `Double-click to launch\n${rom.filePath}`
+      }
     >
       {/* When tilt is enabled, the cover image needs its own clipping wrapper
           because the outer card stays overflow-visible for the 3D transform.
@@ -381,6 +422,46 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
       </button>
+
+      {/* Bulk-select checkmark — top-right, replaces favorite when active. */}
+      {inBulkSelect && (
+        <div
+          className={`absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full shadow-md ${
+            isBulkSelected
+              ? "bg-[var(--color-accent)] text-white"
+              : "bg-black/60 text-white/70"
+          }`}
+          aria-hidden
+        >
+          {isBulkSelected ? "\u2713" : ""}
+        </div>
+      )}
+
+      {/* Emulator-missing warning badge — bottom-left, always visible when
+          the rom's system has no detected emulator. Non-interactive; exists
+          purely to flag that double-click won't launch. */}
+      {emulatorMissing && (
+        <div
+          className="absolute bottom-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/90 shadow-md"
+          title={`Ningún emulador detectado para ${SYSTEM_NAMES[rom.systemId] ?? rom.systemId}`}
+          aria-label="Emulador no detectado"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#111827"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+      )}
 
       {/* Favorite heart — top-right */}
       <button

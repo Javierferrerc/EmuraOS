@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { MetadataCache } from "./metadata-cache.js";
+import { ensureThumbnail } from "./thumbnail-cache.js";
 import { logSecurityEvent } from "./security-logger.js";
 import { normalizeTitle } from "./title-utils.js";
 import type {
@@ -336,6 +337,10 @@ export class SteamGridDb {
       console.warn("[steamgriddb] failed to write cover:", err);
       return null;
     }
+    void ensureThumbnail(
+      coverPath,
+      this.cache.getThumbnailPath(systemId, romFileName)
+    );
 
     this.saveCoverMetadata(systemId, romFileName, coverPath);
     return coverPath;

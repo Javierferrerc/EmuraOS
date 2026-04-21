@@ -8,6 +8,7 @@ import {
   TOPBAR_INDEX_RESCAN,
   TOPBAR_INDEX_VIEW_MODE,
   TOPBAR_INDEX_SETTINGS,
+  TOPBAR_INDEX_COLLECTIONS,
 } from "./TopBar";
 import { SystemSlider } from "./SystemSlider";
 import { GameGrid } from "./GameGrid";
@@ -50,6 +51,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     recentlyPlayed,
     openGameDetail,
     openQuickLaunch,
+    setCollectionsModalOpen,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -329,6 +331,9 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
                 updateConfig({ libraryViewMode: modes[(idx + 1) % modes.length] });
                 break;
               }
+              case TOPBAR_INDEX_COLLECTIONS:
+                setCollectionsModalOpen(true);
+                break;
               case TOPBAR_INDEX_SETTINGS:
                 setCurrentView("settings");
                 break;

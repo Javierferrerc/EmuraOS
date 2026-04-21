@@ -12,6 +12,8 @@ import { UpdateModal } from "./components/UpdateModal";
 import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { GameDetailModal } from "./components/GameDetailModal";
 import { QuickLaunch } from "./components/QuickLaunch";
+import { CollectionsModal } from "./components/CollectionsModal";
+import { BulkSelectBar } from "./components/BulkSelectBar";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
@@ -215,7 +217,7 @@ export default function App() {
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
     } else {
-      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen} />;
+      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
     }
   } else {
     switch (currentView) {
@@ -229,7 +231,7 @@ export default function App() {
         page = <GameModeView />;
         break;
       default:
-        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen} />;
+        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
     }
   }
 
@@ -282,6 +284,8 @@ export default function App() {
       )}
       <DisambiguationDialog />
       {app.quickLaunchOpen && <QuickLaunch />}
+      {app.collectionsModalOpen && <CollectionsModal />}
+      <BulkSelectBar />
       {app.detailModalRom && (
         <GameDetailModal
           rom={app.detailModalRom}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { formatPlayTime } from "../utils/formatPlayTime";
+import { hasDetectedEmulatorForSystem } from "../utils/emulatorStatus";
 
 const SYSTEM_NAMES: Record<string, string> = {
   nes: "NES",
@@ -34,7 +35,19 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
     getMetadataForRom,
     playHistory,
     config,
+    lastDetection,
+    bulkSelectTarget,
+    bulkSelectedRoms,
+    toggleBulkSelectRom,
   } = useApp();
+  const inBulkSelect = bulkSelectTarget !== null;
+  const isBulkSelected = bulkSelectedRoms.has(
+    `${rom.systemId}:${rom.fileName}`
+  );
+  const emulatorMissing = !hasDetectedEmulatorForSystem(
+    lastDetection,
+    rom.systemId
+  );
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
   const [imgError, setImgError] = useState(false);
 
@@ -46,33 +59,67 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
 
   useEffect(() => {
     if (metadata?.coverPath) {
-      window.electronAPI.readCoverDataUrl(metadata.coverPath).then((url) => {
-        if (url) setCoverDataUrl(url);
-      });
+      window.electronAPI
+        .readThumbnailDataUrl(rom.systemId, rom.fileName)
+        .then((url) => {
+          if (url) setCoverDataUrl(url);
+        });
     }
-  }, [metadata?.coverPath]);
+  }, [metadata?.coverPath, rom.systemId, rom.fileName]);
 
   const handleDoubleClick = useCallback(() => {
+    if (inBulkSelect) {
+      toggleBulkSelectRom(rom.systemId, rom.fileName);
+      return;
+    }
     if ((config?.cardClickAction ?? "launch") === "detail") {
       openGameDetail(rom);
     } else {
       launchGame(rom);
     }
-  }, [launchGame, openGameDetail, rom, config?.cardClickAction]);
+  }, [
+    launchGame,
+    openGameDetail,
+    rom,
+    config?.cardClickAction,
+    inBulkSelect,
+    toggleBulkSelectRom,
+  ]);
 
   const hasCover = coverDataUrl && !imgError;
 
   return (
     <div
       data-grid-index={gridIndex}
+      onClick={
+        inBulkSelect
+          ? () => toggleBulkSelectRom(rom.systemId, rom.fileName)
+          : undefined
+      }
       onDoubleClick={handleDoubleClick}
       className={`game-list-row group flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2 cursor-pointer transition-colors ${
         isFocused
           ? "bg-white/20 ring-2 ring-focus"
           : "hover:bg-white/15"
-      }`}
-      title={`Double-click to launch\n${rom.filePath}`}
+      } ${inBulkSelect && isBulkSelected ? "ring-2 ring-[var(--color-accent)]" : ""}`}
+      title={
+        inBulkSelect
+          ? "Click para seleccionar"
+          : `Double-click to launch\n${rom.filePath}`
+      }
     >
+      {inBulkSelect && (
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            isBulkSelected
+              ? "bg-[var(--color-accent)] text-white"
+              : "bg-black/40 text-white/60"
+          }`}
+          aria-hidden
+        >
+          {isBulkSelected ? "\u2713" : ""}
+        </span>
+      )}
       {/* Mini cover */}
       <div className="h-10 w-7 shrink-0 overflow-hidden rounded">
         {hasCover ? (
@@ -89,9 +136,31 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
         )}
       </div>
 
-      {/* Name */}
-      <span className="flex-1 truncate text-sm font-medium text-primary">
-        {displayName}
+      {/* Name + optional missing-emulator badge */}
+      <span className="flex flex-1 items-center gap-2 truncate text-sm font-medium text-primary">
+        <span className="truncate">{displayName}</span>
+        {emulatorMissing && (
+          <span
+            className="shrink-0 text-amber-400"
+            title="Emulador no detectado para este sistema"
+            aria-label="Emulador no detectado"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </span>
+        )}
       </span>
 
       {/* System */}
