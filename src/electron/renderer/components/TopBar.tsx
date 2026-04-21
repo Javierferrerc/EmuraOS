@@ -3,13 +3,13 @@ import { useApp, type ActiveFilter } from "../context/AppContext";
 import logoEmura from "../assets/logo-emura.svg";
 import "./TopBar.css";
 
-export const TOPBAR_ITEM_COUNT = 5; // was 6 — profile temporarily disabled
+export const TOPBAR_ITEM_COUNT = 6;
 export const TOPBAR_INDEX_SEARCH = 0;
 export const TOPBAR_INDEX_ADD_ROM = 1;
 export const TOPBAR_INDEX_RESCAN = 2;
 export const TOPBAR_INDEX_FAVORITES = 3;
-// export const TOPBAR_INDEX_PROFILE = 4; // temporarily disabled
-export const TOPBAR_INDEX_SETTINGS = 4; // was 5
+export const TOPBAR_INDEX_VIEW_MODE = 4;
+export const TOPBAR_INDEX_SETTINGS = 5;
 
 interface TopBarProps {
   focusedIndex: number;
@@ -34,6 +34,8 @@ export function TopBar({
     refreshScan,
     isScanning,
     isAddingRoms,
+    config,
+    updateConfig,
   } = useApp();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,6 +82,15 @@ export function TopBar({
       setActiveFilter({ type: "favorites" } as ActiveFilter);
     }
   }, [isFavoritesActive, setActiveFilter]);
+
+  const viewMode = config?.libraryViewMode ?? "grid";
+
+  const handleCycleViewMode = useCallback(() => {
+    const modes = ["grid", "list", "compact"] as const;
+    const idx = modes.indexOf(viewMode as typeof modes[number]);
+    const next = modes[(idx + 1) % modes.length];
+    updateConfig({ libraryViewMode: next });
+  }, [viewMode, updateConfig]);
 
   const isFocused = (idx: number) => focusActive && focusedIndex === idx;
   const focusRingClass = (idx: number) =>
@@ -195,6 +206,33 @@ export function TopBar({
           <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
             <path d="M240,102c0,70-103.79,126.66-108.21,129a8,8,0,0,1-7.58,0C119.79,228.66,16,172,16,102A62.07,62.07,0,0,1,78,40c20.65,0,38.73,8.88,50,23.89C139.27,48.88,157.35,40,178,40A62.07,62.07,0,0,1,240,102Z" />
           </svg>
+        </button>
+
+        {/* View mode toggle */}
+        <button
+          data-topbar-index={TOPBAR_INDEX_VIEW_MODE}
+          onClick={handleCycleViewMode}
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_VIEW_MODE
+          )}`}
+          title={`View: ${viewMode === "grid" ? "Grid" : viewMode === "list" ? "List" : "Compact"}`}
+        >
+          {viewMode === "list" ? (
+            /* List icon */
+            <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
+              <path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z" />
+            </svg>
+          ) : viewMode === "compact" ? (
+            /* Compact grid icon */
+            <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
+              <path d="M64,28H40A12,12,0,0,0,28,40V64A12,12,0,0,0,40,76H64A12,12,0,0,0,76,64V40A12,12,0,0,0,64,28Zm0,92H40a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12H64a12,12,0,0,0,12-12V132A12,12,0,0,0,64,120Zm0,92H40a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12H64a12,12,0,0,0,12-12V224A12,12,0,0,0,64,212ZM152,28H128a12,12,0,0,0-12,12V64a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V40A12,12,0,0,0,152,28Zm0,92H128a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V132A12,12,0,0,0,152,120Zm0,92H128a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V224A12,12,0,0,0,152,212ZM240,28H216a12,12,0,0,0-12,12V64a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V40A12,12,0,0,0,240,28Zm0,92H216a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V132A12,12,0,0,0,240,120Zm0,92H216a12,12,0,0,0-12,12v24a12,12,0,0,0,12,12h24a12,12,0,0,0,12-12V224A12,12,0,0,0,240,212Z" />
+            </svg>
+          ) : (
+            /* Grid icon (default) */
+            <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
+              <path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48ZM200,40H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48ZM104,136H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48ZM200,136H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48Z" />
+            </svg>
+          )}
         </button>
 
         {/* User profile — temporarily disabled */}

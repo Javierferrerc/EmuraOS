@@ -40,15 +40,21 @@ import type { GameLauncher } from "../../core/game-launcher.js";
 import {
   findWindowByPid,
   stripDecorations,
+  restoreDecorations,
   removeMenuBar,
+  getMenu,
+  restoreMenuBar,
   hideFromTaskbar,
+  showInTaskbar,
   positionWindow,
   showWindow,
   focusWindow,
   isWindowAlive,
   isKeyPressed,
   clipTopPixels,
+  clearClipRegion,
   VK_F10,
+  VK_F11,
 } from "./win32-api.js";
 
 // Pixels to clip off the top of the PCSX2 window to hide its Qt menu bar
@@ -124,6 +130,25 @@ export class EmulatorOverlay {
     FullScreen: string | null;
     ShowMenuBar: string | null;
   } | null = null;
+  // Dolphin config patching: forces [Core] ConfirmStop=False during embedded
+  // sessions. Dolphin's default ESC binding triggers "Stop", which — with
+  // ConfirmStop=True — pops a modal confirmation dialog. Inside our embedded
+  // layout the modal is unreachable, so Dolphin freezes waiting for input and
+  // the render surface goes black. Disabling the prompt makes ESC cleanly end
+  // the process, letting our child.on("exit") handler run cleanup. null in the
+  // backup means the key was absent → remove on restore.
+  private dolphinConfigPath: string | null = null;
+  private dolphinBackup: {
+    ConfirmStop: string | null;
+  } | null = null;
+  // F11 Dolphin-only "config mode" toggle. See `toggleConfigMode` for the
+  // state machine. `savedMenu` holds the native HMENU detached at embed time
+  // so we can re-attach it when entering config mode; `configMode` gates the
+  // reposition loop and cleanup path; `prevF11Down` is the rising-edge
+  // detector for the sync-interval keyboard poll.
+  private savedMenu: unknown = null;
+  private configMode = false;
+  private prevF11Down = false;
 
   constructor(win: BrowserWindow, callbacks: OverlayCallbacks) {
     this.win = win;
@@ -159,6 +184,7 @@ export class EmulatorOverlay {
     const isCitra = resolved.definition.id === "citra";
     const isPCSX2 = resolved.definition.id === "pcsx2";
     const isPPSSPP = resolved.definition.id === "ppsspp";
+    const isDolphin = resolved.definition.id === "dolphin";
 
     // For RetroArch, generate a temporary config to run windowed + no menu
     if (isRetroArch) {
@@ -207,6 +233,13 @@ export class EmulatorOverlay {
     // Original values are restored on cleanup.
     if (isPPSSPP) {
       this.patchPPSSPPConfig(resolved.executablePath);
+    }
+
+    // For Dolphin, force [Core] ConfirmStop=False so ESC (default "Stop"
+    // binding) cleanly exits the emulator instead of showing a modal
+    // confirmation dialog that's unreachable inside the embedded layout.
+    if (isDolphin) {
+      this.patchDolphinConfig();
     }
 
     // Mark the game as active BEFORE spawning so the blur handler in
@@ -264,6 +297,13 @@ export class EmulatorOverlay {
 
       // Strip decorations and hide from taskbar
       stripDecorations(hwnd);
+      // Capture the native Win32 HMENU (if any) BEFORE detaching it so
+      // `toggleConfigMode` can re-attach the same handle later. SetMenu with
+      // NULL only detaches — it doesn't destroy the menu — but once detached
+      // there is no API to retrieve the previous handle. For Qt-based
+      // emulators GetMenu returns null, which is fine: restoreMenuBar is a
+      // no-op on null handles.
+      this.savedMenu = getMenu(hwnd);
       // Detach any native Win32 menu bar (PPSSPP, Dolphin, Project64). No-op
       // for Qt-based emulators which use an in-client QMenuBar widget instead
       // — those are hidden via clipTopPixels / config patches elsewhere.
@@ -481,10 +521,11 @@ export class EmulatorOverlay {
       this.boundHandlers.push({ event, handler });
     }
 
-    // Reset F10 edge-detection state for the new session.
+    // Reset F10/F11 edge-detection state for the new session.
     this.prevF10Down = false;
+    this.prevF11Down = false;
 
-    // Polling: check if emulator is still alive + reposition + detect F10.
+    // Polling: check if emulator is still alive + reposition + detect F10/F11.
     //
     // The F10 polling is a fallback for when globalShortcut stops delivering
     // WM_HOTKEY once an embedded fullscreen emulator owns the foreground.
@@ -493,12 +534,21 @@ export class EmulatorOverlay {
     // detection (prevF10Down → down) ensures one toggle per press; the shared
     // claimF10Fire() debounce in game-state.ts prevents the parallel
     // globalShortcut path from also firing for the same press.
+    //
+    // F11 is Dolphin-only and toggles config mode (see `toggleConfigMode`).
+    // It doesn't use globalShortcut because we intentionally want it to only
+    // fire during an active embedded session, not in the launcher UI.
     this.syncInterval = setInterval(() => {
       if (!this.emuHwnd || !isWindowAlive(this.emuHwnd)) {
         this.cleanup();
         return;
       }
-      this.repositionEmulator();
+      // In config mode the emulator window is a standalone window the user
+      // is interacting with directly — do NOT reposition it every tick or
+      // we'd yank it back to the game rectangle mid-click.
+      if (!this.configMode) {
+        this.repositionEmulator();
+      }
 
       const f10Down = isKeyPressed(VK_F10);
       if (f10Down && !this.prevF10Down && claimF10Fire()) {
@@ -507,7 +557,94 @@ export class EmulatorOverlay {
         this.win.setFullScreen(next);
       }
       this.prevF10Down = f10Down;
+
+      if (this.currentEmulatorId === "dolphin") {
+        const f11Down = isKeyPressed(VK_F11);
+        if (f11Down && !this.prevF11Down) {
+          this.toggleConfigMode();
+        }
+        this.prevF11Down = f11Down;
+      }
     }, 100);
+  }
+
+  /**
+   * Toggle Dolphin between embedded mode and standalone "config mode".
+   *
+   * Embedded → Config: hide the Electron host window, restore the emulator's
+   * window chrome + native menu bar + taskbar presence, drop any clipping
+   * region, and resize to a centered 1280×720 DIP rectangle on the display
+   * the launcher was on. The user can then reach Dolphin's Options / Graphics
+   * / Controllers menus as if it had been launched standalone.
+   *
+   * Config → Embedded: reverse everything — re-strip decorations, detach the
+   * menu, hide from taskbar, re-show the Electron window, and reposition the
+   * emulator back inside the game area. Any config dialogs Dolphin opened
+   * while in config mode remain as separate top-level windows; the user is
+   * expected to close them before toggling back.
+   *
+   * Scoped to Dolphin for now (see the F11 guard in `startSync`). Generalizing
+   * to PCSX2/Citra/PPSSPP requires also re-applying `clipTopPixels` with the
+   * right chrome offset and isn't needed for the initial use case.
+   */
+  private toggleConfigMode(): void {
+    if (!this.emuHwnd) return;
+
+    if (!this.configMode) {
+      this.configMode = true;
+      console.log("[overlay] F11 → entering config mode");
+
+      // Suppress the win.on("focus") handler for a moment so hiding the
+      // Electron window doesn't race with a focus redirect back to Dolphin.
+      this.suppressFocus = true;
+
+      // Hide the Electron launcher so Dolphin has the full screen real estate
+      // and appears on top naturally when we foreground it below.
+      if (this.win.isFullScreen()) this.win.setFullScreen(false);
+      this.win.hide();
+
+      // Restore standalone window chrome on the emulator.
+      restoreDecorations(this.emuHwnd);
+      restoreMenuBar(this.emuHwnd, this.savedMenu);
+      showInTaskbar(this.emuHwnd);
+      clearClipRegion(this.emuHwnd);
+
+      // Resize + center on the display the launcher was on. Convert DIPs to
+      // physical pixels since positionWindow expects physical coords in a
+      // Per-Monitor DPI V2 process.
+      const contentBounds = this.win.getContentBounds();
+      const display = screen.getDisplayMatching(contentBounds);
+      const sf = display.scaleFactor;
+      const w = Math.round(1280 * sf);
+      const h = Math.round(720 * sf);
+      const x =
+        Math.round(display.bounds.x * sf) +
+        Math.round((display.bounds.width * sf - w) / 2);
+      const y =
+        Math.round(display.bounds.y * sf) +
+        Math.round((display.bounds.height * sf - h) / 2);
+      positionWindow(this.emuHwnd, x, y, w, h);
+      focusWindow(this.emuHwnd);
+    } else {
+      this.configMode = false;
+      console.log("[overlay] F11 → exiting config mode");
+
+      // Re-strip chrome and re-embed. Order matches the initial embedding in
+      // launchEmbedded so the window state is identical.
+      stripDecorations(this.emuHwnd);
+      removeMenuBar(this.emuHwnd);
+      hideFromTaskbar(this.emuHwnd);
+
+      // Bring the Electron host back. Defer the reposition + refocus a tick
+      // so the show() has time to create the host's swapchain before we
+      // SetWindowPos the emulator over its content area.
+      this.win.show();
+      setTimeout(() => {
+        this.suppressFocus = false;
+        this.repositionEmulator();
+        if (this.emuHwnd) focusWindow(this.emuHwnd);
+      }, 200);
+    }
   }
 
   /**
@@ -1050,6 +1187,137 @@ export class EmulatorOverlay {
     }
   }
 
+  /**
+   * Patch `%APPDATA%/Dolphin Emulator/Config/Dolphin.ini` to force
+   * [Core] ConfirmStop=False during an embedded session. See the field
+   * declaration comment for the rationale. Original value is captured so
+   * `restoreDolphinConfig` can put it back after the game exits. If the key
+   * was absent in the original file, the backup stores null and restore
+   * deletes the line we inserted.
+   */
+  private patchDolphinConfig(): void {
+    const configPath = path.join(
+      app.getPath("appData"),
+      "Dolphin Emulator",
+      "Config",
+      "Dolphin.ini"
+    );
+    if (!existsSync(configPath)) {
+      console.warn("[overlay] Dolphin config not found:", configPath);
+      return;
+    }
+
+    try {
+      const raw = readFileSync(configPath, "utf-8");
+      const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+      const lines = raw.split(/\r?\n/);
+
+      // Locate [Core] section bounds.
+      let coreStartIdx = -1;
+      let coreEndIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (trimmed === "[Core]") {
+          coreStartIdx = i;
+          continue;
+        }
+        if (coreStartIdx !== -1 && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          coreEndIdx = i;
+          break;
+        }
+      }
+      if (coreStartIdx === -1) {
+        console.warn("[overlay] Dolphin [Core] section not found in config");
+        return;
+      }
+      if (coreEndIdx === -1) coreEndIdx = lines.length;
+
+      // Find existing ConfirmStop = ... line (with or without spaces).
+      const re = /^\s*ConfirmStop\s*=\s*(.*)$/;
+      let confirmIdx = -1;
+      let origValue: string | null = null;
+      for (let i = coreStartIdx + 1; i < coreEndIdx; i++) {
+        const m = lines[i].match(re);
+        if (m) {
+          confirmIdx = i;
+          origValue = m[1];
+          break;
+        }
+      }
+
+      this.dolphinConfigPath = configPath;
+      this.dolphinBackup = { ConfirmStop: origValue };
+
+      if (confirmIdx !== -1) {
+        lines[confirmIdx] = "ConfirmStop = False";
+      } else {
+        lines.splice(coreStartIdx + 1, 0, "ConfirmStop = False");
+      }
+
+      writeFileSync(configPath, lines.join(eol), "utf-8");
+    } catch (err) {
+      console.warn("[overlay] Failed to patch Dolphin config:", err);
+    }
+  }
+
+  /**
+   * Restore the original Dolphin.ini [Core] ConfirmStop value patched by
+   * `patchDolphinConfig`. Safe to call if nothing was patched.
+   */
+  private restoreDolphinConfig(): void {
+    if (!this.dolphinBackup || !this.dolphinConfigPath) return;
+    if (!existsSync(this.dolphinConfigPath)) {
+      this.dolphinBackup = null;
+      this.dolphinConfigPath = null;
+      return;
+    }
+
+    try {
+      const raw = readFileSync(this.dolphinConfigPath, "utf-8");
+      const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+      const lines = raw.split(/\r?\n/);
+      const original = this.dolphinBackup.ConfirmStop;
+
+      let coreStartIdx = -1;
+      let coreEndIdx = -1;
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (trimmed === "[Core]") {
+          coreStartIdx = i;
+          continue;
+        }
+        if (coreStartIdx !== -1 && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          coreEndIdx = i;
+          break;
+        }
+      }
+      if (coreStartIdx === -1) {
+        this.dolphinBackup = null;
+        this.dolphinConfigPath = null;
+        return;
+      }
+      if (coreEndIdx === -1) coreEndIdx = lines.length;
+
+      const re = /^\s*ConfirmStop\s*=\s*(.*)$/;
+      for (let i = coreEndIdx - 1; i > coreStartIdx; i--) {
+        if (!re.test(lines[i])) continue;
+        if (original === null) {
+          lines.splice(i, 1);
+        } else {
+          lines[i] = `ConfirmStop = ${original}`;
+        }
+        break;
+      }
+
+      writeFileSync(this.dolphinConfigPath, lines.join(eol), "utf-8");
+    } catch (err) {
+      console.warn("[overlay] Failed to restore Dolphin config:", err);
+    } finally {
+      this.dolphinBackup = null;
+      this.dolphinConfigPath = null;
+    }
+  }
+
   private killProcess(): void {
     const proc = this.process;
     if (!proc || proc.killed) return;
@@ -1118,12 +1386,25 @@ export class EmulatorOverlay {
     // Restore PPSSPP ini values if we patched them before launch.
     this.restorePPSSPPConfig();
 
+    // Restore Dolphin.ini [Core] ConfirmStop if we patched it before launch.
+    this.restoreDolphinConfig();
+
+    // If the session ended while Dolphin was in standalone config mode the
+    // Electron window is still hidden — make it visible again so the user
+    // lands back on the launcher instead of a vanished app.
+    if (this.configMode && !this.win.isDestroyed()) {
+      this.win.show();
+    }
+
     this.emuHwnd = null;
     this.process = null;
     this.currentRom = null;
     this.currentEmulatorId = null;
     this.suppressFocus = false;
     this.topChromePx = 0;
+    this.savedMenu = null;
+    this.configMode = false;
+    this.prevF11Down = false;
 
     setGameActive(false);
     this.callbacks.onSessionEnded();

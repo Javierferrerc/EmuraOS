@@ -104,6 +104,7 @@ interface AppState {
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
   detailModalRom: DiscoveredRom | null;
+  quickLaunchOpen: boolean;
   /** True while the controller-mapping modal (MandosTab) is waiting for a
    *  button press. Used to silence the global gamepad nav so Circle/B etc.
    *  don't double-fire as "back" while we're listening. */
@@ -160,6 +161,8 @@ interface AppActions {
   cancelDisambiguation: () => void;
   openGameDetail: (rom: DiscoveredRom) => void;
   closeGameDetail: () => void;
+  openQuickLaunch: () => void;
+  closeQuickLaunch: () => void;
   setControllerCaptureOpen: (open: boolean) => void;
 }
 
@@ -248,6 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
+  const [quickLaunchOpen, setQuickLaunchOpen] = useState(false);
   const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
 
   // Load emulator definitions once on mount.
@@ -612,6 +616,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const closeGameDetail = useCallback(() => {
     setDetailModalRom(null);
+  }, []);
+
+  const openQuickLaunch = useCallback(() => {
+    setQuickLaunchOpen(true);
+  }, []);
+
+  const closeQuickLaunch = useCallback(() => {
+    setQuickLaunchOpen(false);
   }, []);
 
   // Listen for the main-process startup trigger
@@ -1060,6 +1072,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     detailModalRom,
     openGameDetail,
     closeGameDetail,
+    quickLaunchOpen,
+    openQuickLaunch,
+    closeQuickLaunch,
     controllerCaptureOpen,
     setControllerCaptureOpen,
   };
