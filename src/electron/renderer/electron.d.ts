@@ -125,6 +125,21 @@ export interface ElectronAPI {
   }>;
   writeCemuKeys(content: string): Promise<{ path: string }>;
 
+  // Dolphin GameCube controller (GCPadNew.ini)
+  getDolphinGcPadConfig(): Promise<{
+    configPath: string;
+    exists: boolean;
+    ports: Record<1 | 2 | 3 | 4, { entries: Record<string, string> }>;
+    otherSections: Record<string, Record<string, string>>;
+  }>;
+  updateDolphinGcPadConfig(
+    updates: Array<{
+      port: 1 | 2 | 3 | 4;
+      changes: Record<string, string>;
+    }>
+  ): Promise<{ configPath: string }>;
+  launchEmulatorGui(executablePath: string): Promise<{ pid: number | null }>;
+
   // Emulator downloads (Google Drive)
   getEmulatorDefs(): Promise<EmulatorDefinition[]>;
   listDriveEmulators(

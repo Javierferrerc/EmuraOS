@@ -104,6 +104,10 @@ interface AppState {
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
   detailModalRom: DiscoveredRom | null;
+  /** True while the controller-mapping modal (MandosTab) is waiting for a
+   *  button press. Used to silence the global gamepad nav so Circle/B etc.
+   *  don't double-fire as "back" while we're listening. */
+  controllerCaptureOpen: boolean;
 }
 
 interface AppActions {
@@ -156,6 +160,7 @@ interface AppActions {
   cancelDisambiguation: () => void;
   openGameDetail: (rom: DiscoveredRom) => void;
   closeGameDetail: () => void;
+  setControllerCaptureOpen: (open: boolean) => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -243,6 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
+  const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -1054,6 +1060,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     detailModalRom,
     openGameDetail,
     closeGameDetail,
+    controllerCaptureOpen,
+    setControllerCaptureOpen,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

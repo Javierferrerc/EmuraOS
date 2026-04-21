@@ -5,15 +5,21 @@ import { EstadoTab } from "./tabs/EstadoTab";
 import { ConfiguracionTab } from "./tabs/ConfiguracionTab";
 import { DescargaTab } from "./tabs/DescargaTab";
 import { AvanzadoTab } from "./tabs/AvanzadoTab";
+import { MandosTab } from "./tabs/MandosTab";
 
-const TABS = [
+const BASE_TABS = [
   { id: "estado", label: "Estado" },
   { id: "configuracion", label: "Configuración" },
+  { id: "mandos", label: "Mandos" },
   { id: "descarga", label: "Descarga" },
   { id: "avanzado", label: "Avanzado" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+type TabId = (typeof BASE_TABS)[number]["id"];
+
+// Emulators that currently expose a native controller editor. Others hide the
+// Mandos tab so we don't present an empty screen.
+const EMULATORS_WITH_MANDOS: ReadonlySet<string> = new Set(["dolphin"]);
 
 interface Props {
   ctx: SettingsContext;
@@ -24,6 +30,14 @@ interface Props {
 }
 
 export function EmuladorDetail({ ctx, emulatorId, prevFilterRef, nextFilterRef, listActionRef }: Props) {
+  const TABS = useMemo(
+    () =>
+      BASE_TABS.filter(
+        (t) => t.id !== "mandos" || EMULATORS_WITH_MANDOS.has(emulatorId)
+      ),
+    [emulatorId]
+  );
+
   // Derive initial tab from nav path if present
   const initialTab = useMemo(() => {
     const match = ctx.navigation.match(
@@ -32,7 +46,7 @@ export function EmuladorDetail({ ctx, emulatorId, prevFilterRef, nextFilterRef, 
     const tab = match?.tab as TabId | undefined;
     if (tab && TABS.some((t) => t.id === tab)) return tab;
     return "estado" as TabId;
-  }, []);
+  }, [TABS]);
 
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
@@ -140,6 +154,9 @@ export function EmuladorDetail({ ctx, emulatorId, prevFilterRef, nextFilterRef, 
           emulatorId={emulatorId}
           actionRef={configActionRef}
         />
+      )}
+      {activeTab === "mandos" && EMULATORS_WITH_MANDOS.has(emulatorId) && (
+        <MandosTab ctx={ctx} emulatorId={emulatorId} />
       )}
       {activeTab === "descarga" && (
         <DescargaTab ctx={ctx} emulatorId={emulatorId} />

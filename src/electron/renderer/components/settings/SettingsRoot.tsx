@@ -530,7 +530,10 @@ export function SettingsRoot() {
     [dispatch, handleBack, handleSelectSection, handleSelectTab, handleGridListNav, sections, tabCount, playNavigate, playSelect]
   );
 
-  useGamepad({ onAction: handleGamepadAction });
+  useGamepad({
+    onAction: handleGamepadAction,
+    disabled: app.controllerCaptureOpen,
+  });
 
   // Keyboard handling — dpad + Enter/Escape. This is isolated to the
   // Settings shell; the library's `useKeyboardNav` is not mounted while

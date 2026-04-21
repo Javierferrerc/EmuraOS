@@ -104,6 +104,28 @@ export const CemuKeysContentSchema = z.string().max(10000);
 
 export const EmulatorConfigChangesSchema = z.record(z.string(), z.string());
 
+// Dolphin GameCube controller config (GCPadNew.ini) updates.
+export const GcPadPortSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+]);
+
+// INI key: "Group/Name" or "Name". Value: bare text or backticked string.
+// Max length bounded to keep validation cheap; real Dolphin keys are <64 chars.
+export const GcPadUpdateSchema = z.object({
+  port: GcPadPortSchema,
+  changes: z.record(
+    z.string().min(1).max(128),
+    z.string().max(512)
+  ),
+});
+
+export const GcPadUpdatesArraySchema = z.array(GcPadUpdateSchema).max(16);
+
+export const ExecutablePathSchema = z.string().min(1).max(500);
+
 export const CollectionNameSchema = z.string().min(1).max(100);
 
 export const RecentlyPlayedLimitSchema = z.number().int().positive().optional();

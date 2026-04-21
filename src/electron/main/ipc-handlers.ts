@@ -2,6 +2,7 @@ import { ipcMain, app, BrowserWindow, dialog, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import os from "node:os";
+import { spawn } from "node:child_process";
 import {
   readFileSync,
   writeFileSync,
@@ -36,6 +37,10 @@ import {
   readCitraGamepadStatus,
   CITRA_GAMEPAD_PROFILES,
 } from "../../core/citra-gamepad.js";
+import {
+  readGcPadConfig,
+  writeGcPadConfig,
+} from "../../core/dolphin-gcpad.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
@@ -57,6 +62,8 @@ import {
   FileFilterSchema,
   CemuKeysContentSchema,
   EmulatorConfigChangesSchema,
+  GcPadUpdatesArraySchema,
+  ExecutablePathSchema,
   CollectionNameSchema,
   RecentlyPlayedLimitSchema,
   ForceRefreshSchema,
@@ -1095,6 +1102,36 @@ export function registerIpcHandlers(
       }
       const keysPath = writeCemuKeys(resolved.executablePath, validatedContent);
       return { path: keysPath };
+    }
+  );
+
+  // --- Dolphin GameCube controller config (GCPadNew.ini) ---
+
+  ipcMain.handle("get-dolphin-gcpad-config", () => {
+    return readGcPadConfig(app.getPath("appData"));
+  });
+
+  ipcMain.handle(
+    "update-dolphin-gcpad-config",
+    (_event: IpcMainInvokeEvent, updates: unknown) => {
+      const validated = GcPadUpdatesArraySchema.parse(updates);
+      return writeGcPadConfig(app.getPath("appData"), validated);
+    }
+  );
+
+  ipcMain.handle(
+    "launch-emulator-gui",
+    (_event: IpcMainInvokeEvent, executablePath: unknown) => {
+      const validated = ExecutablePathSchema.parse(executablePath);
+      if (!existsSync(validated)) {
+        throw new Error(`Executable not found: ${validated}`);
+      }
+      const child = spawn(validated, [], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+      return { pid: child.pid ?? null };
     }
   );
 

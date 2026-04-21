@@ -139,10 +139,6 @@ export function useGamepad(options: {
     }
 
     function poll() {
-      if (disabledRef.current) {
-        rafRef.current = requestAnimationFrame(poll);
-        return;
-      }
       const gamepads = navigator.getGamepads();
       let gp: Gamepad | null = null;
       for (const g of gamepads) {
@@ -150,6 +146,32 @@ export function useGamepad(options: {
           gp = g;
           break;
         }
+      }
+
+      // While disabled (e.g. capture modal open) we still track current
+      // button/axis state so that, the moment we re-enable, a button the
+      // user is already holding isn't treated as a fresh rising edge.
+      if (disabledRef.current) {
+        if (gp) {
+          for (const indexStr of Object.keys(BUTTON_MAP)) {
+            const idx = Number(indexStr);
+            prevButtonsRef.current[idx] = gp.buttons[idx]?.pressed ?? false;
+          }
+          const axisX = gp.axes[0] ?? 0;
+          const axisY = gp.axes[1] ?? 0;
+          const absX = Math.abs(axisX);
+          const absY = Math.abs(axisY);
+          prevAxesRef.current["stick-left"] = absX >= DEADZONE && axisX < 0;
+          prevAxesRef.current["stick-right"] = absX >= DEADZONE && axisX > 0;
+          prevAxesRef.current["stick-up"] = absY >= DEADZONE && axisY < 0;
+          prevAxesRef.current["stick-down"] = absY >= DEADZONE && axisY > 0;
+        }
+        // Drop any in-flight repeat timers so we don't fire the moment
+        // we re-enable.
+        buttonStateRef.current = {};
+        axisStateRef.current = {};
+        rafRef.current = requestAnimationFrame(poll);
+        return;
       }
 
       if (gp) {

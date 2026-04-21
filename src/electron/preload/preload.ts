@@ -130,6 +130,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeCemuKeys: (content: string) =>
     ipcRenderer.invoke("write-cemu-keys", content),
 
+  // Dolphin GameCube controller (GCPadNew.ini)
+  getDolphinGcPadConfig: () =>
+    ipcRenderer.invoke("get-dolphin-gcpad-config"),
+  updateDolphinGcPadConfig: (
+    updates: Array<{ port: 1 | 2 | 3 | 4; changes: Record<string, string> }>
+  ) => ipcRenderer.invoke("update-dolphin-gcpad-config", updates),
+  launchEmulatorGui: (executablePath: string) =>
+    ipcRenderer.invoke("launch-emulator-gui", executablePath),
+
   // Emulator downloads (Google Drive)
   getEmulatorDefs: () => ipcRenderer.invoke("get-emulator-defs"),
   listDriveEmulators: (forceRefresh?: boolean) =>
