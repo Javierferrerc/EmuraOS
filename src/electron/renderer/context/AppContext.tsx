@@ -28,6 +28,7 @@ import type {
   DriveEmulatorMapping,
   EmulatorDownloadProgress,
   UpdateInfo,
+  SmartCollectionFilter,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -109,6 +110,16 @@ interface AppState {
    *  button press. Used to silence the global gamepad nav so Circle/B etc.
    *  don't double-fire as "back" while we're listening. */
   controllerCaptureOpen: boolean;
+  collectionsModalOpen: boolean;
+  /**
+   * When non-null the library is in bulk-select mode targeting a specific
+   * manual collection. Clicks on game cards toggle membership in
+   * `bulkSelectedRoms`; the user commits the batch via the floating toolbar
+   * which adds all selected keys to the target collection in one go.
+   * Smart collections never trigger this — their contents are derived.
+   */
+  bulkSelectTarget: { collectionId: string; collectionName: string } | null;
+  bulkSelectedRoms: Set<string>;
 }
 
 interface AppActions {
@@ -130,6 +141,14 @@ interface AppActions {
   toggleFavorite: (systemId: string, fileName: string) => Promise<void>;
   isFavorite: (systemId: string, fileName: string) => boolean;
   createCollection: (name: string) => Promise<void>;
+  createSmartCollection: (
+    name: string,
+    filter: SmartCollectionFilter
+  ) => Promise<void>;
+  updateSmartCollectionFilter: (
+    id: string,
+    filter: SmartCollectionFilter
+  ) => Promise<void>;
   renameCollection: (id: string, name: string) => Promise<void>;
   deleteCollection: (id: string) => Promise<void>;
   addToCollection: (
@@ -164,6 +183,11 @@ interface AppActions {
   openQuickLaunch: () => void;
   closeQuickLaunch: () => void;
   setControllerCaptureOpen: (open: boolean) => void;
+  setCollectionsModalOpen: (open: boolean) => void;
+  enterBulkSelect: (collectionId: string, collectionName: string) => void;
+  exitBulkSelect: () => void;
+  toggleBulkSelectRom: (systemId: string, fileName: string) => void;
+  commitBulkSelect: () => Promise<void>;
 }
 
 type AppContextType = AppState & AppActions;
@@ -253,6 +277,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
   const [quickLaunchOpen, setQuickLaunchOpen] = useState(false);
   const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
+  const [collectionsModalOpen, setCollectionsModalOpen] = useState(false);
+  const [bulkSelectTarget, setBulkSelectTarget] = useState<
+    { collectionId: string; collectionName: string } | null
+  >(null);
+  const [bulkSelectedRoms, setBulkSelectedRoms] = useState<Set<string>>(
+    new Set()
+  );
 
   // Load emulator definitions once on mount.
   useEffect(() => {
@@ -626,6 +657,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setQuickLaunchOpen(false);
   }, []);
 
+  const enterBulkSelect = useCallback(
+    (collectionId: string, collectionName: string) => {
+      setBulkSelectTarget({ collectionId, collectionName });
+      setBulkSelectedRoms(new Set());
+    },
+    []
+  );
+
+  const exitBulkSelect = useCallback(() => {
+    setBulkSelectTarget(null);
+    setBulkSelectedRoms(new Set());
+  }, []);
+
+  const toggleBulkSelectRom = useCallback(
+    (systemId: string, fileName: string) => {
+      const key = `${systemId}:${fileName}`;
+      setBulkSelectedRoms((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    []
+  );
+
+  const commitBulkSelect = useCallback(async () => {
+    if (!bulkSelectTarget) return;
+    const collectionId = bulkSelectTarget.collectionId;
+    // Sequence the IPC calls — addToCollection is cheap but kept serial so
+    // the on-disk file isn't being read+written concurrently.
+    for (const key of bulkSelectedRoms) {
+      const idx = key.indexOf(":");
+      if (idx <= 0) continue;
+      const systemId = key.slice(0, idx);
+      const fileName = key.slice(idx + 1);
+      try {
+        await window.electronAPI.addToCollection(
+          collectionId,
+          systemId,
+          fileName
+        );
+      } catch (err) {
+        console.error("Failed to add rom to collection:", err);
+      }
+    }
+    // Optimistically update local state instead of refetching the whole list.
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? {
+              ...c,
+              roms: Array.from(new Set([...c.roms, ...bulkSelectedRoms])),
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    setBulkSelectTarget(null);
+    setBulkSelectedRoms(new Set());
+  }, [bulkSelectTarget, bulkSelectedRoms]);
+
   // Listen for the main-process startup trigger
   useEffect(() => {
     const unsubscribe = window.electronAPI.onStartupUpdateCheck(() => {
@@ -901,6 +994,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const createSmartCollectionAction = useCallback(
+    async (name: string, filter: SmartCollectionFilter) => {
+      try {
+        const col = await window.electronAPI.createSmartCollection(name, filter);
+        setCollections((prev) => [...prev, col]);
+      } catch (err) {
+        console.error("Failed to create smart collection:", err);
+      }
+    },
+    []
+  );
+
+  const updateSmartCollectionFilterAction = useCallback(
+    async (id: string, filter: SmartCollectionFilter) => {
+      try {
+        await window.electronAPI.updateSmartCollectionFilter(id, filter);
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  kind: "smart",
+                  filter,
+                  updatedAt: new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      } catch (err) {
+        console.error("Failed to update smart collection filter:", err);
+      }
+    },
+    []
+  );
+
   const renameCollectionAction = useCallback(
     async (id: string, name: string) => {
       try {
@@ -1043,6 +1171,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleFavorite,
     isFavorite: isFavoriteCheck,
     createCollection: createCollectionAction,
+    createSmartCollection: createSmartCollectionAction,
+    updateSmartCollectionFilter: updateSmartCollectionFilterAction,
     renameCollection: renameCollectionAction,
     deleteCollection: deleteCollectionAction,
     addToCollection: addToCollectionAction,
@@ -1077,6 +1207,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closeQuickLaunch,
     controllerCaptureOpen,
     setControllerCaptureOpen,
+    collectionsModalOpen,
+    setCollectionsModalOpen,
+    bulkSelectTarget,
+    bulkSelectedRoms,
+    enterBulkSelect,
+    exitBulkSelect,
+    toggleBulkSelectRom,
+    commitBulkSelect,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

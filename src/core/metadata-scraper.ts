@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MetadataCache } from "./metadata-cache.js";
+import { ensureThumbnail } from "./thumbnail-cache.js";
 import { logSecurityEvent } from "./security-logger.js";
 import type {
   DiscoveredRom,
@@ -155,6 +156,9 @@ export class MetadataScraper {
     if (!response.ok) return "";
     const buffer = Buffer.from(await response.arrayBuffer());
     writeFileSync(coverPath, buffer);
+    // Fire-and-forget: generate a 200px thumbnail for the grid. Failure
+    // here is non-fatal — the UI falls back to the full cover.
+    void ensureThumbnail(coverPath, this.cache.getThumbnailPath(systemId, romFileName));
     return coverPath;
   }
 

@@ -16,6 +16,7 @@ import type {
   ReadinessReport,
   UserLibraryFile,
   Collection,
+  SmartCollectionFilter,
   EmulatorConfigData,
   EmulatorDefinition,
   DriveEmulatorMapping,
@@ -44,6 +45,15 @@ export interface ElectronAPI {
     romFileName: string
   ): Promise<string | null>;
   readCoverDataUrl(coverPath: string): Promise<string | null>;
+  readThumbnailDataUrl(
+    systemId: string,
+    romFileName: string
+  ): Promise<string | null>;
+  rebuildThumbnails(): Promise<{
+    generated: number;
+    skipped: number;
+    failed: number;
+  }>;
   setCustomCover(
     systemId: string,
     romFileName: string,
@@ -73,6 +83,14 @@ export interface ElectronAPI {
   toggleFavorite(systemId: string, fileName: string): Promise<boolean>;
   getCollections(): Promise<Collection[]>;
   createCollection(name: string): Promise<Collection>;
+  createSmartCollection(
+    name: string,
+    filter: SmartCollectionFilter
+  ): Promise<Collection>;
+  updateSmartCollectionFilter(
+    id: string,
+    filter: SmartCollectionFilter
+  ): Promise<void>;
   renameCollection(id: string, name: string): Promise<void>;
   deleteCollection(id: string): Promise<void>;
   addToCollection(

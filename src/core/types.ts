@@ -200,12 +200,38 @@ export interface PlayRecord {
   totalPlayTime?: number; // accumulated seconds (optional for backward compat)
 }
 
+/**
+ * Filter criteria used by smart collections. Any field left undefined is
+ * not applied. Multiple active fields AND together. Shared with the library
+ * filter panel so the two features stay consistent.
+ */
+export interface SmartCollectionFilter {
+  systems?: string[];
+  genre?: string;
+  minRating?: number;
+  decade?: string; // "2020s", "2010s", etc. "all" or undefined = no filter
+  onlyFavorites?: boolean;
+  onlyRecent?: boolean; // within last N played
+  hasCover?: "yes" | "no";
+}
+
 export interface Collection {
   id: string;
   name: string;
-  roms: string[]; // "systemId:fileName" keys
+  roms: string[]; // "systemId:fileName" keys — empty for smart collections
   createdAt: string;
   updatedAt: string;
+  /**
+   * Collection shape:
+   * - "manual" (default when absent, for backward compat): user manages the
+   *   roms list explicitly.
+   * - "smart": `roms` is ignored and the effective list is computed by
+   *   evaluating `filter` against current metadata/favorites/history.
+   */
+  kind?: "manual" | "smart";
+  filter?: SmartCollectionFilter;
+  /** Optional custom cover path (overrides the 2x2 auto-mosaic). */
+  customCoverPath?: string;
 }
 
 export interface EmbeddedLaunchResult {

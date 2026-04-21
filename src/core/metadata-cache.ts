@@ -28,15 +28,18 @@ export class MetadataCache {
   private projectRoot: string;
   private metadataDir: string;
   private coversDir: string;
+  private thumbnailsDir: string;
 
   constructor(projectRoot?: string) {
     this.projectRoot = projectRoot ?? resolve(__dirname, "..", "..");
     this.metadataDir = resolve(this.projectRoot, "config", "metadata");
     this.coversDir = resolve(this.metadataDir, "covers");
+    this.thumbnailsDir = resolve(this.metadataDir, "thumbnails");
   }
 
   ensureDirectories(systemId: string): void {
     mkdirSync(resolve(this.coversDir, systemId), { recursive: true });
+    mkdirSync(resolve(this.thumbnailsDir, systemId), { recursive: true });
   }
 
   private getCacheFilePath(systemId: string): string {
@@ -120,5 +123,25 @@ export class MetadataCache {
 
   coverExists(systemId: string, romFileName: string): boolean {
     return existsSync(this.getCoverPath(systemId, romFileName));
+  }
+
+  /**
+   * Path for the 200px-wide JPEG thumbnail used by the grid. Note: extension
+   * is .jpg even though the source cover is .png — sharp re-encodes to JPEG
+   * for ~10x smaller files, which meaningfully speeds up grid scrolling on
+   * large libraries. The full cover stays as-is for the detail modal.
+   */
+  getThumbnailPath(systemId: string, romFileName: string): string {
+    return resolve(this.thumbnailsDir, systemId, `${normalizeKey(romFileName)}.jpg`);
+  }
+
+  thumbnailExists(systemId: string, romFileName: string): boolean {
+    return existsSync(this.getThumbnailPath(systemId, romFileName));
+  }
+
+  /** Public getter so callers (thumbnail-cache helpers, UI diagnostics) can
+   *  reason about where thumbnails live without re-deriving the path. */
+  getThumbnailsDir(): string {
+    return this.thumbnailsDir;
   }
 }

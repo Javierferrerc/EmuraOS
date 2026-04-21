@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MetadataCache } from "./metadata-cache.js";
+import { ensureThumbnail } from "./thumbnail-cache.js";
 import { normalizeTitle, tokenize } from "./title-utils.js";
 import type {
   DiscoveredRom,
@@ -231,6 +232,10 @@ export class LibretroThumbnails {
       const coverPath = this.cache.getCoverPath(systemId, romFileName);
       const buffer = Buffer.from(await response.arrayBuffer());
       writeFileSync(coverPath, buffer);
+      void ensureThumbnail(
+        coverPath,
+        this.cache.getThumbnailPath(systemId, romFileName)
+      );
       return coverPath;
     }
 
@@ -300,6 +305,10 @@ export class LibretroThumbnails {
     const coverPath = this.cache.getCoverPath(systemId, romFileName);
     const buffer = Buffer.from(await response.arrayBuffer());
     writeFileSync(coverPath, buffer);
+    void ensureThumbnail(
+      coverPath,
+      this.cache.getThumbnailPath(systemId, romFileName)
+    );
 
     this.saveCoverMetadata(systemId, romFileName, coverPath);
     return coverPath;

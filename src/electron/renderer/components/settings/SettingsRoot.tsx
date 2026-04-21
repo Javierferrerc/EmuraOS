@@ -532,7 +532,7 @@ export function SettingsRoot() {
 
   useGamepad({
     onAction: handleGamepadAction,
-    disabled: app.controllerCaptureOpen,
+    disabled: app.controllerCaptureOpen || app.collectionsModalOpen,
   });
 
   // Keyboard handling — dpad + Enter/Escape. This is isolated to the

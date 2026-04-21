@@ -5,6 +5,7 @@ import { GameListRow } from "./GameListRow";
 import { GameCardCompact } from "./GameCardCompact";
 import { resolveSystemMembers } from "../utils/systemGroups";
 import type { DiscoveredRom } from "../../../core/types";
+import { evaluateSmartCollection } from "../../../core/smart-collection";
 import "./GameGrid.css";
 
 const MIN_CARD_WIDTH = 292;
@@ -111,9 +112,27 @@ export function GameGrid({
         );
         roms = [];
         if (col) {
-          for (const key of col.roms) {
-            const rom = romByKey.get(key);
-            if (rom) roms.push(rom);
+          if (col.kind === "smart" && col.filter) {
+            // Evaluate the smart filter against the full library on every
+            // render. Cheap (O(n) over allRoms) and avoids any cache
+            // invalidation logic — favorites/recent/metadata changes show up
+            // immediately.
+            const matched = evaluateSmartCollection(
+              col.filter,
+              allRoms,
+              getMetadataForRom,
+              favorites,
+              recentlyPlayed
+            );
+            const matchedSet = new Set(matched);
+            roms = allRoms.filter((r) =>
+              matchedSet.has(`${r.systemId}:${r.fileName}`)
+            );
+          } else {
+            for (const key of col.roms) {
+              const rom = romByKey.get(key);
+              if (rom) roms.push(rom);
+            }
           }
         }
         break;

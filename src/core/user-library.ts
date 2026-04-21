@@ -6,6 +6,7 @@ import type {
   Collection,
   PlayRecord,
   RomReference,
+  SmartCollectionFilter,
 } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -98,12 +99,47 @@ export class UserLibrary {
       id: `col_${Date.now()}`,
       name,
       roms: [],
+      kind: "manual",
       createdAt: now,
       updatedAt: now,
     };
     data.collections.push(collection);
     this.save(data);
     return collection;
+  }
+
+  createSmartCollection(
+    name: string,
+    filter: SmartCollectionFilter
+  ): Collection {
+    const data = this.load();
+    const now = new Date().toISOString();
+    const collection: Collection = {
+      id: `col_${Date.now()}`,
+      name,
+      roms: [],
+      kind: "smart",
+      filter,
+      createdAt: now,
+      updatedAt: now,
+    };
+    data.collections.push(collection);
+    this.save(data);
+    return collection;
+  }
+
+  updateSmartCollectionFilter(
+    id: string,
+    filter: SmartCollectionFilter
+  ): void {
+    const data = this.load();
+    const col = data.collections.find((c) => c.id === id);
+    if (col) {
+      col.kind = "smart";
+      col.filter = filter;
+      col.updatedAt = new Date().toISOString();
+      this.save(data);
+    }
   }
 
   renameCollection(id: string, name: string): void {

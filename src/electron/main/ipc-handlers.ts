@@ -3,6 +3,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { z } from "zod";
 import {
   readFileSync,
   writeFileSync,
@@ -41,6 +42,7 @@ import {
   readGcPadConfig,
   writeGcPadConfig,
 } from "../../core/dolphin-gcpad.js";
+import { backfillThumbnails } from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
@@ -64,6 +66,7 @@ import {
   EmulatorConfigChangesSchema,
   GcPadUpdatesArraySchema,
   ExecutablePathSchema,
+  SmartCollectionFilterSchema,
   CollectionNameSchema,
   RecentlyPlayedLimitSchema,
   ForceRefreshSchema,
@@ -490,6 +493,45 @@ export function registerIpcHandlers(
     }
   );
 
+  /**
+   * Read a 200px thumbnail as a dataURL. Falls back to the full cover if the
+   * thumbnail doesn't exist yet (e.g. a user upgrading from a pre-thumbnail
+   * build who hasn't rebuilt yet). The renderer uses this for grid cards;
+   * detail/modal views should keep calling read-cover-data-url for full res.
+   */
+  ipcMain.handle(
+    "read-thumbnail-data-url",
+    (_event: IpcMainInvokeEvent, systemId: unknown, romFileName: unknown) => {
+      if (typeof systemId !== "string" || typeof romFileName !== "string") {
+        return null;
+      }
+      const cache = new MetadataCache(getProjectRoot());
+      const thumbPath = cache.getThumbnailPath(systemId, romFileName);
+      const coverPath = cache.getCoverPath(systemId, romFileName);
+      const resolved = existsSync(thumbPath) ? thumbPath : coverPath;
+      if (!existsSync(resolved)) return null;
+      try {
+        const data = readFileSync(resolved);
+        const ext = path.extname(resolved).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".png": "image/png",
+          ".webp": "image/webp",
+        };
+        const mime = mimeMap[ext] ?? "image/png";
+        return `data:${mime};base64,${data.toString("base64")}`;
+      } catch {
+        return null;
+      }
+    }
+  );
+
+  ipcMain.handle("rebuild-thumbnails", async () => {
+    const cache = new MetadataCache(getProjectRoot());
+    return backfillThumbnails(cache);
+  });
+
   ipcMain.handle(
     "read-cover-data-url",
     (_event: IpcMainInvokeEvent, coverPath: string) => {
@@ -501,6 +543,7 @@ export function registerIpcHandlers(
         path.join(projectRoot, "metadata"),
         path.join(projectRoot, "covers"),
         path.join(projectRoot, "config", "metadata"),
+        path.join(projectRoot, "config", "metadata", "thumbnails"),
       ];
       const resolved = path.resolve(coverPath);
       const isAllowed = allowedRoots.some(
@@ -795,6 +838,26 @@ export function registerIpcHandlers(
       const validatedName = CollectionNameSchema.parse(name);
       const lib = new UserLibrary(getProjectRoot());
       return lib.createCollection(validatedName);
+    }
+  );
+
+  ipcMain.handle(
+    "create-smart-collection",
+    (_event: IpcMainInvokeEvent, name: unknown, filter: unknown) => {
+      const validatedName = CollectionNameSchema.parse(name);
+      const validatedFilter = SmartCollectionFilterSchema.parse(filter);
+      const lib = new UserLibrary(getProjectRoot());
+      return lib.createSmartCollection(validatedName, validatedFilter);
+    }
+  );
+
+  ipcMain.handle(
+    "update-smart-collection-filter",
+    (_event: IpcMainInvokeEvent, id: unknown, filter: unknown) => {
+      const validatedId = z.string().min(1).max(100).parse(id);
+      const validatedFilter = SmartCollectionFilterSchema.parse(filter);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.updateSmartCollectionFilter(validatedId, validatedFilter);
     }
   );
 

@@ -9,7 +9,8 @@ export const TOPBAR_INDEX_ADD_ROM = 1;
 export const TOPBAR_INDEX_RESCAN = 2;
 export const TOPBAR_INDEX_FAVORITES = 3;
 export const TOPBAR_INDEX_VIEW_MODE = 4;
-export const TOPBAR_INDEX_SETTINGS = 5;
+export const TOPBAR_INDEX_COLLECTIONS = 5;
+export const TOPBAR_INDEX_SETTINGS = 6;
 
 interface TopBarProps {
   focusedIndex: number;
@@ -36,6 +37,7 @@ export function TopBar({
     isAddingRoms,
     config,
     updateConfig,
+    setCollectionsModalOpen,
   } = useApp();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -233,6 +235,20 @@ export function TopBar({
               <path d="M104,40H56A16,16,0,0,0,40,56v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,104,40Zm0,64H56V56h48ZM200,40H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,64H152V56h48ZM104,136H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm0,64H56V152h48ZM200,136H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Zm0,64H152V152h48Z" />
             </svg>
           )}
+        </button>
+
+        {/* Collections — opens the manager modal (manual + smart) */}
+        <button
+          data-topbar-index={TOPBAR_INDEX_COLLECTIONS}
+          onClick={() => setCollectionsModalOpen(true)}
+          className={`topbar-icon-btn p-2.5 ${focusRingClass(
+            TOPBAR_INDEX_COLLECTIONS
+          )}`}
+          title="Colecciones"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 256 256" fill="url(#icon-gradient)">
+            <path d="M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200.62A13.39,13.39,0,0,0,37.38,214H216.89A15.13,15.13,0,0,0,232,198.89V88A16,16,0,0,0,216,72ZM40,56H92.69l16,16H40ZM216,198H40V88H216Z" />
+          </svg>
         </button>
 
         {/* User profile — temporarily disabled */}
