@@ -187,8 +187,8 @@ export function SystemSlider({
             data-slider-index={idx}
             onClick={() => onSelect(idx)}
             className={`slider-btn flex items-center justify-center text-xs font-bold ${
-              isFocused ? "ring-2 ring-focus scale-105" : ""
-            } ${isActive ? "scale-105" : ""}`}
+              isFocused || isActive ? "scale-105" : ""
+            }`}
             style={{
               "--slider-color": item.color,
               "--slider-icon-color": item.iconColor,
@@ -196,6 +196,9 @@ export function SystemSlider({
               "--slider-dark": `${item.darkColor}00`,
               "--slider-border-start": `${item.color}d1`,
               "--slider-border-end": `${item.darkColor}00`,
+              ...(isFocused
+                ? { outline: `2px solid ${item.color}`, outlineOffset: "2px" }
+                : {}),
             } as React.CSSProperties}
             title={item.label}
           >
