@@ -66,10 +66,10 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
     <div
       data-grid-index={gridIndex}
       onDoubleClick={handleDoubleClick}
-      className={`game-list-row group flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+      className={`game-list-row group flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2 cursor-pointer transition-colors ${
         isFocused
-          ? "bg-white/15 ring-2 ring-focus"
-          : "hover:bg-white/8"
+          ? "bg-white/20 ring-2 ring-focus"
+          : "hover:bg-white/15"
       }`}
       title={`Double-click to launch\n${rom.filePath}`}
     >

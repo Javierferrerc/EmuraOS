@@ -85,6 +85,17 @@ export const AppConfigPartialSchema = z
     backgroundBrightness: z.number().min(0).max(200).optional(),
     backgroundBlur: z.number().min(0).max(20).optional(),
     backgroundOpacity: z.number().min(0).max(100).optional(),
+    cardClickAction: z.enum(["launch", "detail"]).optional(),
+    libraryViewMode: z.enum(["grid", "list", "compact"]).optional(),
+    libraryFilters: z
+      .object({
+        genre: z.string().max(100).optional(),
+        decade: z.string().max(20).optional(),
+        minRating: z.string().max(10).optional(),
+        players: z.string().max(20).optional(),
+        hasCover: z.string().max(10).optional(),
+      })
+      .optional(),
   })
   .strict();
 
