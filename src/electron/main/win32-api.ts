@@ -92,6 +92,9 @@ const SetWindowRgn = memoize(() =>
 const SetMenu = memoize(() =>
   user32().func("int __stdcall SetMenu(void *hWnd, void *hMenu)")
 );
+const GetMenu = memoize(() =>
+  user32().func("void * __stdcall GetMenu(void *hWnd)")
+);
 const DrawMenuBar = memoize(() =>
   user32().func("int __stdcall DrawMenuBar(void *hWnd)")
 );
@@ -171,12 +174,35 @@ export function stripDecorations(hwnd: unknown): void {
 }
 
 /**
+ * Re-add standard window chrome (title bar, borders, resize frame, system
+ * menu). Inverse of `stripDecorations` — used when a game session temporarily
+ * exits embedded mode so the user can interact with the emulator as a normal
+ * standalone window (e.g. to reach its native config menus).
+ */
+export function restoreDecorations(hwnd: unknown): void {
+  let style = Number(GetWindowLongPtrW()(hwnd, GWL_STYLE));
+  style |= WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_SYSMENU;
+  SetWindowLongPtrW()(hwnd, GWL_STYLE, style);
+  SetWindowPos()(hwnd, 0, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
+}
+
+/**
  * Hide window from the taskbar.
  */
 export function hideFromTaskbar(hwnd: unknown): void {
   let exStyle = Number(GetWindowLongPtrW()(hwnd, GWL_EXSTYLE));
   exStyle |= WS_EX_TOOLWINDOW;
   exStyle &= ~WS_EX_APPWINDOW;
+  SetWindowLongPtrW()(hwnd, GWL_EXSTYLE, exStyle);
+}
+
+/**
+ * Show window in the taskbar. Inverse of `hideFromTaskbar`.
+ */
+export function showInTaskbar(hwnd: unknown): void {
+  let exStyle = Number(GetWindowLongPtrW()(hwnd, GWL_EXSTYLE));
+  exStyle &= ~WS_EX_TOOLWINDOW;
+  exStyle |= WS_EX_APPWINDOW;
   SetWindowLongPtrW()(hwnd, GWL_EXSTYLE, exStyle);
 }
 
@@ -217,6 +243,40 @@ export function positionWindow(hwnd: unknown, x: number, y: number, w: number, h
 export function removeMenuBar(hwnd: unknown): void {
   SetMenu()(hwnd, 0);
   DrawMenuBar()(hwnd);
+}
+
+/**
+ * Read the current HMENU attached to a window. Returns the koffi pointer
+ * (can be re-passed to `restoreMenuBar`) or null if no menu is attached.
+ * Call this BEFORE `removeMenuBar` if you intend to re-attach the same menu
+ * later — Win32 menus detached via SetMenu(hwnd, NULL) are not destroyed,
+ * but there's no way to retrieve the previous handle once detached.
+ */
+export function getMenu(hwnd: unknown): unknown {
+  const hmenu = GetMenu()(hwnd);
+  // koffi returns a "pointer" value; a null pointer compares loosely to 0.
+  // We return it as-is; callers should truthy-check before using.
+  return hmenu;
+}
+
+/**
+ * Re-attach a previously saved HMENU to a window. Inverse of `removeMenuBar`.
+ * No-op if `hmenu` is falsy (e.g. the window never had a native menu).
+ */
+export function restoreMenuBar(hwnd: unknown, hmenu: unknown): void {
+  if (!hmenu) return;
+  SetMenu()(hwnd, hmenu);
+  DrawMenuBar()(hwnd);
+}
+
+/**
+ * Remove any window region previously set via `clipTopPixels`, restoring the
+ * full rectangular window shape. Passing NULL to SetWindowRgn tells Windows
+ * to drop the current region and use the default (rectangular client area).
+ */
+export function clearClipRegion(hwnd: unknown): void {
+  // bRedraw=1 so Windows repaints immediately.
+  SetWindowRgn()(hwnd, 0, 1);
 }
 
 /**
@@ -287,3 +347,5 @@ export function isKeyPressed(vk: number): boolean {
 
 /** Windows Virtual-Key code for F10. */
 export const VK_F10 = 0x79;
+/** Windows Virtual-Key code for F11. */
+export const VK_F11 = 0x7a;
