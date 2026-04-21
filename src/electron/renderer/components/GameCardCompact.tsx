@@ -85,7 +85,7 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
           : `Double-click to launch\n${rom.filePath}`
       }
     >
-      {/* Cover */}
+      {/* Cover — shimmer skeleton while the thumbnail resolves. */}
       <div className="h-full w-full">
         {hasCover ? (
           <img
@@ -94,6 +94,8 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
             className="h-full w-full object-cover"
             onError={() => setImgError(true)}
           />
+        ) : metadata?.coverPath && !imgError ? (
+          <div className="cover-skeleton h-full w-full" aria-hidden />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-white/5 text-3xl">
             🎮

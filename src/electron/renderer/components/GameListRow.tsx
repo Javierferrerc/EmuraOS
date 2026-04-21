@@ -120,7 +120,7 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
           {isBulkSelected ? "\u2713" : ""}
         </span>
       )}
-      {/* Mini cover */}
+      {/* Mini cover — shimmer skeleton while loading. */}
       <div className="h-10 w-7 shrink-0 overflow-hidden rounded">
         {hasCover ? (
           <img
@@ -129,6 +129,8 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
             className="h-full w-full object-cover"
             onError={() => setImgError(true)}
           />
+        ) : metadata?.coverPath && !imgError ? (
+          <div className="cover-skeleton h-full w-full" aria-hidden />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-white/5 text-xs">
             🎮

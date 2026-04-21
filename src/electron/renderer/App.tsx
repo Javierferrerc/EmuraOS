@@ -14,6 +14,7 @@ import { GameDetailModal } from "./components/GameDetailModal";
 import { QuickLaunch } from "./components/QuickLaunch";
 import { CollectionsModal } from "./components/CollectionsModal";
 import { BulkSelectBar } from "./components/BulkSelectBar";
+import { GlobalProgress } from "./components/GlobalProgress";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
@@ -210,30 +211,47 @@ export default function App() {
   const bgOpacity = app.config?.backgroundOpacity ?? 30;
 
   let page;
+  // Stable key per top-level view so the fade animation plays only on
+  // view changes (library ↔ settings ↔ game), not on sub-route updates
+  // inside a single view (which would otherwise remount SettingsPage on
+  // every tab switch).
+  let viewKey: string;
   if (NEW_SETTINGS_ENABLED) {
     const path = navigation.currentPath;
     if (path === "/game") {
       page = <GameModeView />;
+      viewKey = "game";
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
+      viewKey = "settings";
     } else {
       page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
+      viewKey = "library";
     }
   } else {
     switch (currentView) {
       case "settings":
         page = <SettingsPage />;
+        viewKey = "settings";
         break;
       case "emulator-config":
         page = <EmulatorConfigPage />;
+        viewKey = "emulator-config";
         break;
       case "game":
         page = <GameModeView />;
+        viewKey = "game";
         break;
       default:
         page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
+        viewKey = "library";
     }
   }
+  page = (
+    <div key={viewKey} className="view-fade-enter flex h-full flex-col">
+      {page}
+    </div>
+  );
 
   return (
     <div className="flex h-screen flex-col">
@@ -286,6 +304,7 @@ export default function App() {
       {app.quickLaunchOpen && <QuickLaunch />}
       {app.collectionsModalOpen && <CollectionsModal />}
       <BulkSelectBar />
+      <GlobalProgress />
       {app.detailModalRom && (
         <GameDetailModal
           rom={app.detailModalRom}

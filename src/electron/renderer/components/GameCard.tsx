@@ -241,10 +241,14 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     [openGameDetail, rom]
   );
 
+  const [favPopKey, setFavPopKey] = useState(0);
   const handleToggleFavorite = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       toggleFavorite(rom.systemId, rom.fileName);
+      // Bump the key so the <svg> remounts and plays the CSS animation —
+      // simpler than removing/re-adding a class with a timeout.
+      setFavPopKey((k) => k + 1);
     },
     [toggleFavorite, rom.systemId, rom.fileName]
   );
@@ -345,6 +349,10 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-100"
       }`;
 
+  // While metadata reports a coverPath but the IPC read hasn't resolved yet,
+  // render a shimmer skeleton instead of the placeholder glyph. Once resolved
+  // we flip to <img>; if the read fails we fall through to the glyph.
+  const coverPending = !!metadata?.coverPath && !coverDataUrl && !imgError;
   const coverContent = hasCover ? (
     <img
       src={coverDataUrl}
@@ -352,6 +360,8 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       className="h-full w-full object-cover"
       onError={() => setImgError(true)}
     />
+  ) : coverPending ? (
+    <div className="cover-skeleton h-full w-full" aria-hidden />
   ) : (
     <div className="flex h-full w-full items-center justify-center bg-white/5 text-4xl">
       🎮
@@ -474,6 +484,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         title={favorited ? "Remove from favorites" : "Add to favorites"}
       >
         <svg
+          key={favPopKey}
           width="14"
           height="14"
           viewBox="0 0 24 24"
@@ -482,6 +493,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          className={favPopKey > 0 ? "fav-pop" : ""}
         >
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
         </svg>
