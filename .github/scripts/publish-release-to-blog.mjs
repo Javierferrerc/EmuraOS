@@ -16,8 +16,8 @@ const slug = tag.replace(/^v/, "");
 const title = release.name?.trim() || `Emura ${tag}`;
 const date = (release.published_at ?? new Date().toISOString()).slice(0, 10);
 
-let content = (release.body ?? "").trim();
-if (!content) {
+let rawNotes = (release.body ?? "").trim();
+if (!rawNotes) {
   const res = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/releases/generate-notes`,
     {
@@ -34,7 +34,57 @@ if (!content) {
     throw new Error(`generate-notes failed: ${res.status} ${await res.text()}`);
   }
   const generated = await res.json();
-  content = (generated.body ?? "").trim();
+  rawNotes = (generated.body ?? "").trim();
+}
+
+const systemPrompt = `Eres el redactor del blog oficial de Emura, una aplicación de retro-launcher para juegos retro.
+
+Te paso las notas técnicas autogeneradas de un release (con commits, pull requests, enlaces y nombres de usuario). Tu trabajo es reescribirlas como un post de blog en español dirigido a usuarios finales, no a desarrolladores.
+
+Reglas obligatorias:
+- NO incluyas enlaces, URLs, ni la línea "Full Changelog".
+- NO menciones números de PR (#42) ni nombres de usuario (@nombre).
+- NO uses jerga técnica: nada de "commit", "pull request", "merge", "bump de dependencias", "refactor".
+- NO uses emojis.
+- NO inventes funcionalidades que no aparezcan en las notas originales.
+- Si un cambio es puramente interno (refactor, dependencias, ajustes de build, CI), descártalo por completo.
+- Escribe en tono cercano y natural, como si le contaras las novedades a un usuario.
+
+Estructura:
+- Usa headings markdown (## Novedades, ## Mejoras, ## Correcciones) solo para las secciones que tengan contenido real. Si una sección queda vacía, no la incluyas.
+- Bajo cada heading, escribe prosa breve o bullets cortos y claros.
+- Si tras aplicar las reglas no queda ningún cambio user-facing, responde solo con una frase: "Esta versión incluye mejoras internas y de estabilidad."
+
+Salida: solo el markdown del post, sin introducción, sin explicaciones y sin metacomentarios.`;
+
+const llmRes = await fetch("https://models.github.ai/inference/chat/completions", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${ghToken}`,
+    "Content-Type": "application/json",
+    Accept: "application/vnd.github+json",
+  },
+  body: JSON.stringify({
+    model: "openai/gpt-4o-mini",
+    temperature: 0.4,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: `Versión: ${tag}\n\nNotas técnicas del release:\n\n${rawNotes || "(sin notas)"}`,
+      },
+    ],
+  }),
+});
+
+if (!llmRes.ok) {
+  throw new Error(`GitHub Models rewrite failed: ${llmRes.status} ${await llmRes.text()}`);
+}
+
+const llmData = await llmRes.json();
+const content = (llmData.choices?.[0]?.message?.content ?? "").trim();
+if (!content) {
+  throw new Error("GitHub Models returned empty content");
 }
 
 const row = {
