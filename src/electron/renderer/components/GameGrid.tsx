@@ -1,12 +1,16 @@
 import { useMemo, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { GameCard } from "./GameCard";
+import { GameListRow } from "./GameListRow";
+import { GameCardCompact } from "./GameCardCompact";
 import { resolveSystemMembers } from "../utils/systemGroups";
 import type { DiscoveredRom } from "../../../core/types";
 import "./GameGrid.css";
 
 const MIN_CARD_WIDTH = 292;
+const MIN_CARD_WIDTH_COMPACT = 160;
 const GRID_GAP = 32;
+const LIST_GAP = 4;
 
 interface GameGridProps {
   focusedIndex?: number;
@@ -32,6 +36,7 @@ export function GameGrid({
     collections,
     config,
     romAddedDates,
+    getMetadataForRom,
   } = useApp();
 
   // Mutable ref to the current grid element (used for scroll-into-view).
@@ -160,6 +165,59 @@ export function GameGrid({
         roms.sort((a, b) => a.fileName.localeCompare(b.fileName));
         break;
     }
+
+    // Apply persistent library filters from Settings > Biblioteca > Filtros
+    const filters = config?.libraryFilters;
+    if (filters) {
+      if (filters.genre) {
+        const g = filters.genre.toLowerCase();
+        roms = roms.filter((r) => {
+          const meta = getMetadataForRom(r.systemId, r.fileName);
+          return meta?.genre && meta.genre.toLowerCase().includes(g);
+        });
+      }
+      if (filters.decade && filters.decade !== "all") {
+        const decadeStart = parseInt(filters.decade, 10); // "1990s" → 1990
+        roms = roms.filter((r) => {
+          const meta = getMetadataForRom(r.systemId, r.fileName);
+          if (!meta?.year) return false;
+          const year = parseInt(meta.year, 10);
+          return year >= decadeStart && year < decadeStart + 10;
+        });
+      }
+      if (filters.minRating && filters.minRating !== "0") {
+        const min = parseInt(filters.minRating, 10);
+        roms = roms.filter((r) => {
+          const meta = getMetadataForRom(r.systemId, r.fileName);
+          if (!meta?.rating) return false;
+          const rating = parseFloat(meta.rating);
+          return rating >= min;
+        });
+      }
+      if (filters.players && filters.players !== "all") {
+        roms = roms.filter((r) => {
+          const meta = getMetadataForRom(r.systemId, r.fileName);
+          if (!meta?.players) return false;
+          const p = meta.players;
+          if (filters.players === "1") return p === "1" || p.startsWith("1");
+          if (filters.players === "2") return p.includes("2");
+          if (filters.players === "multi") {
+            // Any player count > 2
+            const nums = p.match(/\d+/g);
+            return nums ? nums.some((n) => parseInt(n, 10) > 2) : false;
+          }
+          return true;
+        });
+      }
+      if (filters.hasCover && filters.hasCover !== "all") {
+        roms = roms.filter((r) => {
+          const meta = getMetadataForRom(r.systemId, r.fileName);
+          const has = !!meta?.coverPath;
+          return filters.hasCover === "yes" ? has : !has;
+        });
+      }
+    }
+
     return roms;
   }, [
     allRoms,
@@ -170,7 +228,9 @@ export function GameGrid({
     recentlyPlayed,
     collections,
     config?.gameSortOrder,
+    config?.libraryFilters,
     romAddedDates,
+    getMetadataForRom,
   ]);
 
   // Report filtered roms and item count to parent
@@ -181,6 +241,8 @@ export function GameGrid({
   useEffect(() => {
     onItemCountChange?.(filteredRoms.length);
   }, [filteredRoms.length, onItemCountChange]);
+
+  const viewMode = config?.libraryViewMode ?? "grid";
 
   // Callback ref: attaches a ResizeObserver whenever the grid div is
   // mounted (or re-mounted — the `key={filterKey}` below forces a remount
@@ -199,10 +261,16 @@ export function GameGrid({
       if (!el) return;
 
       const compute = () => {
+        if (viewMode === "list") {
+          onColumnCountChange?.(1);
+          return;
+        }
+        const minW = viewMode === "compact" ? MIN_CARD_WIDTH_COMPACT : MIN_CARD_WIDTH;
+        const gap = viewMode === "compact" ? 16 : GRID_GAP;
         const width = el.clientWidth;
         const cols = Math.max(
           1,
-          Math.floor((width + GRID_GAP) / (MIN_CARD_WIDTH + GRID_GAP))
+          Math.floor((width + gap) / (minW + gap))
         );
         onColumnCountChange?.(cols);
       };
@@ -214,7 +282,7 @@ export function GameGrid({
       // column count on first paint.
       compute();
     },
-    [onColumnCountChange]
+    [onColumnCountChange, viewMode]
   );
 
   // Disconnect observer on unmount.
@@ -284,6 +352,55 @@ export function GameGrid({
       : activeFilter.type === "collection"
         ? `col-${activeFilter.collectionId}`
         : activeFilter.type;
+
+  if (viewMode === "list") {
+    return (
+      <div
+        key={`${filterKey}-list`}
+        ref={setGridRef}
+        className="flex flex-col pt-10"
+        style={{ gap: `${LIST_GAP}px` }}
+      >
+        {filteredRoms.map((rom, idx) => (
+          <div
+            key={rom.filePath}
+            style={{ animationDelay: `${Math.min(idx * 20, 200)}ms` }}
+          >
+            <GameListRow
+              rom={rom}
+              gridIndex={idx}
+              isFocused={focusActive && focusedIndex === idx}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (viewMode === "compact") {
+    return (
+      <div
+        key={`${filterKey}-compact`}
+        ref={setGridRef}
+        className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] pt-10"
+        style={{ gap: "16px" }}
+      >
+        {filteredRoms.map((rom, idx) => (
+          <div
+            key={rom.filePath}
+            className="game-grid-card-compact"
+            style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+          >
+            <GameCardCompact
+              rom={rom}
+              gridIndex={idx}
+              isFocused={focusActive && focusedIndex === idx}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -54,6 +54,22 @@ function buildTopSessionRows(): InfoSetting[] {
   }));
 }
 
+/** Extract unique genres from the metadataMap for dynamic dropdown options. */
+function extractGenres(ctx: SettingsContext): string[] {
+  const genres = new Set<string>();
+  for (const systemGames of Object.values(ctx.metadataMap)) {
+    for (const meta of Object.values(systemGames)) {
+      if (meta.genre) {
+        // Some entries have multiple genres separated by comma or /
+        for (const g of meta.genre.split(/[,/]/).map((s: string) => s.trim())) {
+          if (g) genres.add(g);
+        }
+      }
+    }
+  }
+  return [...genres].sort((a, b) => a.localeCompare(b));
+}
+
 export const bibliotecaSection: SettingsSection = {
   id: "biblioteca",
   path: "/settings/biblioteca",
@@ -106,6 +122,21 @@ export const bibliotecaSection: SettingsSection = {
                 await ctx.updateConfig({ cardClickAction: value as "launch" | "detail" });
               },
             },
+            {
+              id: "bib.view-mode",
+              kind: "dropdown",
+              label: "Vista de biblioteca",
+              description: "Cambiar entre cuadrícula, lista o vista compacta.",
+              options: [
+                { value: "grid", label: "Cuadrícula" },
+                { value: "list", label: "Lista" },
+                { value: "compact", label: "Compacta" },
+              ],
+              get: (ctx) => ctx.config?.libraryViewMode ?? "grid",
+              set: async (value, ctx) => {
+                await ctx.updateConfig({ libraryViewMode: value as "grid" | "list" | "compact" });
+              },
+            },
           ],
         },
         {
@@ -125,6 +156,125 @@ export const bibliotecaSection: SettingsSection = {
               set: async (value, ctx) => {
                 await ctx.updateConfig({
                   systemSortOrder: value as "default" | "recent" | "custom",
+                });
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "bib-filters",
+      label: "Filtros",
+      groups: [
+        {
+          id: "bib-filters-metadata",
+          title: "Filtros de metadata",
+          description: "Filtros persistentes que se aplican automáticamente a la biblioteca.",
+          rows: [
+            {
+              id: "bib.filter-genre",
+              kind: "dropdown",
+              label: "Género",
+              description: "Mostrar solo juegos de un género específico.",
+              options: [
+                { value: "", label: "Todos" },
+              ],
+              get: (ctx) => {
+                // Dynamically inject genre options from metadata
+                const setting = bibliotecaSection.tabs![1].groups[0].rows[0];
+                if (setting.kind === "dropdown") {
+                  const genres = extractGenres(ctx);
+                  setting.options = [
+                    { value: "", label: "Todos" },
+                    ...genres.map((g) => ({ value: g.toLowerCase(), label: g })),
+                  ];
+                }
+                return ctx.config?.libraryFilters?.genre ?? "";
+              },
+              set: async (value, ctx) => {
+                const existing = ctx.config?.libraryFilters ?? {};
+                await ctx.updateConfig({
+                  libraryFilters: { ...existing, genre: value as string },
+                });
+              },
+            },
+            {
+              id: "bib.filter-decade",
+              kind: "dropdown",
+              label: "Año / Década",
+              description: "Filtrar juegos por década de lanzamiento.",
+              options: [
+                { value: "all", label: "Todos" },
+                { value: "2020s", label: "2020s" },
+                { value: "2010s", label: "2010s" },
+                { value: "2000s", label: "2000s" },
+                { value: "1990s", label: "1990s" },
+                { value: "1980s", label: "1980s" },
+                { value: "1970s", label: "1970s" },
+              ],
+              get: (ctx) => ctx.config?.libraryFilters?.decade ?? "all",
+              set: async (value, ctx) => {
+                const existing = ctx.config?.libraryFilters ?? {};
+                await ctx.updateConfig({
+                  libraryFilters: { ...existing, decade: value as string },
+                });
+              },
+            },
+            {
+              id: "bib.filter-rating",
+              kind: "dropdown",
+              label: "Rating mínimo",
+              description: "Mostrar solo juegos con rating igual o superior.",
+              options: [
+                { value: "0", label: "Sin filtro" },
+                { value: "1", label: "1+" },
+                { value: "2", label: "2+" },
+                { value: "3", label: "3+" },
+                { value: "4", label: "4+" },
+              ],
+              get: (ctx) => ctx.config?.libraryFilters?.minRating ?? "0",
+              set: async (value, ctx) => {
+                const existing = ctx.config?.libraryFilters ?? {};
+                await ctx.updateConfig({
+                  libraryFilters: { ...existing, minRating: value as string },
+                });
+              },
+            },
+            {
+              id: "bib.filter-players",
+              kind: "dropdown",
+              label: "Jugadores",
+              description: "Filtrar por número de jugadores.",
+              options: [
+                { value: "all", label: "Todos" },
+                { value: "1", label: "1 jugador" },
+                { value: "2", label: "2 jugadores" },
+                { value: "multi", label: "Multijugador" },
+              ],
+              get: (ctx) => ctx.config?.libraryFilters?.players ?? "all",
+              set: async (value, ctx) => {
+                const existing = ctx.config?.libraryFilters ?? {};
+                await ctx.updateConfig({
+                  libraryFilters: { ...existing, players: value as string },
+                });
+              },
+            },
+            {
+              id: "bib.filter-cover",
+              kind: "dropdown",
+              label: "Portada",
+              description: "Filtrar por juegos con o sin portada.",
+              options: [
+                { value: "all", label: "Todos" },
+                { value: "yes", label: "Solo con portada" },
+                { value: "no", label: "Solo sin portada" },
+              ],
+              get: (ctx) => ctx.config?.libraryFilters?.hasCover ?? "all",
+              set: async (value, ctx) => {
+                const existing = ctx.config?.libraryFilters ?? {};
+                await ctx.updateConfig({
+                  libraryFilters: { ...existing, hasCover: value as string },
                 });
               },
             },

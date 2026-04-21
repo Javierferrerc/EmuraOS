@@ -70,6 +70,14 @@ export interface AppConfig {
   backgroundBlur?: number;
   backgroundOpacity?: number;
   cardClickAction?: "launch" | "detail";
+  libraryViewMode?: "grid" | "list" | "compact";
+  libraryFilters?: {
+    genre?: string;          // single genre filter (empty string = all)
+    decade?: string;         // "all", "2020s", "2010s", "2000s", "1990s", "1980s", "1970s"
+    minRating?: string;      // "0" = no filter, "1", "2", "3", "4"
+    players?: string;        // "all", "1", "2", "multi"
+    hasCover?: string;       // "all", "yes", "no"
+  };
 }
 
 export interface EmulatorDefinition {

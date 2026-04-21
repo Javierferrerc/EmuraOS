@@ -36,3 +36,16 @@
   scroll-margin-top: 16px;
   animation: card-fade-in 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
+
+/* List view rows */
+.game-list-row {
+  scroll-margin-top: 16px;
+  animation: card-fade-in 0.3s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* Compact view cards */
+.game-grid-card-compact {
+  height: 200px;
+  scroll-margin-top: 16px;
+  animation: card-fade-in 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}

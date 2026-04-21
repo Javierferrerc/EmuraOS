@@ -11,6 +11,7 @@ import { GameLoadingOverlay } from "./components/GameLoadingOverlay";
 import { UpdateModal } from "./components/UpdateModal";
 import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { GameDetailModal } from "./components/GameDetailModal";
+import { QuickLaunch } from "./components/QuickLaunch";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
@@ -214,7 +215,7 @@ export default function App() {
     } else if (path.startsWith("/settings")) {
       page = <SettingsPage />;
     } else {
-      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom} />;
+      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen} />;
     }
   } else {
     switch (currentView) {
@@ -228,7 +229,7 @@ export default function App() {
         page = <GameModeView />;
         break;
       default:
-        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom} />;
+        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen} />;
     }
   }
 
@@ -280,6 +281,7 @@ export default function App() {
         <UpdateModal updateInfo={updateInfo} onDismiss={dismissUpdateModal} />
       )}
       <DisambiguationDialog />
+      {app.quickLaunchOpen && <QuickLaunch />}
       {app.detailModalRom && (
         <GameDetailModal
           rom={app.detailModalRom}

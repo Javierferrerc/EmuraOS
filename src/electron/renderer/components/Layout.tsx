@@ -6,7 +6,7 @@ import {
   TOPBAR_INDEX_FAVORITES,
   TOPBAR_INDEX_ADD_ROM,
   TOPBAR_INDEX_RESCAN,
-  // TOPBAR_INDEX_PROFILE, // temporarily disabled
+  TOPBAR_INDEX_VIEW_MODE,
   TOPBAR_INDEX_SETTINGS,
 } from "./TopBar";
 import { SystemSlider } from "./SystemSlider";
@@ -44,10 +44,12 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     searchQuery,
     setSearchQuery,
     config,
+    updateConfig,
     addRomsFlow,
     refreshScan,
     recentlyPlayed,
     openGameDetail,
+    openQuickLaunch,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -320,8 +322,13 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
               case TOPBAR_INDEX_RESCAN:
                 refreshScan();
                 break;
-              // case TOPBAR_INDEX_PROFILE: // temporarily disabled
-              //   break;
+              case TOPBAR_INDEX_VIEW_MODE: {
+                const modes = ["grid", "list", "compact"] as const;
+                const cur = config?.libraryViewMode ?? "grid";
+                const idx = modes.indexOf(cur as typeof modes[number]);
+                updateConfig({ libraryViewMode: modes[(idx + 1) % modes.length] });
+                break;
+              }
               case TOPBAR_INDEX_SETTINGS:
                 setCurrentView("settings");
                 break;
@@ -439,6 +446,8 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
       playKeyboardSound,
       moveKeyboardCursor,
       applyVirtualKey,
+      config?.libraryViewMode,
+      updateConfig,
     ]
   );
 
@@ -472,6 +481,18 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     onToggleFullscreen: toggleFullscreen,
     disabled: inputDisabled,
   });
+
+  // Ctrl+K → Quick Launch (works even from input fields)
+  useEffect(() => {
+    function handleCtrlK(e: KeyboardEvent) {
+      if (e.ctrlKey && e.key === "k") {
+        e.preventDefault();
+        openQuickLaunch();
+      }
+    }
+    document.addEventListener("keydown", handleCtrlK);
+    return () => document.removeEventListener("keydown", handleCtrlK);
+  }, [openQuickLaunch]);
 
   // Mouse escape hatch: deactivate focus on mouse click
   useEffect(() => {
