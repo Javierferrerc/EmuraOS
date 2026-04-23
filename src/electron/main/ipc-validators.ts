@@ -106,6 +106,7 @@ export const AppConfigPartialSchema = z
         hasCover: z.string().max(10).optional(),
       })
       .optional(),
+    fuzzySearchEnabled: z.boolean().optional(),
   })
   .strict();
 

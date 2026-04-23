@@ -2,8 +2,88 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
+import { fuzzyMatch, substringMatch } from "../utils/fuzzyMatch";
+import { useCommandPaletteActions } from "../hooks/useCommandPaletteActions";
+import {
+  ACTION_GROUP_ORDER,
+  type CommandAction,
+  type ActionGroup,
+} from "../utils/commandPaletteActions";
 
-const MAX_RESULTS = 10;
+const MAX_GAMES = 8;
+const MAX_ACTIONS_PER_GROUP = 6;
+const GROUP_LABEL_GAMES = "Juegos";
+
+/**
+ * Render a string with match indices highlighted. Returns an array of
+ * React nodes — matched characters are wrapped in <mark> with a neutral
+ * class so the palette controls the actual colouring.
+ *
+ * We build the node list with a linear scan instead of dangerouslySetInnerHTML
+ * so React handles escaping for us — names can contain arbitrary characters
+ * (apostrophes, ampersands) that would otherwise need manual encoding.
+ */
+function highlightMatches(text: string, indices: number[]): React.ReactNode {
+  if (indices.length === 0) return text;
+  const set = new Set(indices);
+  const out: React.ReactNode[] = [];
+  let runStart = 0;
+  let runIsMatch = set.has(0);
+  for (let i = 0; i <= text.length; i++) {
+    const isMatch = i < text.length && set.has(i);
+    if (i === text.length || isMatch !== runIsMatch) {
+      const chunk = text.slice(runStart, i);
+      if (chunk.length > 0) {
+        out.push(
+          runIsMatch ? (
+            <mark
+              key={runStart}
+              className="rounded-sm bg-[var(--color-accent)]/30 px-0 text-[var(--color-text-primary)]"
+            >
+              {chunk}
+            </mark>
+          ) : (
+            <span key={runStart}>{chunk}</span>
+          )
+        );
+      }
+      runStart = i;
+      runIsMatch = isMatch;
+    }
+  }
+  return out;
+}
+
+// Discriminated union so renderer and Enter handler branch by `kind`
+// without ever having to null-check a sibling field.
+interface GameResult {
+  kind: "game";
+  id: string;
+  rom: DiscoveredRom;
+  displayName: string;
+  indices: number[];
+  score: number;
+}
+interface ActionResult {
+  kind: "action";
+  id: string;
+  action: CommandAction;
+  displayLabel: string;
+  indices: number[];
+  score: number;
+}
+type Result = GameResult | ActionResult;
+
+interface Group {
+  title: string;
+  items: Result[];
+}
+
+const SYSTEM_NAMES: Record<string, string> = {
+  nes: "NES", snes: "SNES", n64: "N64", gb: "GB", gbc: "GBC", gba: "GBA",
+  nds: "NDS", gamecube: "GCN", wii: "Wii", megadrive: "MD",
+  mastersystem: "SMS", dreamcast: "DC", psx: "PSX", ps2: "PS2", psp: "PSP",
+};
 
 export function QuickLaunch() {
   const {
@@ -11,7 +91,10 @@ export function QuickLaunch() {
     launchGame,
     getMetadataForRom,
     closeQuickLaunch,
+    config,
   } = useApp();
+
+  const actions = useCommandPaletteActions();
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -28,33 +111,132 @@ export function QuickLaunch() {
     return roms;
   }, [scanResult]);
 
-  // Filter ROMs by query
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    const matched: DiscoveredRom[] = [];
+  const fuzzyEnabled = config?.fuzzySearchEnabled ?? true;
+
+  // Empty query: surface the curated "featured" actions grouped in the
+  // "Acciones" section. Makes the palette self-documenting — a new user
+  // pressing Ctrl+K immediately sees what's possible.
+  const featuredActions = useMemo<Result[]>(
+    () =>
+      actions
+        .filter((a) => a.featured)
+        .map((action, i) => ({
+          kind: "action",
+          id: `featured:${action.id}:${i}`,
+          action,
+          displayLabel: action.label,
+          indices: [],
+          score: 0,
+        })),
+    [actions]
+  );
+
+  // Search: fuzzy-match both games and actions. Actions also match their
+  // keywords; we pick the best score across label and keywords.
+  const groups = useMemo<Group[]>(() => {
+    const match = fuzzyEnabled ? fuzzyMatch : substringMatch;
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      // Empty query → only the curated actions.
+      return featuredActions.length > 0
+        ? [{ title: "Acciones sugeridas", items: featuredActions }]
+        : [];
+    }
+
+    // — Games
+    const gameResults: GameResult[] = [];
     for (const rom of allRoms) {
-      if (matched.length >= MAX_RESULTS) break;
       const meta = getMetadataForRom(rom.systemId, rom.fileName);
-      const title = meta?.title ?? rom.fileName;
-      if (title.toLowerCase().includes(q) || rom.fileName.toLowerCase().includes(q)) {
-        matched.push(rom);
+      const displayName =
+        meta?.title || rom.fileName.replace(/\.[^.]+$/, "");
+      const res = match(query, displayName);
+      if (res) {
+        gameResults.push({
+          kind: "game",
+          id: `game:${rom.systemId}:${rom.fileName}`,
+          rom,
+          displayName,
+          indices: res.indices,
+          score: res.score,
+        });
       }
     }
-    return matched;
-  }, [query, allRoms, getMetadataForRom]);
+    gameResults.sort((a, b) => b.score - a.score);
 
-  // Reset selection when results change
+    // — Actions (with keyword matching)
+    const actionResults: ActionResult[] = [];
+    for (const action of actions) {
+      const candidates = [action.label, ...(action.keywords ?? [])];
+      let best: { score: number; indices: number[] } | null = null;
+      let bestText = action.label;
+      for (const text of candidates) {
+        const res = match(query, text);
+        if (res && (!best || res.score > best.score)) {
+          best = { score: res.score, indices: res.indices };
+          bestText = text;
+        }
+      }
+      if (best) {
+        // Indices are into `bestText`. If the winning candidate is a keyword
+        // (not the label itself), we render the label verbatim without the
+        // highlight — showing the label is more useful than highlighting
+        // a keyword the user didn't see.
+        const indices = bestText === action.label ? best.indices : [];
+        actionResults.push({
+          kind: "action",
+          id: `action:${action.id}`,
+          action,
+          displayLabel: action.label,
+          indices,
+          score: best.score,
+        });
+      }
+    }
+    actionResults.sort((a, b) => b.score - a.score);
+
+    // Group output — games first, then action groups in canonical order.
+    const out: Group[] = [];
+    if (gameResults.length > 0) {
+      out.push({
+        title: GROUP_LABEL_GAMES,
+        items: gameResults.slice(0, MAX_GAMES),
+      });
+    }
+    const byGroup = new Map<ActionGroup, ActionResult[]>();
+    for (const r of actionResults) {
+      const arr = byGroup.get(r.action.group) ?? [];
+      arr.push(r);
+      byGroup.set(r.action.group, arr);
+    }
+    for (const g of ACTION_GROUP_ORDER) {
+      const arr = byGroup.get(g);
+      if (!arr || arr.length === 0) continue;
+      out.push({ title: g, items: arr.slice(0, MAX_ACTIONS_PER_GROUP) });
+    }
+
+    return out;
+  }, [query, allRoms, getMetadataForRom, fuzzyEnabled, actions, featuredActions]);
+
+  // Flattened list for arrow-key navigation. The index in this array is the
+  // single source of truth for which row is highlighted.
+  const flatResults = useMemo<Result[]>(
+    () => groups.flatMap((g) => g.items),
+    [groups]
+  );
+
+  // Reset selection when the flattened list changes identity. Using length
+  // as the dep is enough — any time items come or go the count changes.
   useEffect(() => {
     setSelectedIndex(0);
-  }, [results.length]);
+  }, [flatResults.length]);
 
   // Autofocus input
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Close on Escape or click outside
+  // Close on Escape
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -73,24 +255,33 @@ export function QuickLaunch() {
     [closeQuickLaunch]
   );
 
+  const executeResult = useCallback(
+    (r: Result) => {
+      closeQuickLaunch();
+      if (r.kind === "game") {
+        launchGame(r.rom);
+      } else {
+        r.action.run();
+      }
+    },
+    [closeQuickLaunch, launchGame]
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+        setSelectedIndex((prev) => Math.min(prev + 1, flatResults.length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const rom = results[selectedIndex];
-        if (rom) {
-          closeQuickLaunch();
-          launchGame(rom);
-        }
+        const r = flatResults[selectedIndex];
+        if (r) executeResult(r);
       }
     },
-    [results, selectedIndex, closeQuickLaunch, launchGame]
+    [flatResults, selectedIndex, executeResult]
   );
 
   // Scroll selected item into view
@@ -99,31 +290,26 @@ export function QuickLaunch() {
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  // Cover loader for results
+  // Cover loader for the games section
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
   useEffect(() => {
     let cancelled = false;
-    const toLoad = results.filter((r) => {
-      const meta = getMetadataForRom(r.systemId, r.fileName);
-      return meta?.coverPath && !coverUrls[`${r.systemId}:${r.fileName}`];
-    });
-    for (const rom of toLoad) {
-      const meta = getMetadataForRom(rom.systemId, rom.fileName);
+    for (const r of flatResults) {
+      if (r.kind !== "game") continue;
+      const key = `${r.rom.systemId}:${r.rom.fileName}`;
+      if (coverUrls[key]) continue;
+      const meta = getMetadataForRom(r.rom.systemId, r.rom.fileName);
       if (!meta?.coverPath) continue;
       window.electronAPI.readCoverDataUrl(meta.coverPath).then((url) => {
         if (!cancelled && url) {
-          setCoverUrls((prev) => ({ ...prev, [`${rom.systemId}:${rom.fileName}`]: url }));
+          setCoverUrls((prev) => ({ ...prev, [key]: url }));
         }
       });
     }
     return () => { cancelled = true; };
-  }, [results, getMetadataForRom, coverUrls]);
+  }, [flatResults, getMetadataForRom, coverUrls]);
 
-  const SYSTEM_NAMES: Record<string, string> = {
-    nes: "NES", snes: "SNES", n64: "N64", gb: "GB", gbc: "GBC", gba: "GBA",
-    nds: "NDS", gamecube: "GCN", wii: "Wii", megadrive: "MD",
-    mastersystem: "SMS", dreamcast: "DC", psx: "PSX", ps2: "PS2", psp: "PSP",
-  };
+  let runningIndex = 0;
 
   return createPortal(
     <div
@@ -155,7 +341,7 @@ export function QuickLaunch() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Quick Launch — buscar juego..."
+            placeholder="Buscar juegos y acciones..."
             className="flex-1 bg-transparent text-sm text-primary placeholder-[var(--color-text-muted)] outline-none"
           />
           <kbd className="hidden sm:inline-flex items-center rounded border border-white/20 px-1.5 py-0.5 text-[10px] text-muted">
@@ -163,69 +349,126 @@ export function QuickLaunch() {
           </kbd>
         </div>
 
-        {/* Results */}
-        {results.length > 0 && (
-          <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-            {results.map((rom, idx) => {
-              const meta = getMetadataForRom(rom.systemId, rom.fileName);
-              const name = meta?.title || rom.fileName.replace(/\.[^.]+$/, "");
-              const cover = coverUrls[`${rom.systemId}:${rom.fileName}`];
-              const isSelected = idx === selectedIndex;
-              return (
-                <button
-                  key={rom.filePath}
-                  data-ql-index={idx}
-                  className={`flex w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
-                    isSelected
-                      ? "bg-white/15"
-                      : "hover:bg-white/8"
-                  }`}
-                  onClick={() => {
-                    closeQuickLaunch();
-                    launchGame(rom);
-                  }}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                >
-                  {/* Mini cover */}
-                  <div className="h-11 w-8 shrink-0 overflow-hidden rounded">
-                    {cover ? (
-                      <img src={cover} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-white/5 text-xs">
-                        🎮
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-primary">{name}</p>
-                    {meta?.genre && (
-                      <p className="truncate text-xs text-muted">{meta.genre}</p>
-                    )}
-                  </div>
-                  <span className="shrink-0 rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold text-muted">
-                    {SYSTEM_NAMES[rom.systemId] ?? rom.systemId.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
+        {/* Grouped results */}
+        {groups.length > 0 && (
+          <div ref={listRef} className="max-h-96 overflow-y-auto py-1">
+            {groups.map((group) => (
+              <div key={group.title}>
+                <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  {group.title}
+                </div>
+                {group.items.map((r) => {
+                  const idx = runningIndex++;
+                  const isSelected = idx === selectedIndex;
+                  return (
+                    <QuickLaunchRow
+                      key={r.id}
+                      result={r}
+                      selected={isSelected}
+                      idx={idx}
+                      coverUrl={
+                        r.kind === "game"
+                          ? coverUrls[`${r.rom.systemId}:${r.rom.fileName}`]
+                          : undefined
+                      }
+                      onHover={() => setSelectedIndex(idx)}
+                      onPick={() => executeResult(r)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* Empty state */}
-        {query.trim() && results.length === 0 && (
+        {/* Empty state (query active, no results) */}
+        {query.trim() && groups.length === 0 && (
           <div className="px-4 py-6 text-center text-sm text-muted">
-            No se encontraron juegos para "{query}"
+            Sin resultados para "{query}"
           </div>
         )}
 
-        {/* Hint when no query */}
-        {!query.trim() && (
+        {/* Hint when there's no featured actions AND no query — shouldn't
+            normally happen, but gives a graceful fallback. */}
+        {!query.trim() && groups.length === 0 && (
           <div className="px-4 py-6 text-center text-sm text-muted">
-            Escribe el nombre de un juego para lanzarlo al instante
+            Escribe para buscar juegos o acciones
           </div>
         )}
       </div>
     </div>,
     document.body
+  );
+}
+
+interface QuickLaunchRowProps {
+  result: Result;
+  selected: boolean;
+  idx: number;
+  coverUrl?: string;
+  onHover: () => void;
+  onPick: () => void;
+}
+
+function QuickLaunchRow({
+  result,
+  selected,
+  idx,
+  coverUrl,
+  onHover,
+  onPick,
+}: QuickLaunchRowProps) {
+  return (
+    <button
+      data-ql-index={idx}
+      className={`flex w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
+        selected ? "bg-white/15" : "hover:bg-white/8"
+      }`}
+      onClick={onPick}
+      onMouseEnter={onHover}
+    >
+      {/* Left icon / cover */}
+      <div className="h-11 w-8 shrink-0 overflow-hidden rounded flex items-center justify-center">
+        {result.kind === "game" ? (
+          coverUrl ? (
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-white/5 text-xs">
+              🎮
+            </div>
+          )
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-white/5 text-lg">
+            {result.action.icon ?? "•"}
+          </div>
+        )}
+      </div>
+
+      {/* Label + meta */}
+      <div className="flex-1 min-w-0">
+        {result.kind === "game" ? (
+          <>
+            <p className="truncate text-sm font-medium text-primary">
+              {highlightMatches(result.displayName, result.indices)}
+            </p>
+          </>
+        ) : (
+          <p className="truncate text-sm font-medium text-primary">
+            {highlightMatches(result.displayLabel, result.indices)}
+          </p>
+        )}
+      </div>
+
+      {/* Right-side chip */}
+      {result.kind === "game" ? (
+        <span className="shrink-0 rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold text-muted">
+          {SYSTEM_NAMES[result.rom.systemId] ?? result.rom.systemId.toUpperCase()}
+        </span>
+      ) : (
+        <span className="shrink-0 rounded bg-white/10 px-2 py-0.5 text-[10px] font-medium text-muted">
+          {result.action.group}
+        </span>
+      )}
+    </button>
   );
 }
