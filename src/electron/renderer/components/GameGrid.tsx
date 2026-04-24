@@ -196,6 +196,18 @@ export function GameGrid({
       );
     }
 
+    // Apply hidden-roms filter universally (except when the user is
+    // explicitly viewing favorites, where hiding their own favorites
+    // would be surprising). Hidden roms stay on disk, only the library
+    // UI hides them.
+    const hidden = config?.hiddenRoms;
+    if (hidden && hidden.length > 0 && activeFilter.type !== "favorites") {
+      const hiddenSet = new Set(hidden);
+      roms = roms.filter(
+        (r) => !hiddenSet.has(`${r.systemId}:${r.fileName}`)
+      );
+    }
+
     const sortOrder = config?.gameSortOrder ?? "alpha-asc";
     switch (sortOrder) {
       case "alpha-desc":

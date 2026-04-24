@@ -82,6 +82,22 @@ export const generalSection: SettingsSection = {
             await ctx.updateConfig({ fuzzySearchEnabled: value });
           },
         },
+        {
+          id: "gen.unhide-roms",
+          kind: "button",
+          label: "Juegos ocultos",
+          description:
+            "Restaura a la biblioteca los juegos marcados como ocultos desde el menú contextual.",
+          variant: "ghost",
+          status: (ctx) => {
+            const n = ctx.config?.hiddenRoms?.length ?? 0;
+            return n === 0 ? "Ninguno oculto" : `${n} oculto${n === 1 ? "" : "s"}`;
+          },
+          run: async (ctx) => {
+            if ((ctx.config?.hiddenRoms?.length ?? 0) === 0) return;
+            await ctx.updateConfig({ hiddenRoms: [] });
+          },
+        },
       ],
     },
   ],

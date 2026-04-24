@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { deriveSystemColors } from "../utils/colorUtils";
 import { formatPlayTime } from "../utils/formatPlayTime";
 import { hasDetectedEmulatorForSystem } from "../utils/emulatorStatus";
+import { isRomNew } from "../utils/newBadge";
+import { GameContextMenu } from "./GameContextMenu";
 import "./GameCard.css";
 
 const SYSTEM_COLORS: Record<string, [string, string]> = {
@@ -81,7 +82,9 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     bulkSelectTarget,
     bulkSelectedRoms,
     toggleBulkSelectRom,
+    romAddedDates,
   } = useApp();
+  const isNew = isRomNew(romAddedDates, playHistory, rom.systemId, rom.fileName);
   const inBulkSelect = bulkSelectTarget !== null;
   const isBulkSelected = bulkSelectedRoms.has(
     `${rom.systemId}:${rom.fileName}`
@@ -241,63 +244,46 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     [openGameDetail, rom]
   );
 
-  const [favPopKey, setFavPopKey] = useState(0);
+  // Re-trigger the fav-pop CSS animation on every toggle by removing the
+  // class, forcing a reflow, then re-adding it. The previous `key` bump
+  // worked but caused React to unmount/remount the <svg>, which could
+  // flicker mid-click and also swallowed fast successive clicks while
+  // the new element was being mounted.
+  const heartRef = useRef<SVGSVGElement>(null);
+  const triggerFavPop = useCallback(() => {
+    const el = heartRef.current;
+    if (!el) return;
+    el.classList.remove("fav-pop");
+    // Force a reflow so the browser notices the class removal before we
+    // re-add it on the same frame. Standard CSS-animation restart trick.
+    void el.offsetWidth;
+    el.classList.add("fav-pop");
+  }, []);
+
   const handleToggleFavorite = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       toggleFavorite(rom.systemId, rom.fileName);
-      // Bump the key so the <svg> remounts and plays the CSS animation —
-      // simpler than removing/re-adding a class with a timeout.
-      setFavPopKey((k) => k + 1);
+      triggerFavPop();
     },
-    [toggleFavorite, rom.systemId, rom.fileName]
+    [toggleFavorite, rom.systemId, rom.fileName, triggerFavPop]
   );
 
-  // ── Context menu (right-click "Open with…") ──────────────────────
+  // ── Context menu (right-click — Phase 20 slice 3 full menu) ──────
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    emulators: Array<{ emulatorId: string; emulatorName: string }>;
   } | null>(null);
 
-  const handleContextMenu = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        const emulators =
-          await window.electronAPI.getEmulatorsForSystem(rom.systemId);
-        if (emulators.length <= 1) {
-          // 0-1 emulators — just launch directly
-          launchGame(rom);
-          return;
-        }
-        setContextMenu({ x: e.clientX, y: e.clientY, emulators });
-      } catch (err) {
-        console.error("Failed to get emulators for system:", err);
-      }
-    },
-    [rom, launchGame]
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
-
-  // Close context menu on Escape or outside click
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener("keydown", handleKey);
-    document.addEventListener("mousedown", handleClick);
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.removeEventListener("mousedown", handleClick);
-    };
-  }, [contextMenu]);
 
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
   const theme = config?.theme ?? "dark";
@@ -411,10 +397,16 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         coverContent
       )}
 
-      {/* Info button — top-left */}
+      {/* Info button — top-left. onDoubleClick stopPropagation for the same
+          reason as the favorite heart: the parent card's onDoubleClick would
+          otherwise launch the game on a fast double-tap.
+          cursor-pointer explicit because Tailwind v4's preflight no longer
+          forces it on bare <button> elements and the card's own
+          cursor-pointer doesn't always inherit into overlapping children. */}
       <button
         onClick={handleInfoClick}
-        className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 ${isFocused ? "opacity-100" : ""}`}
+        onDoubleClick={(e) => e.stopPropagation()}
+        className={`absolute left-2 top-2 z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 ${isFocused ? "opacity-100" : ""}`}
         title="Ver ficha del juego"
       >
         <svg
@@ -447,6 +439,24 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         </div>
       )}
 
+      {/* "Nuevo" badge — top-left, shown while the rom was added less
+          than 7 days ago. At rest it sits exactly where the (hidden)
+          info button would be; on hover/focus it slides down so the
+          info button can take the top slot. Focused cards permanently
+          show the info button, so the badge lives in its "below" slot. */}
+      {isNew && (
+        <div
+          className={`absolute left-2 z-10 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-md transition-all duration-200 ease-out ${
+            isFocused
+              ? "top-12"
+              : "top-2 group-hover:top-12 group-focus-within:top-12"
+          }`}
+          aria-label="Añadido recientemente"
+        >
+          Nuevo
+        </div>
+      )}
+
       {/* Emulator-missing warning badge — bottom-left, always visible when
           the rom's system has no detected emulator. Non-interactive; exists
           purely to flag that double-click won't launch. */}
@@ -473,31 +483,38 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         </div>
       )}
 
-      {/* Favorite heart — top-right */}
-      <button
-        onClick={handleToggleFavorite}
-        className={`absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity ${
-          favorited
-            ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-        } ${isFocused ? "opacity-100" : ""}`}
-        title={favorited ? "Remove from favorites" : "Add to favorites"}
-      >
-        <svg
-          key={favPopKey}
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill={favorited ? "#ef4444" : "none"}
-          stroke={favorited ? "#ef4444" : "#e5e7eb"}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={favPopKey > 0 ? "fav-pop" : ""}
+      {/* Favorite heart — top-right. Hidden while the card is in bulk-select
+          mode so it doesn't fight with the selection checkmark for the same
+          coordinate. onDoubleClick explicitly stops propagation because the
+          card's onDoubleClick launches the game — without this, a quick
+          double-tap on the heart would toggle the favorite twice AND launch
+          the game. */}
+      {!inBulkSelect && (
+        <button
+          onClick={handleToggleFavorite}
+          onDoubleClick={(e) => e.stopPropagation()}
+          className={`absolute right-2 top-2 z-10 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-opacity ${
+            favorited
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+          } ${isFocused ? "opacity-100" : ""}`}
+          title={favorited ? "Remove from favorites" : "Add to favorites"}
         >
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
-      </button>
+          <svg
+            ref={heartRef}
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill={favorited ? "#ef4444" : "none"}
+            stroke={favorited ? "#ef4444" : "#e5e7eb"}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
+      )}
 
       {/* Bottom overlay — visible on hover/focus. When tilt is enabled it pops
           forward in 3D via `.game-card__overlay` in GameCard.css. */}
@@ -521,33 +538,14 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
         )}
       </div>
 
-      {/* Context menu portal */}
-      {contextMenu &&
-        createPortal(
-          <div
-            className="ctx-menu-panel fixed z-50 min-w-[180px] rounded-lg border py-1 shadow-xl backdrop-blur-sm"
-            style={{ left: contextMenu.x, top: contextMenu.y, background: "var(--color-ctx-bg)", borderColor: "var(--color-ctx-border)" }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-1.5 text-xs font-medium text-muted truncate max-w-[240px]">
-              {displayName}
-            </div>
-            <div className="mx-2 my-1 border-t" style={{ borderColor: "var(--color-ctx-border)" }} />
-            {contextMenu.emulators.map((emu) => (
-              <button
-                key={emu.emulatorId}
-                className="ctx-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-sm text-secondary transition-colors"
-                onClick={() => {
-                  closeContextMenu();
-                  launchGame(rom, emu.emulatorId);
-                }}
-              >
-                Abrir con {emu.emulatorName}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
+      {contextMenu && (
+        <GameContextMenu
+          rom={rom}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   );
 }

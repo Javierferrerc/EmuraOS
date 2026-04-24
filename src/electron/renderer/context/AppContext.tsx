@@ -176,8 +176,17 @@ interface AppActions {
   checkForUpdates: () => Promise<void>;
   dismissUpdateModal: () => void;
   addRomsFlow: () => Promise<void>;
+  // Drop-in variant used by drag&drop — skips the file picker and runs the
+  // same resolve → classify → (disambiguate|add) → rescan flow.
+  addRomsFromPaths: (filePaths: string[]) => Promise<void>;
   resolveDisambiguation: (selections: Array<{ filePath: string; systemId: string }>) => Promise<void>;
   cancelDisambiguation: () => void;
+  // Phase 20 — right-click actions on a rom.
+  hideRom: (systemId: string, fileName: string) => Promise<void>;
+  unhideAllRoms: () => Promise<void>;
+  isRomHidden: (systemId: string, fileName: string) => boolean;
+  showRomInExplorer: (filePath: string) => Promise<void>;
+  copyRomPath: (filePath: string) => Promise<void>;
   openGameDetail: (rom: DiscoveredRom) => void;
   closeGameDetail: () => void;
   openQuickLaunch: () => void;
@@ -578,44 +587,100 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Add ROMs flow ──────────────────────────────────────────────────
-  const addRomsFlow = useCallback(async () => {
-    try {
-      const selectedSystemId = activeFilter.type === "system" ? activeFilter.systemId : undefined;
-      const filePaths = await window.electronAPI.pickRomFiles(selectedSystemId);
-      if (!filePaths || filePaths.length === 0) return;
-
-      const resolved = await window.electronAPI.resolveRomSystems(filePaths);
-
-      const unambiguous: Array<{ filePath: string; systemId: string }> = [];
-      const ambiguous: DisambiguationFile[] = [];
-
-      for (const entry of resolved) {
-        if (entry.systems.length === 1) {
-          unambiguous.push({ filePath: entry.filePath, systemId: entry.systems[0].id });
-        } else if (entry.systems.length > 1) {
-          ambiguous.push({ ...entry, selectedSystemId: null });
-        }
-        // systems.length === 0 → skip silently (no matching system)
-      }
-
-      if (ambiguous.length > 0) {
-        setDisambiguationPending({ files: ambiguous, readyEntries: unambiguous });
-        return;
-      }
-
-      if (unambiguous.length === 0) return;
-
-      setIsAddingRoms(true);
+  // Core: takes a set of file paths (from picker or drag&drop) and runs
+  // the unified resolve → classify → (disambiguate|add) → rescan flow.
+  const addRomsFromPaths = useCallback(
+    async (filePaths: string[]) => {
+      if (filePaths.length === 0) return;
       try {
-        await window.electronAPI.addRoms(unambiguous);
-        await refreshScan();
-      } finally {
-        setIsAddingRoms(false);
+        const resolved = await window.electronAPI.resolveRomSystems(filePaths);
+
+        const unambiguous: Array<{ filePath: string; systemId: string }> = [];
+        const ambiguous: DisambiguationFile[] = [];
+
+        for (const entry of resolved) {
+          if (entry.systems.length === 1) {
+            unambiguous.push({
+              filePath: entry.filePath,
+              systemId: entry.systems[0].id,
+            });
+          } else if (entry.systems.length > 1) {
+            ambiguous.push({ ...entry, selectedSystemId: null });
+          }
+          // systems.length === 0 → skip silently (no matching system)
+        }
+
+        if (ambiguous.length > 0) {
+          setDisambiguationPending({ files: ambiguous, readyEntries: unambiguous });
+          return;
+        }
+
+        if (unambiguous.length === 0) return;
+
+        setIsAddingRoms(true);
+        try {
+          await window.electronAPI.addRoms(unambiguous);
+          await refreshScan();
+        } finally {
+          setIsAddingRoms(false);
+        }
+      } catch (err) {
+        console.error("Failed to add ROMs:", err);
       }
+    },
+    [refreshScan]
+  );
+
+  const addRomsFlow = useCallback(async () => {
+    const selectedSystemId = activeFilter.type === "system" ? activeFilter.systemId : undefined;
+    const filePaths = await window.electronAPI.pickRomFiles(selectedSystemId);
+    if (!filePaths || filePaths.length === 0) return;
+    await addRomsFromPaths(filePaths);
+  }, [activeFilter, addRomsFromPaths]);
+
+  // ── Phase 20 rom-level actions ─────────────────────────────────────
+
+  const hideRom = useCallback(
+    async (systemId: string, fileName: string) => {
+      const key = `${systemId}:${fileName}`;
+      const current = configRef.current?.hiddenRoms ?? [];
+      if (current.includes(key)) return;
+      await updateConfig({ hiddenRoms: [...current, key] });
+    },
+    [updateConfig]
+  );
+
+  const unhideAllRoms = useCallback(async () => {
+    await updateConfig({ hiddenRoms: [] });
+  }, [updateConfig]);
+
+  const isRomHidden = useCallback(
+    (systemId: string, fileName: string) => {
+      const set = config?.hiddenRoms;
+      if (!set || set.length === 0) return false;
+      return set.includes(`${systemId}:${fileName}`);
+    },
+    [config?.hiddenRoms]
+  );
+
+  const showRomInExplorer = useCallback(async (filePath: string) => {
+    try {
+      await window.electronAPI.showInExplorer(filePath);
     } catch (err) {
-      console.error("Failed to add ROMs:", err);
+      console.error("Failed to reveal rom in explorer:", err);
     }
-  }, [refreshScan, activeFilter]);
+  }, []);
+
+  const copyRomPath = useCallback(async (filePath: string) => {
+    try {
+      await navigator.clipboard.writeText(filePath);
+    } catch (err) {
+      // Clipboard can fail in locked-down environments — log and swallow.
+      // The UI reads "the link was copied" optimistically but a failure
+      // is not worth blocking the user with a dialog.
+      console.warn("Failed to copy rom path:", err);
+    }
+  }, []);
 
   const resolveDisambiguation = useCallback(
     async (selections: Array<{ filePath: string; systemId: string }>) => {
@@ -1195,8 +1260,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isAddingRoms,
     disambiguationPending,
     addRomsFlow,
+    addRomsFromPaths,
     resolveDisambiguation,
     cancelDisambiguation,
+    hideRom,
+    unhideAllRoms,
+    isRomHidden,
+    showRomInExplorer,
+    copyRomPath,
     resolvedPaths,
     romAddedDates,
     detailModalRom,

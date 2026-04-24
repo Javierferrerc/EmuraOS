@@ -3,6 +3,8 @@ import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { formatPlayTime } from "../utils/formatPlayTime";
 import { hasDetectedEmulatorForSystem } from "../utils/emulatorStatus";
+import { isRomNew } from "../utils/newBadge";
+import { GameContextMenu } from "./GameContextMenu";
 
 const SYSTEM_NAMES: Record<string, string> = {
   nes: "NES",
@@ -39,7 +41,10 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
     bulkSelectTarget,
     bulkSelectedRoms,
     toggleBulkSelectRom,
+    romAddedDates,
   } = useApp();
+  const isNew = isRomNew(romAddedDates, playHistory, rom.systemId, rom.fileName);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const inBulkSelect = bulkSelectTarget !== null;
   const isBulkSelected = bulkSelectedRoms.has(
     `${rom.systemId}:${rom.fileName}`
@@ -88,6 +93,12 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
 
   const hasCover = coverDataUrl && !imgError;
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   return (
     <div
       data-grid-index={gridIndex}
@@ -97,6 +108,7 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
           : undefined
       }
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       className={`game-list-row group flex items-center gap-3 rounded-lg bg-white/10 px-3 py-2 cursor-pointer transition-colors ${
         isFocused
           ? "bg-white/20 ring-2 ring-focus"
@@ -138,9 +150,17 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
         )}
       </div>
 
-      {/* Name + optional missing-emulator badge */}
+      {/* Name + optional missing-emulator badge + "Nuevo" pill */}
       <span className="flex flex-1 items-center gap-2 truncate text-sm font-medium text-primary">
         <span className="truncate">{displayName}</span>
+        {isNew && (
+          <span
+            className="shrink-0 rounded-full bg-[var(--color-accent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white"
+            aria-label="Añadido recientemente"
+          >
+            Nuevo
+          </span>
+        )}
         {emulatorMissing && (
           <span
             className="shrink-0 text-amber-400"
@@ -184,6 +204,14 @@ export function GameListRow({ rom, isFocused, gridIndex }: GameListRowProps) {
       <span className="w-16 shrink-0 text-right text-xs text-muted hidden lg:block">
         {totalPlayTime > 0 ? formatPlayTime(totalPlayTime) : "—"}
       </span>
+      {contextMenu && (
+        <GameContextMenu
+          rom={rom}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

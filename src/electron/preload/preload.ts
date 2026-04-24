@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
   getConfig: () => ipcRenderer.invoke("get-config"),
@@ -209,6 +209,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }>,
   openFolder: (folderPath: string) =>
     ipcRenderer.invoke("open-folder", folderPath),
+  showInExplorer: (filePath: string) =>
+    ipcRenderer.invoke("show-in-explorer", filePath),
+  // Electron 32+ removed `File.path`. The renderer now has to go through
+  // preload for the absolute path; this is the canonical replacement.
+  // Returns "" when the File was not spawned from a filesystem drop
+  // (e.g. synthetic blobs), which callers should treat as "skip".
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),

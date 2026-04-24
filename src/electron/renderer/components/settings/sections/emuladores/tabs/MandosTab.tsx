@@ -5,17 +5,19 @@ import { useApp } from "../../../../../context/AppContext";
 /*
  * Native editor for Dolphin's GameCube controller config (GCPadNew.ini).
  *
- * Scope of this first cut:
- *  - Read/write the 4 [GCPadN] sections, preserving keys we don't manage
- *    (stick calibration, modifiers, etc).
+ * Scope:
+ *  - Read/write the 4 [GCPadN] sections, preserving keys we don't manage.
  *  - Button detection via the Web Gamepad API, mapping the pressed button
  *    to Dolphin's SDL or XInput name depending on the Device line.
- *  - Stick / trigger axis remapping is deferred — detection flags axis
- *    movement and asks the user to use Dolphin's own dialog (reachable
- *    via the "Abrir Dolphin" button). The reason is that the Y-axis
- *    sign and trigger axis-vs-button conventions differ between Dolphin
- *    backends and Chromium's standard-mapping gamepads, so silent
- *    mis-detection would be worse than an honest fallback.
+ *  - Stick calibration (Main Stick + C-Stick) via a wizard: auto-detect
+ *    the axis pair, capture rest-position noise, then sample the full
+ *    rotation and emit Dolphin's 32-float radial gate plus Center and
+ *    Dead Zone. The bin ordering mirrors Dolphin's own layout (bin 0 at
+ *    angle 0 going CCW in math terms); most sticks are near-circular so
+ *    rotational alignment isn't critical for input feel.
+ *  - Analog trigger calibration is still deferred: the Triggers/L-Analog
+ *    input expression isn't exposed in this UI yet, and writing only
+ *    Range/Dead Zone without a mapping has no effect. Separate pass.
  */
 
 type GcPadPort = 1 | 2 | 3 | 4;
@@ -148,6 +150,173 @@ function buttonIndexToDolphinName(
   return name.includes(" ") ? `\`${name}\`` : name;
 }
 
+// Map a Chromium standard-mapping axis (index + sign) to the expression
+// Dolphin expects for the given backend.
+//
+// Both Dolphin's SDL and XInput backends consume SDL_GameController /
+// XInput respectively — two APIs that normalize controllers into the
+// same Left X/Y + Right X/Y layout and report Y positive UP. Chromium's
+// standard mapping reports Y positive DOWN (up = -1), so we invert the
+// sign for Y axes when translating either way.
+const STANDARD_AXIS_NAMES: Record<
+  number,
+  { name: string; invertSign: boolean }
+> = {
+  0: { name: "Left X", invertSign: false },
+  1: { name: "Left Y", invertSign: true },
+  2: { name: "Right X", invertSign: false },
+  3: { name: "Right Y", invertSign: true },
+};
+
+function axisToDolphinExpr(
+  axisIdx: number,
+  sign: 1 | -1,
+  backend: Backend
+): string | null {
+  if (backend === "SDL" || backend === "XInput") {
+    const info = STANDARD_AXIS_NAMES[axisIdx];
+    if (!info) return null;
+    const eff = info.invertSign ? ((-sign) as 1 | -1) : sign;
+    return `\`${info.name}${eff === 1 ? "+" : "-"}\``;
+  }
+  // DInput / unknown: raw axis index fallback. User can hand-edit if
+  // Dolphin rejects it.
+  return `\`Axis ${axisIdx}${sign === 1 ? "+" : "-"}\``;
+}
+
+const STICK_DIRECTION_KEYS = new Set<string>([
+  "Main Stick/Up",
+  "Main Stick/Down",
+  "Main Stick/Left",
+  "Main Stick/Right",
+  "C-Stick/Up",
+  "C-Stick/Down",
+  "C-Stick/Left",
+  "C-Stick/Right",
+]);
+
+/* ── Calibration helpers ────────────────────────────────────────── */
+
+type CalibTarget = "main-stick" | "c-stick";
+
+interface AxisPair {
+  padIdx: number;
+  xIdx: number;
+  yIdx: number;
+}
+
+const CALIB_BINS = 32;
+
+// First axis to deviate from baseline by more than `threshold` anchors the
+// pair. Chromium standard-mapping pairs axes as (0,1) and (2,3); we round
+// down to the even index so either axis of the pair triggers the same
+// detection.
+function detectAxisPair(
+  baseline: Array<{ axes: number[] } | null>,
+  now: (Gamepad | null)[],
+  threshold = 0.5
+): AxisPair | null {
+  for (let i = 0; i < now.length; i++) {
+    const pad = now[i];
+    const base = baseline[i];
+    if (!pad || !base) continue;
+    for (let a = 0; a < pad.axes.length; a++) {
+      const delta = Math.abs(pad.axes[a] - (base.axes[a] ?? 0));
+      if (delta > threshold) {
+        const start = Math.floor(a / 2) * 2;
+        return { padIdx: i, xIdx: start, yIdx: start + 1 };
+      }
+    }
+  }
+  return null;
+}
+
+function computeCenter(samples: Array<{ x: number; y: number }>): {
+  cx: number;
+  cy: number;
+  noise: number;
+} {
+  if (samples.length === 0) return { cx: 0, cy: 0, noise: 0 };
+  const cx = samples.reduce((a, s) => a + s.x, 0) / samples.length;
+  const cy = samples.reduce((a, s) => a + s.y, 0) / samples.length;
+  let noise = 0;
+  for (const s of samples) {
+    const d = Math.hypot(s.x - cx, s.y - cy);
+    if (d > noise) noise = d;
+  }
+  return { cx, cy, noise };
+}
+
+// Takes radial samples (relative to center) and returns CALIB_BINS radii,
+// each the maximum observed in its angular bucket. Empty buckets are
+// linearly interpolated from the nearest filled neighbours so a user who
+// skips a few angles still gets a closed gate. If everything is empty we
+// fall back to a unit circle.
+function computeStickCalibration(
+  samples: Array<{ x: number; y: number }>,
+  center: { cx: number; cy: number }
+): number[] {
+  const bins = new Array<number>(CALIB_BINS).fill(0);
+  for (const s of samples) {
+    const dx = s.x - center.cx;
+    const dy = s.y - center.cy;
+    const radius = Math.hypot(dx, dy);
+    if (radius < 0.05) continue; // ignore near-center noise
+    const angle = Math.atan2(dy, dx) + Math.PI; // 0..2π
+    const bin = Math.min(
+      CALIB_BINS - 1,
+      Math.floor((angle / (2 * Math.PI)) * CALIB_BINS)
+    );
+    if (radius > bins[bin]) bins[bin] = radius;
+  }
+  if (bins.every((b) => b === 0)) return new Array(CALIB_BINS).fill(1);
+
+  for (let i = 0; i < CALIB_BINS; i++) {
+    if (bins[i] > 0) continue;
+    let prev = -1;
+    let next = -1;
+    for (let j = 1; j < CALIB_BINS; j++) {
+      const a = (i - j + CALIB_BINS) % CALIB_BINS;
+      if (bins[a] > 0) {
+        prev = a;
+        break;
+      }
+    }
+    for (let j = 1; j < CALIB_BINS; j++) {
+      const a = (i + j) % CALIB_BINS;
+      if (bins[a] > 0) {
+        next = a;
+        break;
+      }
+    }
+    if (prev === -1) bins[i] = bins[next];
+    else if (next === -1) bins[i] = bins[prev];
+    else {
+      const dp = (i - prev + CALIB_BINS) % CALIB_BINS;
+      const dn = (next - i + CALIB_BINS) % CALIB_BINS;
+      bins[i] = bins[prev] + (bins[next] - bins[prev]) * (dp / (dp + dn));
+    }
+  }
+  // Clamp to a sane range — some sticks over-travel slightly past 1.0.
+  return bins.map((b) => Math.max(0, Math.min(1.5, b)));
+}
+
+function formatCalibArray(bins: number[]): string {
+  return bins.map((b) => (b * 100).toFixed(2)).join(" ");
+}
+
+function formatCenter(cx: number, cy: number): string {
+  return `${(cx * 100).toFixed(2)} ${(cy * 100).toFixed(2)}`;
+}
+
+function targetKeyPrefix(t: CalibTarget): string {
+  return t === "main-stick" ? "Main Stick" : "C-Stick";
+}
+
+function targetLabel(t: CalibTarget): string {
+  return t === "main-stick" ? "stick principal" : "stick C";
+}
+
 interface Props {
   ctx: SettingsContext;
   emulatorId: string;
@@ -175,6 +344,7 @@ export function MandosTab({ ctx, emulatorId }: Props) {
 
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState("");
+  const [calibrating, setCalibrating] = useState<CalibTarget | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
@@ -278,6 +448,20 @@ export function MandosTab({ ctx, emulatorId }: Props) {
         delete portEdits[key];
       } else {
         portEdits[key] = value;
+      }
+      return { ...prev, [activePort]: portEdits };
+    });
+  }
+
+  function applyFieldChanges(changes: Record<string, string>) {
+    setEdits((prev) => {
+      const portEdits = { ...prev[activePort] };
+      for (const [key, value] of Object.entries(changes)) {
+        if ((portConfig?.entries[key] ?? "") === value) {
+          delete portEdits[key];
+        } else {
+          portEdits[key] = value;
+        }
       }
       return { ...prev, [activePort]: portEdits };
     });
@@ -460,9 +644,20 @@ export function MandosTab({ ctx, emulatorId }: Props) {
             key={group}
             className="rounded-[var(--radius-md)] bg-[var(--color-surface-0)] p-4"
           >
-            <h3 className="mb-3 text-sm font-semibold text-[var(--color-text-secondary)]">
-              {GROUP_LABELS[group]}
-            </h3>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[var(--color-text-secondary)]">
+                {GROUP_LABELS[group]}
+              </h3>
+              {(group === "main-stick" || group === "c-stick") && (
+                <button
+                  onClick={() => setCalibrating(group as CalibTarget)}
+                  className="rounded border border-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+                  title="Calibra el centro, rango y zona muerta del stick."
+                >
+                  Calibrar
+                </button>
+              )}
+            </div>
             <div className="space-y-1">
               {actions.map((action) => {
                 const value = effectiveValue(action.key);
@@ -550,6 +745,19 @@ export function MandosTab({ ctx, emulatorId }: Props) {
           onCancel={closeEditor}
           backend={backend}
           isDeviceField={editingKey === "Device"}
+          setCaptureActive={setControllerCaptureOpen}
+        />
+      )}
+
+      {/* Calibration wizard */}
+      {calibrating !== null && (
+        <CalibrationModal
+          target={calibrating}
+          onSave={(changes) => {
+            applyFieldChanges(changes);
+            setCalibrating(null);
+          }}
+          onCancel={() => setCalibrating(null)}
           setCaptureActive={setControllerCaptureOpen}
         />
       )}
@@ -671,10 +879,20 @@ function EditModal({
         }
 
         for (let a = 0; a < pad.axes.length; a++) {
-          if (Math.abs(pad.axes[a] - base.axes[a]) > 0.6) {
-            setDetectionHint(
-              `Movimiento de eje (${a}) detectado. La detección de sticks y gatillos no está soportada todavía — usa "Abrir Dolphin" para configurarlos.`
-            );
+          const delta = pad.axes[a] - base.axes[a];
+          if (Math.abs(delta) > 0.5) {
+            const sign: 1 | -1 = delta > 0 ? 1 : -1;
+            const expr = axisToDolphinExpr(a, sign, backendRef.current);
+            if (expr) {
+              onChangeRef.current(expr);
+              setDetectionHint(
+                `Detectado: eje ${a}${sign === 1 ? "+" : "-"} → ${expr} (${backendRef.current}). Pulsa Aplicar para confirmar o vuelve a detectar.`
+              );
+            } else {
+              setDetectionHint(
+                `Eje ${a} detectado pero no hay mapeo conocido para ${backendRef.current}. Escríbelo a mano.`
+              );
+            }
             stopDetection();
             return;
           }
@@ -774,6 +992,367 @@ function EditModal({
           >
             Aplicar
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Stick calibration wizard ───────────────────────────────────── */
+
+type CalibStep = "detect" | "center" | "range" | "preview";
+
+interface CalibrationModalProps {
+  target: CalibTarget;
+  onSave: (changes: Record<string, string>) => void;
+  onCancel: () => void;
+  setCaptureActive: (active: boolean) => void;
+}
+
+const CENTER_CAPTURE_MS = 1200;
+const RANGE_CAPTURE_MS = 4000;
+
+function CalibrationModal({
+  target,
+  onSave,
+  onCancel,
+  setCaptureActive,
+}: CalibrationModalProps) {
+  const prefix = targetKeyPrefix(target);
+  const label = targetLabel(target);
+
+  const [step, setStep] = useState<CalibStep>("detect");
+  const [axisPair, setAxisPair] = useState<AxisPair | null>(null);
+  const [center, setCenter] = useState<{ cx: number; cy: number }>({
+    cx: 0,
+    cy: 0,
+  });
+  const [noise, setNoise] = useState(0);
+  const [bins, setBins] = useState<number[]>([]);
+  const [deadZone, setDeadZone] = useState(15);
+  const [livePos, setLivePos] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [progress, setProgress] = useState(0);
+  const [detachedPad, setDetachedPad] = useState(false);
+
+  const rafRef = useRef<number | null>(null);
+  const baselineRef = useRef<Array<{ axes: number[] } | null>>([]);
+  const centerSamplesRef = useRef<Array<{ x: number; y: number }>>([]);
+  const rangeSamplesRef = useRef<Array<{ x: number; y: number }>>([]);
+
+  const cancelRaf = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    setCaptureActive(true);
+    return () => {
+      setCaptureActive(false);
+      cancelRaf();
+    };
+  }, [setCaptureActive, cancelRaf]);
+
+  // Detection: record baseline, then wait for any axis to move past 0.5.
+  useEffect(() => {
+    if (step !== "detect") return;
+    setDetachedPad(false);
+    const pads = navigator.getGamepads();
+    baselineRef.current = pads.map((p) =>
+      p ? { axes: Array.from(p.axes) } : null
+    );
+    if (!baselineRef.current.some((b) => b !== null)) {
+      setDetachedPad(true);
+    }
+    const tick = () => {
+      const now = navigator.getGamepads();
+      const pair = detectAxisPair(baselineRef.current, now);
+      if (pair) {
+        const pad = now[pair.padIdx];
+        if (pad) {
+          setLivePos({
+            x: pad.axes[pair.xIdx] ?? 0,
+            y: pad.axes[pair.yIdx] ?? 0,
+          });
+        }
+        setAxisPair(pair);
+        // Transition to center capture on next tick so the RAF chain unwinds
+        // cleanly before the next useEffect restarts it.
+        setStep("center");
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return cancelRaf;
+  }, [step, cancelRaf]);
+
+  // Center capture: 1.2s of samples with stick at rest.
+  useEffect(() => {
+    if (step !== "center" || !axisPair) return;
+    centerSamplesRef.current = [];
+    setProgress(0);
+    const start = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const now = navigator.getGamepads();
+      const pad = now[axisPair.padIdx];
+      if (pad) {
+        const x = pad.axes[axisPair.xIdx] ?? 0;
+        const y = pad.axes[axisPair.yIdx] ?? 0;
+        centerSamplesRef.current.push({ x, y });
+        setLivePos({ x, y });
+      }
+      setProgress(Math.min(1, elapsed / CENTER_CAPTURE_MS));
+      if (elapsed >= CENTER_CAPTURE_MS) {
+        const c = computeCenter(centerSamplesRef.current);
+        setCenter({ cx: c.cx, cy: c.cy });
+        setNoise(c.noise);
+        // Suggest dead zone = 1.5× observed drift, clamped to 5–30%.
+        const suggested = Math.max(
+          5,
+          Math.min(30, Math.round(c.noise * 100 * 1.5))
+        );
+        setDeadZone(suggested);
+        setStep("range");
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return cancelRaf;
+  }, [step, axisPair, cancelRaf]);
+
+  // Range capture: 4s of samples while user draws circles.
+  useEffect(() => {
+    if (step !== "range" || !axisPair) return;
+    rangeSamplesRef.current = [];
+    setProgress(0);
+    const start = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - start;
+      const now = navigator.getGamepads();
+      const pad = now[axisPair.padIdx];
+      if (pad) {
+        const x = pad.axes[axisPair.xIdx] ?? 0;
+        const y = pad.axes[axisPair.yIdx] ?? 0;
+        rangeSamplesRef.current.push({ x, y });
+        setLivePos({ x, y });
+      }
+      setProgress(Math.min(1, elapsed / RANGE_CAPTURE_MS));
+      if (elapsed >= RANGE_CAPTURE_MS) {
+        const computed = computeStickCalibration(
+          rangeSamplesRef.current,
+          center
+        );
+        setBins(computed);
+        setStep("preview");
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return cancelRaf;
+  }, [step, axisPair, center, cancelRaf]);
+
+  const handleApply = () => {
+    const changes: Record<string, string> = {
+      [`${prefix}/Calibration`]: formatCalibArray(bins),
+      [`${prefix}/Center`]: formatCenter(center.cx, center.cy),
+      [`${prefix}/Dead Zone`]: deadZone.toFixed(1),
+    };
+    onSave(changes);
+  };
+
+  const handleRetry = () => {
+    cancelRaf();
+    setAxisPair(null);
+    setBins([]);
+    setProgress(0);
+    setLivePos({ x: 0, y: 0 });
+    setStep("detect");
+  };
+
+  const vizSize = 220;
+  const cx = vizSize / 2;
+  const cy = vizSize / 2;
+  const radius = 88;
+
+  const hint =
+    step === "detect"
+      ? `Mueve el ${label} para detectar sus ejes.`
+      : step === "center"
+      ? "Deja el stick en reposo. Midiendo el centro..."
+      : step === "range"
+      ? "Gira el stick en círculos completos tocando todos los bordes..."
+      : "Revisa la forma capturada y ajusta la zona muerta.";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-[var(--radius-md)] bg-[var(--color-surface-1)] p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-1 text-sm font-semibold text-[var(--color-text-primary)]">
+          Calibrar {label}
+        </h3>
+        <p className="mb-4 text-xs text-[var(--color-text-muted)]">{hint}</p>
+
+        {detachedPad && step === "detect" && (
+          <p className="mb-3 text-xs text-[var(--color-warn)]">
+            Ningún mando activo. Pulsa cualquier botón para que Chromium lo
+            enumere y mueve el stick.
+          </p>
+        )}
+
+        <div className="flex justify-center">
+          <svg
+            width={vizSize}
+            height={vizSize}
+            className="rounded bg-[var(--color-surface-0)]"
+          >
+            <circle
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill="none"
+              stroke="var(--color-surface-2)"
+              strokeWidth="1"
+            />
+            <line
+              x1={cx}
+              y1={cy - radius}
+              x2={cx}
+              y2={cy + radius}
+              stroke="var(--color-surface-2)"
+              strokeWidth="0.5"
+            />
+            <line
+              x1={cx - radius}
+              y1={cy}
+              x2={cx + radius}
+              y2={cy}
+              stroke="var(--color-surface-2)"
+              strokeWidth="0.5"
+            />
+
+            {step === "preview" && bins.length === CALIB_BINS && (
+              <polygon
+                points={bins
+                  .map((b, i) => {
+                    const angle =
+                      (i / CALIB_BINS) * 2 * Math.PI - Math.PI;
+                    const px = cx + Math.cos(angle) * radius * b;
+                    const py = cy + Math.sin(angle) * radius * b;
+                    return `${px},${py}`;
+                  })
+                  .join(" ")}
+                fill="var(--color-accent)"
+                fillOpacity="0.25"
+                stroke="var(--color-accent)"
+                strokeWidth="1.5"
+              />
+            )}
+
+            {step === "preview" && (
+              <circle
+                cx={cx + center.cx * radius}
+                cy={cy + center.cy * radius}
+                r={(deadZone / 100) * radius}
+                fill="var(--color-warn)"
+                fillOpacity="0.15"
+                stroke="var(--color-warn)"
+                strokeWidth="1"
+                strokeDasharray="3,3"
+              />
+            )}
+
+            {step !== "preview" && (
+              <circle
+                cx={cx + livePos.x * radius}
+                cy={cy + livePos.y * radius}
+                r="5"
+                fill="var(--color-accent)"
+              />
+            )}
+          </svg>
+        </div>
+
+        {(step === "center" || step === "range") && (
+          <div className="mt-3 h-1.5 overflow-hidden rounded bg-[var(--color-surface-0)]">
+            <div
+              className="h-full bg-[var(--color-accent)]"
+              style={{ width: `${progress * 100}%` }}
+            />
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="mt-4 space-y-3">
+            <div className="text-xs text-[var(--color-text-muted)]">
+              Centro:{" "}
+              <span className="font-mono text-[var(--color-text-secondary)]">
+                {(center.cx * 100).toFixed(2)}, {(center.cy * 100).toFixed(2)}
+              </span>
+              {" · "}
+              Ruido en reposo:{" "}
+              <span className="font-mono text-[var(--color-text-secondary)]">
+                {(noise * 100).toFixed(2)}%
+              </span>
+              {" · "}
+              Ejes:{" "}
+              <span className="font-mono text-[var(--color-text-secondary)]">
+                {axisPair?.xIdx},{axisPair?.yIdx}
+              </span>
+            </div>
+            <div>
+              <label className="flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
+                <span>Zona muerta</span>
+                <span className="font-mono">{deadZone}%</span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                step={1}
+                value={deadZone}
+                onChange={(e) => setDeadZone(Number(e.target.value))}
+                className="mt-1 w-full"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="rounded border border-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+          >
+            Cancelar
+          </button>
+          {step === "preview" && (
+            <>
+              <button
+                onClick={handleRetry}
+                className="rounded border border-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+              >
+                Repetir
+              </button>
+              <button
+                onClick={handleApply}
+                className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)]"
+              >
+                Aplicar
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
