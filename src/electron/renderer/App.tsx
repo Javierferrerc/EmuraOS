@@ -15,6 +15,7 @@ import { QuickLaunch } from "./components/QuickLaunch";
 import { CollectionsModal } from "./components/CollectionsModal";
 import { BulkSelectBar } from "./components/BulkSelectBar";
 import { GlobalProgress } from "./components/GlobalProgress";
+import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
@@ -26,7 +27,24 @@ export default function App() {
   const navigation = useNavigation();
   const [showWizard, setShowWizard] = useState(false);
   const [showAddRomWizard, setShowAddRomWizard] = useState(false);
+  const [showCheatsheet, setShowCheatsheet] = useState(false);
   const addRomWizardShownRef = useRef(false);
+
+  // Phase 20 slice 5: `?` opens the shortcuts cheatsheet unless focus is
+  // inside a text input (where `?` is a literal character the user wants).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "?") return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      e.preventDefault();
+      setShowCheatsheet((s) => !s);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const {
     currentView,
@@ -191,6 +209,63 @@ export default function App() {
     ]
   );
 
+  // ── Phase 20 slice 4: drag & drop of ROM files ─────────────────────
+  // Soltar .iso/.zip/.cue (etc.) en cualquier parte de la ventana dispara
+  // el mismo flow que el file picker: clasificación por extensión, disam-
+  // biguación si aplica, rescan al final. Un overlay efímero informa al
+  // usuario que la zona es válida.
+  const [dropHighlight, setDropHighlight] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  useEffect(() => {
+    // onDragEnter/Leave fire for every child too; count depth so the
+    // overlay only hides when the pointer genuinely leaves the window.
+    const onEnter = (e: DragEvent) => {
+      if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      dragCounterRef.current += 1;
+      setDropHighlight(true);
+    };
+    const onOver = (e: DragEvent) => {
+      if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (dragCounterRef.current === 0) setDropHighlight(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setDropHighlight(false);
+      const paths: string[] = [];
+      for (const file of Array.from(e.dataTransfer.files)) {
+        // Electron ≥32 removed File.path; resolve absolute paths via
+        // the webUtils bridge exposed through preload. Empty string
+        // means "non-filesystem drop" and is ignored.
+        const fullPath = window.electronAPI.getPathForFile(file);
+        if (fullPath) paths.push(fullPath);
+      }
+      if (paths.length > 0) {
+        void app.addRomsFromPaths(paths);
+      }
+    };
+
+    window.addEventListener("dragenter", onEnter);
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onEnter);
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [app.addRomsFromPaths]);
+
   // ── Background image layer ─────────────────────────────────────────
   const [backgroundDataUrl, setBackgroundDataUrl] = useState<string | null>(null);
   const bgImagePath = app.config?.backgroundImage;
@@ -319,6 +394,42 @@ export default function App() {
           + isolation guarantee it wins stacking over any modal. Conditional
           on `launchingGame` inside the component itself. */}
       <GameLoadingOverlay />
+      {showCheatsheet && (
+        <ShortcutsCheatsheet onClose={() => setShowCheatsheet(false)} />
+      )}
+      {dropHighlight && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[9997] flex items-center justify-center"
+          style={{
+            background: "color-mix(in srgb, var(--color-accent) 18%, transparent)",
+            border: "3px dashed var(--color-accent)",
+          }}
+        >
+          <div
+            className="rounded-xl px-6 py-4 text-lg font-semibold shadow-xl"
+            style={{
+              background: "var(--color-surface-1)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            Suelta para añadir ROMs
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Electron's drag events don't always populate `files` until the drop, so
+ * we check the `types` array which exposes "Files" whenever the native
+ * payload is a file transfer. Guards the global listeners against
+ * dragging arbitrary non-file content (selected text, internal nodes).
+ */
+function hasFiles(dt: DataTransfer): boolean {
+  if (!dt.types) return false;
+  for (let i = 0; i < dt.types.length; i++) {
+    if (dt.types[i] === "Files") return true;
+  }
+  return false;
 }

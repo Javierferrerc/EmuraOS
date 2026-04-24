@@ -107,6 +107,7 @@ export const AppConfigPartialSchema = z
       })
       .optional(),
     fuzzySearchEnabled: z.boolean().optional(),
+    hiddenRoms: z.array(z.string().max(500)).max(10000).optional(),
   })
   .strict();
 

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { DiscoveredRom } from "../../../core/types";
 import { hasDetectedEmulatorForSystem } from "../utils/emulatorStatus";
+import { isRomNew } from "../utils/newBadge";
+import { GameContextMenu } from "./GameContextMenu";
 
 interface GameCardCompactProps {
   rom: DiscoveredRom;
@@ -19,7 +21,11 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
     bulkSelectTarget,
     bulkSelectedRoms,
     toggleBulkSelectRom,
+    romAddedDates,
+    playHistory,
   } = useApp();
+  const isNew = isRomNew(romAddedDates, playHistory, rom.systemId, rom.fileName);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const inBulkSelect = bulkSelectTarget !== null;
   const isBulkSelected = bulkSelectedRoms.has(
     `${rom.systemId}:${rom.fileName}`
@@ -65,6 +71,12 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
 
   const hasCover = coverDataUrl && !imgError;
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
   return (
     <div
       data-grid-index={gridIndex}
@@ -74,6 +86,7 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
           : undefined
       }
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       className={`game-grid-card-compact group relative cursor-pointer overflow-hidden rounded-xl transition-all duration-200 ${
         isFocused
           ? "scale-105 ring-2 ring-focus"
@@ -141,12 +154,30 @@ export function GameCardCompact({ rom, isFocused, gridIndex }: GameCardCompactPr
         </div>
       )}
 
+      {/* "Nuevo" pill — top-right, below the bulk-select anchor zone. */}
+      {isNew && !inBulkSelect && (
+        <div
+          className="absolute right-1.5 top-1.5 z-10 rounded-full bg-[var(--color-accent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow"
+          aria-label="Añadido recientemente"
+        >
+          Nuevo
+        </div>
+      )}
+
       {/* Name label at bottom */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-2 pt-6">
         <span className="block truncate text-xs font-medium text-primary">
           {displayName}
         </span>
       </div>
+      {contextMenu && (
+        <GameContextMenu
+          rom={rom}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

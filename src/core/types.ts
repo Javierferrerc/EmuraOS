@@ -90,6 +90,10 @@ export interface AppConfig {
   // (fuzzy with 1-char typo rescue). Substring fallback exists for users
   // who prefer strict matching.
   fuzzySearchEnabled?: boolean;
+  // "systemId:fileName" keys hidden from the library via the game context
+  // menu. Data stays on disk — only the UI hides them. An "Unhide all"
+  // control in Settings brings them back.
+  hiddenRoms?: string[];
 }
 
 export interface EmulatorDefinition {

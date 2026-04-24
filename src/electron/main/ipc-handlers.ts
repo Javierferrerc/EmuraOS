@@ -234,6 +234,14 @@ export function registerIpcHandlers(
     await shell.openPath(validated);
   });
 
+  // Phase 20 — reveal a rom file in the system file browser. shell.showItemInFolder
+  // opens Explorer/Finder with the file pre-selected so the user can verify the
+  // on-disk location without having to navigate manually.
+  ipcMain.handle("show-in-explorer", (_event, filePath: unknown) => {
+    const validated = FolderPathSchema.parse(filePath);
+    shell.showItemInFolder(validated);
+  });
+
   ipcMain.handle("config-exists", () => {
     const configManager = new ConfigManager(getProjectRoot());
     return configManager.exists();
