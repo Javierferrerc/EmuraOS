@@ -6,12 +6,53 @@ import { GameCardCompact } from "./GameCardCompact";
 import { resolveSystemMembers } from "../utils/systemGroups";
 import type { DiscoveredRom } from "../../../core/types";
 import { evaluateSmartCollection } from "../../../core/smart-collection";
+import { fuzzyMatch, substringMatch } from "../utils/fuzzyMatch";
 import "./GameGrid.css";
 
 const MIN_CARD_WIDTH = 292;
 const MIN_CARD_WIDTH_COMPACT = 160;
 const GRID_GAP = 32;
 const LIST_GAP = 4;
+
+/**
+ * Filter a rom list by the current search query, honouring the fuzzy
+ * toggle and scoring against both the metadata title (when available)
+ * and the bare filename. When scoring, we keep the higher of the two
+ * scores per rom so "Super Mario Bros" wins equally whether the filename
+ * is clean or munged like "smb_u_rev1.nes".
+ *
+ * `sortByScore` is false for the "recent" filter branch so user recency
+ * is preserved — matching the existing behaviour where typing into the
+ * search bar while the Recientes filter is active narrows the list
+ * without reshuffling.
+ */
+function applySearchFilter(
+  roms: DiscoveredRom[],
+  query: string,
+  fuzzyEnabled: boolean | undefined,
+  getMetadata: (sysId: string, fn: string) => import("../../../core/types").GameMetadata | null,
+  sortByScore = true
+): DiscoveredRom[] {
+  const match = (fuzzyEnabled ?? true) ? fuzzyMatch : substringMatch;
+  const ranked: Array<{ rom: DiscoveredRom; score: number }> = [];
+  for (const rom of roms) {
+    const meta = getMetadata(rom.systemId, rom.fileName);
+    const title = meta?.title;
+    const fileBase = rom.fileName.replace(/\.[^.]+$/, "");
+    const candidates: string[] = [];
+    if (title) candidates.push(title);
+    candidates.push(fileBase);
+
+    let best = -Infinity;
+    for (const text of candidates) {
+      const res = match(query, text);
+      if (res && res.score > best) best = res.score;
+    }
+    if (best > -Infinity) ranked.push({ rom, score: best });
+  }
+  if (sortByScore) ranked.sort((a, b) => b.score - a.score);
+  return ranked.map((r) => r.rom);
+}
 
 interface GameGridProps {
   focusedIndex?: number;
@@ -97,11 +138,16 @@ export function GameGrid({
           const rom = romByKey.get(key);
           if (rom) roms.push(rom);
         }
-        // Apply search filter then return without sorting
+        // Apply search filter then return without sorting — recency order
+        // is the user's explicit intent when Recientes is active, so the
+        // helper drops non-matches but leaves order untouched.
         if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase();
-          roms = roms.filter((rom) =>
-            rom.fileName.toLowerCase().includes(query)
+          roms = applySearchFilter(
+            roms,
+            searchQuery,
+            config?.fuzzySearchEnabled,
+            getMetadataForRom,
+            false
           );
         }
         return roms;
@@ -142,9 +188,11 @@ export function GameGrid({
     }
 
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      roms = roms.filter((rom) =>
-        rom.fileName.toLowerCase().includes(query)
+      roms = applySearchFilter(
+        roms,
+        searchQuery,
+        config?.fuzzySearchEnabled,
+        getMetadataForRom
       );
     }
 

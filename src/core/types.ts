@@ -85,6 +85,11 @@ export interface AppConfig {
     players?: string;        // "all", "1", "2", "multi"
     hasCover?: string;       // "all", "yes", "no"
   };
+  // Phase 20 — Power UX
+  // Controls SearchBar + QuickLaunch matching behaviour. Default true
+  // (fuzzy with 1-char typo rescue). Substring fallback exists for users
+  // who prefer strict matching.
+  fuzzySearchEnabled?: boolean;
 }
 
 export interface EmulatorDefinition {

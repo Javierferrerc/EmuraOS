@@ -71,6 +71,17 @@ export const generalSection: SettingsSection = {
             await ctx.updateConfig({ autoScanOnStartup: value });
           },
         },
+        {
+          id: "gen.fuzzy-search",
+          kind: "toggle",
+          label: "Búsqueda fuzzy",
+          description:
+            "Tolera typos, abreviaturas y matches no contiguos (smbros → Super Mario Bros). Apaga para volver a coincidencia por substring.",
+          get: (ctx) => ctx.config?.fuzzySearchEnabled ?? true,
+          set: async (value, ctx) => {
+            await ctx.updateConfig({ fuzzySearchEnabled: value });
+          },
+        },
       ],
     },
   ],
