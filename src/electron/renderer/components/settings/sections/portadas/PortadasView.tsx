@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type MouseEvent } from "react";
 import type { SettingsContext } from "../../../../schemas/settings-schema-types";
 import type { DiscoveredRom } from "../../../../../../core/types";
+import { CoverSourcePicker } from "../../../CoverSourcePicker";
 
 /** Resolve the metadata key for a ROM filename (strip extension). */
 function metaKey(fileName: string): string {
@@ -36,6 +37,8 @@ export function PortadasView({
   const [covers, setCovers] = useState<Record<string, string | null>>({});
   // Keys of cards that were just saved/reset — shows a brief badge.
   const [savedKeys, setSavedKeys] = useState<Record<string, "saved" | "reset">>({});
+  // ROM whose source-picker modal is currently open (null when closed).
+  const [pickerRom, setPickerRom] = useState<DiscoveredRom | null>(null);
 
   // Keep a ref to metadataMap so the cover-loading effect can read the
   // latest value without re-firing on every metadata change.
@@ -113,28 +116,60 @@ export function PortadasView({
     }, 2000);
   }, []);
 
-  const handlePickCover = useCallback(async (rom: DiscoveredRom) => {
-    const sourcePath = await window.electronAPI.pickFile([
-      { name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] },
-    ]);
-    if (!sourcePath) return;
+  const handleOpenPicker = useCallback((rom: DiscoveredRom) => {
+    setPickerRom(rom);
+  }, []);
 
-    const result = await window.electronAPI.setCustomCover(
-      rom.systemId,
-      rom.fileName,
-      sourcePath
-    );
-    if (!result.success || !result.coverPath) return;
+  // Called by CoverSourcePicker after any successful source switch. Refreshes
+  // the card image without re-fetching every cover in the gallery, and shows
+  // a brief feedback badge ("Guardado" or "Restaurado").
+  const handlePickerApplied = useCallback(
+    async (
+      rom: DiscoveredRom,
+      result: {
+        action: "libretro" | "steamgriddb" | "custom" | "reset";
+        coverPath?: string;
+      }
+    ) => {
+      const key = `${rom.systemId}:${rom.fileName}`;
 
-    const key = `${rom.systemId}:${rom.fileName}`;
-    try {
-      const dataUrl = await window.electronAPI.readCoverDataUrl(result.coverPath);
-      setCovers((prev) => ({ ...prev, [key]: dataUrl }));
-    } catch { /* silent */ }
+      if (result.action === "reset") {
+        // Clear local cover so placeholder shows while we re-fetch from any
+        // source via the bulk pipeline (libretro → sgdb).
+        setCovers((prev) => ({ ...prev, [key]: null }));
+        await ctx.startFetchingCovers();
+        await ctx.loadAllMetadata();
+        const meta =
+          metadataMapRef.current[rom.systemId]?.[metaKey(rom.fileName)];
+        if (meta?.coverPath) {
+          try {
+            const dataUrl = await window.electronAPI.readCoverDataUrl(
+              meta.coverPath
+            );
+            setCovers((prev) => ({ ...prev, [key]: dataUrl }));
+          } catch {
+            /* silent */
+          }
+        }
+        flashBadge(key, "reset");
+        return;
+      }
 
-    await ctx.loadAllMetadata();
-    flashBadge(key, "saved");
-  }, [ctx, flashBadge]);
+      if (result.coverPath) {
+        try {
+          const dataUrl = await window.electronAPI.readCoverDataUrl(
+            result.coverPath
+          );
+          setCovers((prev) => ({ ...prev, [key]: dataUrl }));
+        } catch {
+          /* silent */
+        }
+      }
+      await ctx.loadAllMetadata();
+      flashBadge(key, "saved");
+    },
+    [ctx, flashBadge]
+  );
 
   const handleResetCover = useCallback(async (rom: DiscoveredRom) => {
     const result = await window.electronAPI.resetCustomCover(
@@ -180,7 +215,7 @@ export function PortadasView({
       secondaryRef.current = null;
       return;
     }
-    activateRef.current = () => { void handlePickCover(rom); };
+    activateRef.current = () => { handleOpenPicker(rom); };
     secondaryRef.current = isCustomCover(rom)
       ? () => { void handleResetCover(rom); }
       : null;
@@ -214,7 +249,7 @@ export function PortadasView({
             <button
               key={key}
               ref={(el) => { itemRefs.current[i] = el; }}
-              onClick={() => handlePickCover(rom)}
+              onClick={() => handleOpenPicker(rom)}
               className={`group relative flex flex-col items-center gap-2 rounded-[var(--radius-md)] folder-row-glass p-3 text-center transition-colors hover:bg-white/[0.06] cursor-pointer ${focused ? "ring-focus" : ""}`}
             >
               {/* Feedback badge */}
@@ -273,6 +308,17 @@ export function PortadasView({
           );
         })}
       </div>
+
+      {pickerRom && (
+        <CoverSourcePicker
+          rom={pickerRom}
+          hasCustomCover={isCustomCover(pickerRom)}
+          onApplied={(result) => {
+            void handlePickerApplied(pickerRom, result);
+          }}
+          onClose={() => setPickerRom(null)}
+        />
+      )}
     </div>
   );
 }

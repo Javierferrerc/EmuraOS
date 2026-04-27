@@ -23,6 +23,8 @@ import type {
   EmulatorDownloadProgress,
   UpdateCheckResult,
   UpdateDownloadProgress,
+  AddRomsProgress,
+  SgdbCandidate,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -63,6 +65,23 @@ export interface ElectronAPI {
     systemId: string,
     romFileName: string
   ): Promise<{ success: boolean; error?: string }>;
+  fetchCoverFromLibretro(
+    systemId: string,
+    romFileName: string
+  ): Promise<{ success: boolean; coverPath?: string; error?: string }>;
+  listSteamGridDbCandidates(
+    systemId: string,
+    romFileName: string
+  ): Promise<{
+    success: boolean;
+    candidates: SgdbCandidate[];
+    error?: string;
+  }>;
+  applySteamGridDbCandidate(
+    systemId: string,
+    romFileName: string,
+    fullUrl: string
+  ): Promise<{ success: boolean; coverPath?: string; error?: string }>;
   readBackgroundDataUrl(imagePath: string): Promise<string | null>;
   onScrapeProgress(callback: (progress: ScrapeProgress) => void): void;
   removeScrapeProgressListener(): void;
@@ -197,6 +216,20 @@ export interface ElectronAPI {
       error?: string;
     }>
   >;
+  onAddRomsProgress(
+    callback: (progress: AddRomsProgress) => void
+  ): () => void;
+  onAddRomsComplete(
+    callback: (data: {
+      results: Array<{
+        filePath: string;
+        fileName: string;
+        systemId: string;
+        success: boolean;
+        error?: string;
+      }>;
+    }) => void
+  ): () => void;
 
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache(): Promise<{ success: boolean; error?: string }>;

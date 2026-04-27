@@ -42,6 +42,7 @@ export function useCommandPaletteActions(): CommandAction[] {
           void app.updateConfig(patch);
         },
         setActiveFilter: app.setActiveFilter,
+        openCollectionViewer: app.openCollectionViewer,
         downloadEmulator: (id) => {
           void app.downloadEmulator(id);
         },

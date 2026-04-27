@@ -65,6 +65,7 @@ export interface BuildActionsArgs {
     type: "collection";
     collectionId: string;
   }) => void;
+  openCollectionViewer: (collectionId: string) => void;
   downloadEmulator: (emulatorId: string) => void;
 }
 
@@ -99,8 +100,12 @@ export function buildCommandPaletteActions(
     toggleFullscreen,
     updateConfig,
     setActiveFilter,
+    openCollectionViewer,
     downloadEmulator,
   } = args;
+  // setActiveFilter is still part of the surface for callers that want to
+  // navigate to the bare collection filter (legacy callers / tests).
+  void setActiveFilter;
 
   const currentTheme = config?.theme ?? "dark";
   const currentViewMode = config?.libraryViewMode ?? "grid";
@@ -221,8 +226,8 @@ export function buildCommandPaletteActions(
       keywords: ["collection", col.name],
       icon: "📁",
       run: () => {
-        setActiveFilter({ type: "collection", collectionId: col.id });
         setCurrentView("library");
+        openCollectionViewer(col.id);
       },
     });
   }

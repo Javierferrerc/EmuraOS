@@ -108,11 +108,15 @@ app.whenReady().then(() => {
   // scripts, connecting to arbitrary hosts, etc. In dev mode Vite needs
   // 'unsafe-inline' scripts and ws: connections for HMR.
   const isDev = !!MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  // SteamGridDB CDN is allowlisted in img-src so the per-game cover picker
+  // can preview candidate thumbnails without round-tripping each image
+  // through main as a data URL. The actual chosen cover is still downloaded
+  // server-side and stored locally — only the previews load directly.
   const csp = isDev
     ? "default-src 'self'; " +
       "script-src 'self' 'unsafe-inline'; " +
       "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data:; " +
+      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
       "connect-src 'self' ws:; " +
       "font-src 'self'; " +
       "object-src 'none'; " +
@@ -120,7 +124,7 @@ app.whenReady().then(() => {
     : "default-src 'self'; " +
       "script-src 'self'; " +
       "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data:; " +
+      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
       "connect-src 'self'; " +
       "font-src 'self'; " +
       "object-src 'none'; " +

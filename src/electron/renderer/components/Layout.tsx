@@ -52,6 +52,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     openGameDetail,
     openQuickLaunch,
     setCollectionsModalOpen,
+    openCollectionViewer,
   } = useApp();
 
   // Track the latest search query in a ref so the virtual keyboard handlers
@@ -81,6 +82,15 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
   const [gridColumnCount, setGridColumnCount] = useState(4);
   const [gridItemCount, setGridItemCount] = useState(0);
   const filteredRomsRef = useRef<DiscoveredRom[]>([]);
+  // Heterogeneous list of grid items (collection tiles + rom cards) in
+  // visual order. The focus index walks this array; activation per item
+  // type happens below in the ACTIVATE case.
+  const gridItemsRef = useRef<
+    Array<
+      | { kind: "tile"; collectionId: string }
+      | { kind: "rom"; rom: DiscoveredRom }
+    >
+  >([]);
 
   // Compute systems with ROMs
   const systemsWithRoms = useMemo(() => {
@@ -308,8 +318,12 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
           focusDispatch(action);
           if (currentView === "settings") break;
           if (focusState.region === "grid") {
-            const rom = filteredRomsRef.current[focusState.gridIndex];
-            if (rom) launchGame(rom);
+            const item = gridItemsRef.current[focusState.gridIndex];
+            if (item?.kind === "rom") {
+              launchGame(item.rom);
+            } else if (item?.kind === "tile") {
+              openCollectionViewer(item.collectionId);
+            }
           } else if (focusState.region === "topbar") {
             switch (focusState.topbarIndex) {
               case TOPBAR_INDEX_SEARCH:
@@ -363,8 +377,10 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
         case "TOGGLE_FAVORITE": {
           focusDispatch(action);
           if (focusState.region === "grid") {
-            const rom = filteredRomsRef.current[focusState.gridIndex];
-            if (rom) toggleFavorite(rom.systemId, rom.fileName);
+            const item = gridItemsRef.current[focusState.gridIndex];
+            if (item?.kind === "rom") {
+              toggleFavorite(item.rom.systemId, item.rom.fileName);
+            }
           }
           break;
         }
@@ -372,8 +388,10 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
         case "SECONDARY_ACTION": {
           focusDispatch(action);
           if (focusState.region === "grid") {
-            const rom = filteredRomsRef.current[focusState.gridIndex];
-            if (rom) openGameDetail(rom);
+            const item = gridItemsRef.current[focusState.gridIndex];
+            if (item?.kind === "rom") {
+              openGameDetail(item.rom);
+            }
           }
           break;
         }
@@ -529,6 +547,22 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     filteredRomsRef.current = roms;
   }, []);
 
+  const handleGridItemsChange = useCallback(
+    (
+      items: Array<
+        | { kind: "tile"; collection: { id: string } }
+        | { kind: "rom"; rom: DiscoveredRom }
+      >
+    ) => {
+      gridItemsRef.current = items.map((it) =>
+        it.kind === "tile"
+          ? { kind: "tile" as const, collectionId: it.collection.id }
+          : { kind: "rom" as const, rom: it.rom }
+      );
+    },
+    []
+  );
+
   const handleColumnCountChange = useCallback((count: number) => {
     setGridColumnCount(count);
   }, []);
@@ -581,6 +615,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
           onColumnCountChange={handleColumnCountChange}
           onItemCountChange={handleItemCountChange}
           onFilteredRomsChange={handleFilteredRomsChange}
+          onGridItemsChange={handleGridItemsChange}
         />
       </main>
       {gamepadConnected && <BottomBar />}

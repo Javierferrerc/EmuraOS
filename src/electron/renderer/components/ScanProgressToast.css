@@ -1,0 +1,53 @@
+/*
+ * Animations for ScanProgressToast.
+ *
+ * The "scanning" state slides up + fades in once when it first mounts and
+ * stays visible until the scan completes (no exit animation — it gets
+ * replaced by the completion variant).
+ *
+ * The "completed" state plays the full 5s in/hold/out sequence as a single
+ * keyframe animation. The component unmounts at 5s via the JS timer; the
+ * keyframe just paints the visible window so the user perceives a smooth
+ * appearance and a smooth dismissal.
+ *
+ * Timing: 6% in (≈300ms), holds, then 6% out (last ≈300ms). Hold runs
+ * ≈4.4s in the middle so the message is comfortably readable.
+ */
+
+.scan-toast {
+  animation: scan-toast-enter 250ms ease-out both;
+}
+
+@keyframes scan-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.scan-toast--completed {
+  animation: scan-toast-flash 5s ease-out forwards;
+}
+
+@keyframes scan-toast-flash {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  6% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  94% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
