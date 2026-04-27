@@ -1820,8 +1820,8 @@ export function registerIpcHandlers(
     }
   );
 
-  ipcMain.handle("install-update", () => {
-    autoUpdater.installUpdate();
+  ipcMain.handle("install-update", async () => {
+    await autoUpdater.installUpdate();
   });
 
   ipcMain.handle("cancel-update-download", () => {
