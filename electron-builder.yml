@@ -27,6 +27,13 @@ nsis:
   uninstallerSidebar: assets/installer/installerSidebar.bmp
   installerHeader: assets/installer/installerHeader.bmp
   license: LICENSE
-  perMachine: true
+  # Per-user install. Two reasons:
+  #   1. No UAC. The buggy v0.1.2/v0.1.3 auto-updater used child_process.spawn
+  #      which can't trigger the UAC prompt — manifest-elevated installers
+  #      hit it with EACCES. A per-user installer is asInvoker so spawn
+  #      succeeds; users on broken versions can finally update.
+  #   2. Going forward, auto-updates don't need admin even on locked-down
+  #      machines (school computers, kiosks, etc.).
+  perMachine: false
   menuCategory: EmuraOS
   include: build/installer.nsh

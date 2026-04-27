@@ -71,8 +71,52 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
     window.electronAPI.cancelUpdateDownload();
   }, []);
 
-  const handleInstall = useCallback(() => {
-    window.electronAPI.installUpdate();
+  const handleInstall = useCallback(async () => {
+    try {
+      await window.electronAPI.installUpdate();
+      // On success the main process calls app.quit() — no UI follow-up
+      // needed; the app simply exits and the installer takes over.
+    } catch (err: unknown) {
+      // The installer launch failed (locked-down group policy, AV
+      // quarantine, missing file, manifest denial). Show the user a
+      // fallback path instead of swallowing the error and leaving them
+      // staring at a stuck dialog.
+      console.error("[update] installUpdate failed:", err);
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "No se pudo iniciar el instalador automáticamente."
+      );
+      setState("error");
+    }
+  }, []);
+
+  const handleOpenInstallerFolder = useCallback(async () => {
+    try {
+      const installerPath =
+        await window.electronAPI.getDownloadedInstallerPath();
+      if (installerPath) {
+        await window.electronAPI.showInExplorer(installerPath);
+      } else {
+        // Download was cancelled / never ran — open the releases page so
+        // the user can grab the installer manually.
+        await window.electronAPI.openExternal(
+          "https://github.com/Javierferrerc/EmuraOS/releases/latest"
+        );
+      }
+    } catch (e) {
+      console.warn("[update] could not open installer location:", e);
+    }
+  }, []);
+
+  const handleOpenReleasesPage = useCallback(async () => {
+    try {
+      await window.electronAPI.openExternal(
+        "https://github.com/Javierferrerc/EmuraOS/releases/latest"
+      );
+    } catch (e) {
+      console.warn("[update] could not open releases page:", e);
+    }
   }, []);
 
   return (
@@ -155,11 +199,12 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
           )}
 
           {state === "error" && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm text-red-400">{errorMessage}</p>
               <p className="text-xs text-gray-500">
-                Podés intentar de nuevo más tarde o descargar la actualización
-                manualmente desde GitHub.
+                Podés instalarla manualmente: abrí la carpeta donde está
+                guardado el instalador y ejecutalo a doble-click, o
+                descargá la última versión desde la página de releases.
               </p>
             </div>
           )}
@@ -207,13 +252,29 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
           )}
 
           {state === "error" && (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600"
-            >
-              Cerrar
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenReleasesPage}
+                className="rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600"
+              >
+                Abrir página de releases
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenInstallerFolder}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+              >
+                Abrir carpeta del instalador
+              </button>
+            </>
           )}
         </div>
       </div>

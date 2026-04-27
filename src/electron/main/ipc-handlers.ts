@@ -1824,6 +1824,14 @@ export function registerIpcHandlers(
     await autoUpdater.installUpdate();
   });
 
+  // Fallback for the renderer: when "Instalar y reiniciar" fails (locked
+  // policies, AV quarantine, manifest denial, etc.) the user needs a way
+  // out. The renderer surfaces this path so the user can click "Open
+  // installer folder" and run the .exe manually.
+  ipcMain.handle("get-downloaded-installer-path", () => {
+    return autoUpdater.getDownloadedInstallerPath();
+  });
+
   ipcMain.handle("cancel-update-download", () => {
     autoUpdater.cancelDownload();
   });

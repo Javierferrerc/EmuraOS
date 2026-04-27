@@ -264,6 +264,7 @@ export interface ElectronAPI {
     error?: string;
   }>;
   openExternal(url: string): Promise<{ success: boolean; error?: string }>;
+  showInExplorer(filePath: string): Promise<unknown>;
   resolveConfigPaths(): Promise<{ romsPath: string; emulatorsPath: string }>;
   openFolder(folderPath: string): Promise<void>;
 
@@ -271,6 +272,7 @@ export interface ElectronAPI {
   checkForUpdates(): Promise<UpdateCheckResult>;
   downloadUpdate(url: string): Promise<string>;
   installUpdate(): Promise<void>;
+  getDownloadedInstallerPath(): Promise<string | null>;
   cancelUpdateDownload(): Promise<void>;
   onUpdateDownloadProgress(
     callback: (progress: UpdateDownloadProgress) => void

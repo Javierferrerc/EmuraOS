@@ -6,7 +6,10 @@ import path from "node:path";
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: { unpack: "**/node_modules/koffi/**" },
+    asar: {
+      unpack:
+        "{**/node_modules/koffi/**,**/node_modules/sharp/**,**/node_modules/@img/**}",
+    },
     extraResource: ["src/data"],
     icon: "assets/icon",
     ignore: [
@@ -20,14 +23,20 @@ const config: ForgeConfig = {
   },
   hooks: {
     // The Vite plugin only includes bundled output in the asar — native
-    // modules marked as `external` are left out. Copy koffi into the
-    // packaged app so `require("koffi")` resolves at runtime.
+    // modules marked as `external` are left out. Copy them into the
+    // packaged app so `require()` resolves at runtime. sharp also needs
+    // its platform package under @img (contains the .node + libvips DLLs).
     packageAfterCopy: async (_config, buildPath) => {
-      cpSync(
-        path.resolve("node_modules/koffi"),
-        path.join(buildPath, "node_modules/koffi"),
-        { recursive: true }
-      );
+      const copyDir = (rel: string) => {
+        cpSync(
+          path.resolve(rel),
+          path.join(buildPath, rel),
+          { recursive: true }
+        );
+      };
+      copyDir("node_modules/koffi");
+      copyDir("node_modules/sharp");
+      copyDir("node_modules/@img");
     },
   },
   makers: [

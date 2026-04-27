@@ -218,18 +218,37 @@ export class AutoUpdater {
         "[auto-update] shell.openPath failed, falling back to cmd start:",
         error
       );
-      try {
-        // `cmd /c start "" "path\\to\\installer.exe"` — the empty quoted
-        // first argument is the optional title, required when the path
-        // itself is quoted so cmd doesn't treat it as the title.
-        spawn("cmd", ["/c", "start", "", installerPath], {
-          detached: true,
-          stdio: "ignore",
-          windowsHide: true,
-        }).unref();
-      } catch (spawnErr) {
+      // `cmd /c start "" "path\\to\\installer.exe"` — the empty quoted
+      // first argument is the optional title, required when the path
+      // itself is quoted so cmd doesn't treat it as the title. start
+      // wraps ShellExecute, so it triggers UAC and AV trust prompts
+      // the same way explorer does.
+      const fallbackErr = await new Promise<Error | null>((resolve) => {
+        try {
+          const child = spawn("cmd", ["/c", "start", "", installerPath], {
+            detached: true,
+            stdio: "ignore",
+            windowsHide: true,
+          });
+          // Without an `error` listener, a failed spawn would crash the
+          // main process with the same Uncaught Exception dialog that
+          // started this whole bug report. Listen and route to renderer.
+          child.once("error", (err) => resolve(err));
+          // Give the spawn a tick to surface its `error` event before we
+          // assume success. spawn errors fire synchronously on the
+          // event loop on Windows, so a microtask is enough.
+          queueMicrotask(() => {
+            child.unref();
+            resolve(null);
+          });
+        } catch (err) {
+          resolve(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
+
+      if (fallbackErr) {
         throw new Error(
-          `Failed to launch installer: ${error}; fallback also failed: ${String(spawnErr)}`
+          `Failed to launch installer: ${error}; fallback also failed: ${fallbackErr.message}`
         );
       }
     }
@@ -238,6 +257,16 @@ export class AutoUpdater {
     // before we quit — quitting too fast can race the ShellExecute call
     // and leave the user with no installer running.
     setTimeout(() => app.quit(), 800);
+  }
+
+  /**
+   * Path to the .exe we downloaded into %TEMP%, or null if no download
+   * has run this session. Exposed so the renderer can fall back to
+   * "show installer in Explorer" when shell.openPath fails for reasons
+   * outside our control (group policies, AV quarantine, etc.).
+   */
+  getDownloadedInstallerPath(): string | null {
+    return this.downloadedInstallerPath;
   }
 
   /**
