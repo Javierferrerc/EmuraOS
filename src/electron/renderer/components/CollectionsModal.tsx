@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import { SmartCollectionEditorModal } from "./SmartCollectionEditorModal";
+import { CreateCollectionModal } from "./CreateCollectionModal";
 import { composeCollectionMosaic } from "../utils/collectionMosaic";
 import { evaluateSmartCollection } from "../../../core/smart-collection";
 import type { Collection, SmartCollectionFilter } from "../../../core/types";
+import xIcon from "../assets/icons/controls/x.svg";
+import circleIcon from "../assets/icons/controls/circle.svg";
+import triangleIcon from "../assets/icons/controls/triangle.svg";
 
 /**
  * Central place to view, create, edit and delete collections (manual + smart).
@@ -20,7 +24,6 @@ import type { Collection, SmartCollectionFilter } from "../../../core/types";
 export function CollectionsModal() {
   const {
     collections,
-    setActiveFilter,
     createCollection,
     createSmartCollection,
     updateSmartCollectionFilter,
@@ -28,15 +31,17 @@ export function CollectionsModal() {
     deleteCollection,
     setCollectionsModalOpen,
     enterBulkSelect,
+    openCollectionViewer,
   } = useApp();
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [editingSmart, setEditingSmart] = useState<Collection | null>(null);
   const [creatingSmart, setCreatingSmart] = useState(false);
-  const [creatingManualName, setCreatingManualName] = useState<string | null>(
-    null
-  );
+  // True while the unified manual-collection create modal is open. The
+  // older inline rename-and-add-later flow was confusing — this modal
+  // collects the name and games in one step.
+  const [creatingManual, setCreatingManual] = useState(false);
 
   function handleClose() {
     setCollectionsModalOpen(false);
@@ -44,17 +49,22 @@ export function CollectionsModal() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editingSmart && !creatingSmart) {
+      if (
+        e.key === "Escape" &&
+        !editingSmart &&
+        !creatingSmart &&
+        !creatingManual
+      ) {
         handleClose();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingSmart, creatingSmart]);
+  }, [editingSmart, creatingSmart, creatingManual]);
 
   function activateCollection(col: Collection) {
-    setActiveFilter({ type: "collection", collectionId: col.id });
+    openCollectionViewer(col.id);
     handleClose();
   }
 
@@ -71,15 +81,10 @@ export function CollectionsModal() {
     setRenameDraft("");
   }
 
-  async function handleCreateManual() {
-    const name = creatingManualName?.trim();
-    if (!name) {
-      setCreatingManualName(null);
-      return;
-    }
-    await createCollection(name);
-    setCreatingManualName(null);
-  }
+  // createCollection is still used by the smart-collection inline path
+  // and exposed through context; the manual path goes through
+  // CreateCollectionModal which calls the same action under the hood.
+  void createCollection;
 
   async function handleCreateSmart(
     name: string,
@@ -104,11 +109,21 @@ export function CollectionsModal() {
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[9990] flex items-center justify-center bg-black/60 p-4"
+        className="fixed inset-0 z-[9990] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
         onClick={handleClose}
       >
         <div
-          className="flex w-full max-w-2xl max-h-[85vh] flex-col rounded-lg bg-[var(--color-surface-1)] shadow-2xl"
+          className="flex w-full max-w-3xl max-h-[85vh] flex-col rounded-2xl shadow-2xl"
+          style={{
+            // Stack the themed surface tint over a fully opaque base bg
+            // so the panel is no longer translucent (surface-1 ships at
+            // 0.7 alpha for the in-app glass cards). Console-style
+            // modals should feel solid and own the screen.
+            backgroundColor: "var(--color-bg)",
+            backgroundImage:
+              "linear-gradient(var(--color-surface-1), var(--color-surface-1))",
+            border: "1px solid var(--color-glass-border)",
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b border-[var(--color-surface-2)] px-5 py-4">
@@ -126,48 +141,18 @@ export function CollectionsModal() {
 
           <div className="flex gap-2 border-b border-[var(--color-surface-2)] px-5 py-3">
             <button
-              onClick={() => setCreatingManualName("")}
-              className="rounded border border-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+              onClick={() => setCreatingManual(true)}
+              className="rounded border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-3 py-1.5 text-sm font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20"
             >
-              + Manual
+              + Nueva colección
             </button>
             <button
               onClick={() => setCreatingSmart(true)}
-              className="rounded border border-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+              className="rounded border border-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
             >
               + Inteligente
             </button>
           </div>
-
-          {creatingManualName !== null && (
-            <div className="flex items-center gap-2 border-b border-[var(--color-surface-2)] bg-[var(--color-surface-0)] px-5 py-3">
-              <input
-                type="text"
-                value={creatingManualName}
-                onChange={(e) => setCreatingManualName(e.target.value)}
-                placeholder="Nombre de la colección"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreateManual();
-                  if (e.key === "Escape") setCreatingManualName(null);
-                }}
-                className="flex-1 rounded border border-[var(--color-surface-2)] bg-[var(--color-surface-1)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-              />
-              <button
-                onClick={handleCreateManual}
-                disabled={!creatingManualName.trim()}
-                className="rounded bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
-              >
-                Crear
-              </button>
-              <button
-                onClick={() => setCreatingManualName(null)}
-                className="rounded border border-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)]"
-              >
-                Cancelar
-              </button>
-            </div>
-          )}
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
             {collections.length === 0 ? (
@@ -273,8 +258,40 @@ export function CollectionsModal() {
               </ul>
             )}
           </div>
+
+          {/* Console-style footer — gamepad button hints. Mirrors the
+              language used by BottomBar and the create modal so the
+              UX feels consistent across the app. */}
+          <div className="flex items-center gap-5 border-t border-[var(--color-surface-2)] px-6 py-3 text-[13px] font-medium text-[var(--color-text-muted)]">
+            <span className="flex items-center gap-1.5">
+              <img src={xIcon} alt="" className="h-5 w-5" />
+              Abrir
+            </span>
+            <span className="flex items-center gap-1.5">
+              <img src={triangleIcon} alt="" className="h-5 w-5" />
+              Editar
+            </span>
+            <span className="flex items-center gap-1.5">
+              <img src={circleIcon} alt="" className="h-5 w-5" />
+              Cerrar
+            </span>
+          </div>
         </div>
       </div>
+
+      {creatingManual && (
+        <CreateCollectionModal
+          onClose={() => setCreatingManual(false)}
+          onCreated={(id) => {
+            // After creating, immediately open the viewer so the user can
+            // see what they made — feels more rewarding than dropping back
+            // to a list with one extra row.
+            setCreatingManual(false);
+            handleClose();
+            openCollectionViewer(id);
+          }}
+        />
+      )}
 
       {creatingSmart && (
         <SmartCollectionEditorModal

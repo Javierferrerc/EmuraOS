@@ -205,6 +205,33 @@ export interface CoverFetchResult {
   totalErrors: number;
 }
 
+export interface AddRomsProgress {
+  fileIndex: number;
+  totalFiles: number;
+  fileName: string;
+  copiedBytes: number;
+  totalBytes: number;
+  percent: number;
+}
+
+/**
+ * One SteamGridDB grid candidate — used by the per-game cover picker so the
+ * user can preview multiple covers and choose the one they like instead of
+ * accepting the auto-selected "best".
+ */
+export interface SgdbCandidate {
+  /** SteamGridDB grid id — stable identifier. */
+  gridId: number;
+  /** Full-resolution image URL (used for the actual download). */
+  fullUrl: string;
+  /** Smaller preview image URL (falls back to fullUrl when not provided). */
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+  style: string;
+  score: number;
+}
+
 export interface RomReference {
   systemId: string;
   fileName: string;

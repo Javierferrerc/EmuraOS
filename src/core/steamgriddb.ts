@@ -8,7 +8,10 @@ import type {
   DiscoveredRom,
   CoverFetchProgress,
   CoverFetchResult,
+  SgdbCandidate,
 } from "./types.js";
+
+export type { SgdbCandidate };
 
 const API_BASE = "https://www.steamgriddb.com/api/v2";
 const DEFAULT_FETCH_DELAY_MS = 250;
@@ -28,8 +31,10 @@ interface SgdbGrid {
   nsfw: boolean;
   humor: boolean;
   url: string;
+  thumb?: string;
   mime?: string;
 }
+
 
 interface SgdbSearchResponse {
   success: boolean;
@@ -230,6 +235,117 @@ export class SteamGridDb {
     const id = best?.id ?? null;
     this.searchCache.set(title, id);
     return id;
+  }
+
+  /**
+   * Public title→id resolver. Bypasses no caches — same lookup the bulk
+   * fetcher uses, so subsequent calls hit the in-memory map.
+   */
+  async resolveGameId(title: string): Promise<number | null> {
+    return this.searchGameId(title);
+  }
+
+  /**
+   * List up to `limit` grid candidates for a SteamGridDB game id, ranked
+   * by the same heuristic the bulk fetcher uses (dimension → style →
+   * SGDB score). Used by the per-game picker so the user can preview
+   * several covers and choose the one they like.
+   */
+  async listGridCandidates(
+    gameId: number,
+    limit = 20
+  ): Promise<SgdbCandidate[]> {
+    const url =
+      `${API_BASE}/grids/game/${gameId}` +
+      `?dimensions=600x900,460x215,512x512,1024x1024&types=static&nsfw=false&humor=false`;
+    const response = await this.apiGet(url);
+    if (!response || !response.ok) return [];
+
+    let data: SgdbGridsResponse;
+    try {
+      data = (await response.json()) as SgdbGridsResponse;
+    } catch {
+      return [];
+    }
+
+    const grids = (data?.data ?? []).filter((g) => !g.nsfw && !g.humor);
+    if (grids.length === 0) return [];
+
+    // Reuse the same ranking as pickBestGrid but keep the top N.
+    const dimensionScore = (g: SgdbGrid): number => {
+      if (g.width === 600 && g.height === 900) return 2;
+      if (g.width === 460 && g.height === 215) return 1;
+      return 0;
+    };
+    const styleScore = (g: SgdbGrid): number => {
+      const s = (g.style ?? "").toLowerCase();
+      if (!s || s === "default") return 3;
+      if (s === "no_logo") return 2;
+      if (s === "alternate" || s === "white_logo") return 1;
+      if (s === "blurred" || s === "material") return 0;
+      return 3;
+    };
+
+    const sorted = [...grids].sort((a, b) => {
+      const ds = dimensionScore(b) - dimensionScore(a);
+      if (ds !== 0) return ds;
+      const ss = styleScore(b) - styleScore(a);
+      if (ss !== 0) return ss;
+      return (b.score ?? 0) - (a.score ?? 0);
+    });
+
+    return sorted.slice(0, limit).map((g) => ({
+      gridId: g.id,
+      fullUrl: g.url,
+      thumbnailUrl: g.thumb ?? g.url,
+      width: g.width,
+      height: g.height,
+      style: g.style,
+      score: g.score,
+    }));
+  }
+
+  /**
+   * Download a specific SteamGridDB image URL and persist it as the cover
+   * for `(systemId, romFileName)`. Used by the per-game picker once the
+   * user has chosen one of the candidates from `listGridCandidates`.
+   */
+  async applyCoverFromUrl(
+    systemId: string,
+    romFileName: string,
+    fullUrl: string
+  ): Promise<string | null> {
+    let imageResponse: Response;
+    try {
+      imageResponse = await fetch(fullUrl);
+    } catch (err) {
+      console.warn("[steamgriddb] image download failed:", err);
+      return null;
+    }
+    if (!imageResponse.ok) return null;
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(await imageResponse.arrayBuffer());
+    } catch {
+      return null;
+    }
+
+    this.cache.ensureDirectories(systemId);
+    const coverPath = this.cache.getCoverPath(systemId, romFileName);
+    try {
+      writeFileSync(coverPath, buffer);
+    } catch (err) {
+      console.warn("[steamgriddb] failed to write cover:", err);
+      return null;
+    }
+    void ensureThumbnail(
+      coverPath,
+      this.cache.getThumbnailPath(systemId, romFileName)
+    );
+
+    this.saveCoverMetadata(systemId, romFileName, coverPath);
+    return coverPath;
   }
 
   private async getBestGrid(gameId: number): Promise<SgdbGrid | null> {

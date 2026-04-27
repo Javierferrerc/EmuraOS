@@ -26,11 +26,8 @@ interface Task {
 
 export function GlobalProgress() {
   const {
-    isScanning,
     isScraping,
     scrapeProgress,
-    isFetchingCovers,
-    coverFetchProgress,
     downloadingEmulatorId,
     emulatorDownloadProgress,
   } = useApp();
@@ -54,17 +51,6 @@ export function GlobalProgress() {
       });
     }
 
-    if (isFetchingCovers && coverFetchProgress) {
-      const p = coverFetchProgress;
-      const progress = p.total > 0 ? p.current / p.total : null;
-      list.push({
-        id: "covers",
-        label: "Descargando portadas",
-        progress,
-        detail: `${p.current}/${p.total} — ${p.romFileName}`,
-      });
-    }
-
     if (isScraping && scrapeProgress) {
       const p = scrapeProgress;
       const progress = p.total > 0 ? p.current / p.total : null;
@@ -76,22 +62,10 @@ export function GlobalProgress() {
       });
     }
 
-    if (isScanning) {
-      list.push({
-        id: "scan",
-        label: "Escaneando ROMs",
-        progress: null,
-        detail: "buscando ficheros compatibles",
-      });
-    }
-
     return list;
   }, [
-    isScanning,
     isScraping,
     scrapeProgress,
-    isFetchingCovers,
-    coverFetchProgress,
     downloadingEmulatorId,
     emulatorDownloadProgress,
   ]);

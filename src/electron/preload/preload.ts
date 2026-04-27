@@ -35,6 +35,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("set-custom-cover", systemId, romFileName, sourcePath),
   resetCustomCover: (systemId: string, romFileName: string) =>
     ipcRenderer.invoke("reset-custom-cover", systemId, romFileName),
+  fetchCoverFromLibretro: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("fetch-cover-from-libretro", systemId, romFileName),
+  listSteamGridDbCandidates: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("list-steamgriddb-candidates", systemId, romFileName),
+  applySteamGridDbCandidate: (
+    systemId: string,
+    romFileName: string,
+    fullUrl: string
+  ) =>
+    ipcRenderer.invoke(
+      "apply-steamgriddb-candidate",
+      systemId,
+      romFileName,
+      fullUrl
+    ),
   readBackgroundDataUrl: (imagePath: string) =>
     ipcRenderer.invoke("read-background-data-url", imagePath),
   fetchCovers: () => ipcRenderer.invoke("fetch-covers"),
@@ -190,6 +205,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
       error?: string;
     }>
   > => ipcRenderer.invoke("add-roms", entries),
+  onAddRomsProgress: (callback: (progress: unknown) => void) => {
+    const listener = (_: unknown, progress: unknown) => callback(progress);
+    ipcRenderer.on("add-roms:progress", listener);
+    return () => {
+      ipcRenderer.removeListener("add-roms:progress", listener);
+    };
+  },
+  onAddRomsComplete: (callback: (data: unknown) => void) => {
+    const listener = (_: unknown, data: unknown) => callback(data);
+    ipcRenderer.on("add-roms:complete", listener);
+    return () => {
+      ipcRenderer.removeListener("add-roms:complete", listener);
+    };
+  },
 
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache: () => ipcRenderer.invoke("clear-metadata-cache"),

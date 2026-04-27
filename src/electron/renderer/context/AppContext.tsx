@@ -29,6 +29,7 @@ import type {
   EmulatorDownloadProgress,
   UpdateInfo,
   SmartCollectionFilter,
+  AddRomsProgress,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -101,6 +102,9 @@ interface AppState {
   isUpdateModalOpen: boolean;
   isScanning: boolean;
   isAddingRoms: boolean;
+  /** Live progress from the main process while a batch of ROMs is being
+   *  copied. null when no copy is active (or shortly after completion). */
+  addRomsProgress: AddRomsProgress | null;
   disambiguationPending: DisambiguationState | null;
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
@@ -120,6 +124,10 @@ interface AppState {
    */
   bulkSelectTarget: { collectionId: string; collectionName: string } | null;
   bulkSelectedRoms: Set<string>;
+  /** Id of the collection currently being viewed in the fullscreen modal,
+   *  or null when no viewer is open. Replaces the older "navigate to a
+   *  collection filter" pattern. */
+  viewingCollectionId: string | null;
 }
 
 interface AppActions {
@@ -197,6 +205,8 @@ interface AppActions {
   exitBulkSelect: () => void;
   toggleBulkSelectRom: (systemId: string, fileName: string) => void;
   commitBulkSelect: () => Promise<void>;
+  openCollectionViewer: (collectionId: string) => void;
+  closeCollectionViewer: () => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -276,6 +286,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isAddingRoms, setIsAddingRoms] = useState(false);
+  const [addRomsProgress, setAddRomsProgress] =
+    useState<AddRomsProgress | null>(null);
   const [disambiguationPending, setDisambiguationPending] =
     useState<DisambiguationState | null>(null);
   const [resolvedPaths, setResolvedPaths] = useState<{
@@ -292,6 +304,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   >(null);
   const [bulkSelectedRoms, setBulkSelectedRoms] = useState<Set<string>>(
     new Set()
+  );
+  const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(
+    null
   );
 
   // Load emulator definitions once on mount.
@@ -321,6 +336,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFullscreen = useCallback(() => {
     window.electronAPI.toggleFullscreen();
+  }, []);
+
+  // Add-roms progress: fed by streaming copy in main. Stays mounted for
+  // the entire app lifetime so the toast keeps showing even if the user
+  // navigates away from the library while a multi-GB ROM is copying.
+  useEffect(() => {
+    const offProgress = window.electronAPI.onAddRomsProgress((progress) => {
+      setAddRomsProgress(progress);
+    });
+    const offComplete = window.electronAPI.onAddRomsComplete(() => {
+      // Hold the toast briefly at 100% so the user sees the result, then
+      // clear so it doesn't linger across the rest of the session.
+      window.setTimeout(() => setAddRomsProgress(null), 1500);
+    });
+    return () => {
+      offProgress();
+      offComplete();
+    };
   }, []);
 
   // Game session listeners
@@ -752,7 +785,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!bulkSelectTarget) return;
     const collectionId = bulkSelectTarget.collectionId;
     // Sequence the IPC calls — addToCollection is cheap but kept serial so
-    // the on-disk file isn't being read+written concurrently.
+    // the on-disk file isn't being read+written concurrently. We track the
+    // keys that actually persisted so the optimistic state update doesn't
+    // lie about failures (used to silently swallow validation errors and
+    // show roms as added even though disk hadn't changed).
+    const persisted: string[] = [];
     for (const key of bulkSelectedRoms) {
       const idx = key.indexOf(":");
       if (idx <= 0) continue;
@@ -764,22 +801,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           systemId,
           fileName
         );
+        persisted.push(key);
       } catch (err) {
         console.error("Failed to add rom to collection:", err);
       }
     }
-    // Optimistically update local state instead of refetching the whole list.
-    setCollections((prev) =>
-      prev.map((c) =>
-        c.id === collectionId
-          ? {
-              ...c,
-              roms: Array.from(new Set([...c.roms, ...bulkSelectedRoms])),
-              updatedAt: new Date().toISOString(),
-            }
-          : c
-      )
-    );
+    if (persisted.length > 0) {
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId
+            ? {
+                ...c,
+                roms: Array.from(new Set([...c.roms, ...persisted])),
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+    }
     setBulkSelectTarget(null);
     setBulkSelectedRoms(new Set());
   }, [bulkSelectTarget, bulkSelectedRoms]);
@@ -1123,12 +1162,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ? { type: "all" }
             : prev
         );
+        setViewingCollectionId((prev) => (prev === id ? null : prev));
       } catch (err) {
         console.error("Failed to delete collection:", err);
       }
     },
     []
   );
+
+  const openCollectionViewer = useCallback((collectionId: string) => {
+    setViewingCollectionId(collectionId);
+  }, []);
+
+  const closeCollectionViewer = useCallback(() => {
+    setViewingCollectionId(null);
+  }, []);
 
   const addToCollectionAction = useCallback(
     async (collectionId: string, systemId: string, fileName: string) => {
@@ -1258,6 +1306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissUpdateModal,
     isScanning,
     isAddingRoms,
+    addRomsProgress,
     disambiguationPending,
     addRomsFlow,
     addRomsFromPaths,
@@ -1286,6 +1335,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     exitBulkSelect,
     toggleBulkSelectRom,
     commitBulkSelect,
+    viewingCollectionId,
+    openCollectionViewer,
+    closeCollectionViewer,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

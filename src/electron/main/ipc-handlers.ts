@@ -8,12 +8,15 @@ import {
   readFileSync,
   writeFileSync,
   copyFileSync,
+  createReadStream,
+  createWriteStream,
   existsSync,
   mkdirSync,
   rmSync,
   readdirSync,
   statSync,
 } from "node:fs";
+import { pipeline } from "node:stream/promises";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
@@ -708,6 +711,179 @@ export function registerIpcHandlers(
     }
   );
 
+  // ── Per-game cover source picker ─────────────────────────────────────
+  // The user opens a card in the Galería and picks a source (Libretro,
+  // SteamGridDB, custom, reset). Libretro/SGDB run a single-rom fetch and
+  // overwrite the existing cover/thumbnail. SGDB additionally exposes a
+  // "list candidates" handler so the user can choose between several covers.
+
+  /** Delete the current cover + thumbnail for one ROM. Used as the first
+   *  step of every "switch source" action so the next downloader writes
+   *  to a clean slot (otherwise libretro/sgdb early-return on coverExists). */
+  function clearCoverFiles(systemId: string, romFileName: string): void {
+    const cache = new MetadataCache(getProjectRoot());
+    const coverPath = path.resolve(cache.getCoverPath(systemId, romFileName));
+    const thumbPath = path.resolve(
+      cache.getThumbnailPath(systemId, romFileName)
+    );
+    const projectRoot = getProjectRoot();
+    const metadataRoot = path.resolve(projectRoot, "config", "metadata");
+    for (const p of [coverPath, thumbPath]) {
+      if (!p.startsWith(metadataRoot + path.sep)) continue;
+      if (existsSync(p)) {
+        try {
+          rmSync(p, { force: true });
+        } catch {
+          /* ignore — best-effort cleanup */
+        }
+      }
+    }
+  }
+
+  ipcMain.handle(
+    "fetch-cover-from-libretro",
+    async (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown
+    ) => {
+      try {
+        const validatedSystem = SystemIdSchema.parse(systemId);
+        const validatedFile = FileNameSchema.parse(romFileName);
+
+        clearCoverFiles(validatedSystem, validatedFile);
+
+        const cache = new MetadataCache(getProjectRoot());
+        const systemMapPath = path.join(getDataPath(), "libretro-systems.json");
+        const thumbs = new LibretroThumbnails(cache, { systemMapPath });
+
+        const coverPath = await thumbs.fetchCover(validatedSystem, validatedFile);
+        if (!coverPath) {
+          return {
+            success: false,
+            error: "No se encontró ninguna portada en Libretro para este juego.",
+          };
+        }
+        return { success: true, coverPath };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "list-steamgriddb-candidates",
+    async (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown
+    ) => {
+      try {
+        const validatedSystem = SystemIdSchema.parse(systemId);
+        const validatedFile = FileNameSchema.parse(romFileName);
+
+        const configManager = new ConfigManager(getProjectRoot());
+        const appConfig = configManager.get();
+        const sgdbKey =
+          process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey;
+        if (!sgdbKey) {
+          return {
+            success: false,
+            error:
+              "Falta la API key de SteamGridDB. Configúrala en Ajustes → Portadas → Credenciales.",
+            candidates: [],
+          };
+        }
+
+        const cache = new MetadataCache(getProjectRoot());
+        const sgdb = new SteamGridDb(cache, { apiKey: sgdbKey });
+        const title = sgdb.extractTitle(validatedFile);
+        if (!title) {
+          return { success: false, error: "Título vacío.", candidates: [] };
+        }
+        const gameId = await sgdb.resolveGameId(title);
+        if (gameId === null) {
+          return {
+            success: true,
+            candidates: [],
+            error: `SteamGridDB no encontró ningún juego para "${title}".`,
+          };
+        }
+        const candidates = await sgdb.listGridCandidates(gameId);
+        // mark the variables as used to satisfy lint rules — the parser
+        // checks happen via Zod above, the `validatedSystem` value isn't
+        // needed for the lookup itself but the validation must not be skipped.
+        void validatedSystem;
+        return { success: true, candidates };
+      } catch (err) {
+        return { success: false, error: String(err), candidates: [] };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    "apply-steamgriddb-candidate",
+    async (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown,
+      fullUrl: unknown
+    ) => {
+      try {
+        const validatedSystem = SystemIdSchema.parse(systemId);
+        const validatedFile = FileNameSchema.parse(romFileName);
+        if (typeof fullUrl !== "string" || !/^https:\/\//.test(fullUrl)) {
+          return { success: false, error: "URL no válida." };
+        }
+        // Defense-in-depth: only accept URLs from the SteamGridDB CDN so a
+        // compromised renderer can't exfiltrate or exec arbitrary downloads
+        // through this handler.
+        const allowedHosts = ["cdn2.steamgriddb.com", "steamgriddb.com"];
+        let parsed: URL;
+        try {
+          parsed = new URL(fullUrl);
+        } catch {
+          return { success: false, error: "URL malformada." };
+        }
+        if (!allowedHosts.some((h) => parsed.hostname.endsWith(h))) {
+          logSecurityEvent({
+            type: "PATH_TRAVERSAL_BLOCKED",
+            channel: "apply-steamgriddb-candidate",
+            detail: `Blocked host: ${parsed.hostname}`,
+            severity: "warn",
+          });
+          return { success: false, error: "Host no permitido." };
+        }
+
+        clearCoverFiles(validatedSystem, validatedFile);
+
+        const configManager = new ConfigManager(getProjectRoot());
+        const appConfig = configManager.get();
+        const sgdbKey =
+          process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey;
+        if (!sgdbKey) {
+          return {
+            success: false,
+            error: "Falta la API key de SteamGridDB.",
+          };
+        }
+        const cache = new MetadataCache(getProjectRoot());
+        const sgdb = new SteamGridDb(cache, { apiKey: sgdbKey });
+        const coverPath = await sgdb.applyCoverFromUrl(
+          validatedSystem,
+          validatedFile,
+          fullUrl
+        );
+        if (!coverPath) {
+          return { success: false, error: "No se pudo descargar la portada." };
+        }
+        return { success: true, coverPath };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
   ipcMain.handle(
     "read-background-data-url",
     (_event: IpcMainInvokeEvent, imagePath: string) => {
@@ -1301,23 +1477,51 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "add-roms",
-    (_event: IpcMainInvokeEvent, entries: unknown) => {
+    async (event: IpcMainInvokeEvent, entries: unknown) => {
       const validated = AddRomsSchema.parse(entries);
       const configManager = new ConfigManager(getProjectRoot());
       const registry = new SystemsRegistry(getSystemsPath());
       const romsPath = configManager.getRomsPath();
-      const projectRoot = getProjectRoot();
+      const sender = event.sender;
+      const totalFiles = validated.length;
 
-      return validated.map((entry) => {
+      // Sends progress to the invoking renderer if it's still alive.
+      // Streamed copy emits 'data' on every chunk; we throttle to 10/s
+      // per file to avoid flooding IPC for large multi-GB ROMs.
+      const sendProgress = (payload: {
+        fileIndex: number;
+        totalFiles: number;
+        fileName: string;
+        copiedBytes: number;
+        totalBytes: number;
+        percent: number;
+      }) => {
+        if (sender.isDestroyed()) return;
+        sender.send("add-roms:progress", payload);
+      };
+
+      const results: Array<{
+        filePath: string;
+        fileName: string;
+        systemId: string;
+        success: boolean;
+        error?: string;
+      }> = [];
+
+      for (let i = 0; i < validated.length; i++) {
+        const entry = validated[i];
         const { filePath, systemId } = entry;
         const fileName = path.basename(filePath);
+
         try {
           const system = registry.getById(systemId);
           if (!system) {
-            return { filePath, fileName, systemId, success: false, error: `Unknown system: ${systemId}` };
+            results.push({ filePath, fileName, systemId, success: false, error: `Unknown system: ${systemId}` });
+            continue;
           }
           if (!existsSync(filePath)) {
-            return { filePath, fileName, systemId, success: false, error: "Source file not found" };
+            results.push({ filePath, fileName, systemId, success: false, error: "Source file not found" });
+            continue;
           }
 
           const destDir = path.join(romsPath, system.romFolder);
@@ -1332,16 +1536,61 @@ export function registerIpcHandlers(
               detail: `Blocked dest: ${destFile}`,
               severity: "warn",
             });
-            return { filePath, fileName, systemId, success: false, error: "Invalid destination path" };
+            results.push({ filePath, fileName, systemId, success: false, error: "Invalid destination path" });
+            continue;
           }
 
           mkdirSync(destDir, { recursive: true });
-          copyFileSync(filePath, resolvedDest);
-          return { filePath, fileName, systemId, success: true };
+
+          const totalBytes = statSync(filePath).size;
+          let copiedBytes = 0;
+          let lastEmitMs = 0;
+
+          sendProgress({
+            fileIndex: i,
+            totalFiles,
+            fileName,
+            copiedBytes: 0,
+            totalBytes,
+            percent: 0,
+          });
+
+          // 1 MiB chunks — keeps libuv thread-pool happy and IPC traffic
+          // tractable. pipeline() handles back-pressure and cleanup.
+          const readStream = createReadStream(filePath, {
+            highWaterMark: 1024 * 1024,
+          });
+          const writeStream = createWriteStream(resolvedDest);
+
+          readStream.on("data", (chunk) => {
+            copiedBytes += chunk.length;
+            const now = Date.now();
+            const finished = copiedBytes >= totalBytes;
+            if (finished || now - lastEmitMs >= 100) {
+              lastEmitMs = now;
+              sendProgress({
+                fileIndex: i,
+                totalFiles,
+                fileName,
+                copiedBytes,
+                totalBytes,
+                percent: totalBytes > 0 ? copiedBytes / totalBytes : 0,
+              });
+            }
+          });
+
+          await pipeline(readStream, writeStream);
+
+          results.push({ filePath, fileName, systemId, success: true });
         } catch (err) {
-          return { filePath, fileName, systemId, success: false, error: String(err) };
+          results.push({ filePath, fileName, systemId, success: false, error: String(err) });
         }
-      });
+      }
+
+      if (!sender.isDestroyed()) {
+        sender.send("add-roms:complete", { results });
+      }
+      return results;
     }
   );
 

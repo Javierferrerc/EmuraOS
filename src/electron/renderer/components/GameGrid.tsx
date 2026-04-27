@@ -3,11 +3,20 @@ import { useApp } from "../context/AppContext";
 import { GameCard } from "./GameCard";
 import { GameListRow } from "./GameListRow";
 import { GameCardCompact } from "./GameCardCompact";
+import { CollectionTile } from "./CollectionTile";
 import { resolveSystemMembers } from "../utils/systemGroups";
-import type { DiscoveredRom } from "../../../core/types";
+import type { Collection, DiscoveredRom } from "../../../core/types";
 import { evaluateSmartCollection } from "../../../core/smart-collection";
 import { fuzzyMatch, substringMatch } from "../utils/fuzzyMatch";
 import "./GameGrid.css";
+
+/** Heterogeneous grid item — collection tiles share index space with rom
+ *  cards so gamepad navigation steps through both seamlessly. The parent
+ *  uses the discriminator to dispatch the right activation handler
+ *  (launch a rom vs. open the collection viewer modal). */
+export type GridItem =
+  | { kind: "tile"; collection: Collection }
+  | { kind: "rom"; rom: DiscoveredRom };
 
 const MIN_CARD_WIDTH = 292;
 const MIN_CARD_WIDTH_COMPACT = 160;
@@ -60,6 +69,9 @@ interface GameGridProps {
   onColumnCountChange?: (count: number) => void;
   onItemCountChange?: (count: number) => void;
   onFilteredRomsChange?: (roms: DiscoveredRom[]) => void;
+  /** Heterogeneous list of grid items in the order they appear visually.
+   *  Used by the parent to dispatch activation actions per-item type. */
+  onGridItemsChange?: (items: GridItem[]) => void;
 }
 
 export function GameGrid({
@@ -68,6 +80,7 @@ export function GameGrid({
   onColumnCountChange,
   onItemCountChange,
   onFilteredRomsChange,
+  onGridItemsChange,
 }: GameGridProps) {
   const {
     scanResult,
@@ -312,16 +325,45 @@ export function GameGrid({
     getMetadataForRom,
   ]);
 
-  // Report filtered roms and item count to parent
+  const viewMode = config?.libraryViewMode ?? "grid";
+
+  // Collections appear as tiles ONLY in the "Todos" view, in normal grid
+  // mode, with no active search query. In every other context (system
+  // filter, favorites, recent, list/compact, searching) they would either
+  // make no sense or break the grid layout, so we skip them.
+  const collectionTiles = useMemo<Collection[]>(() => {
+    if (viewMode !== "grid") return [];
+    if (activeFilter.type !== "all") return [];
+    if (searchQuery.trim()) return [];
+    if (collections.length === 0) return [];
+    // Manual collections always show; smart collections show even when empty
+    // (they're a saved query the user wants to keep visible). The viewer
+    // modal handles the empty state gracefully.
+    return collections;
+  }, [collections, viewMode, activeFilter.type, searchQuery]);
+
+  const gridItems = useMemo<GridItem[]>(() => {
+    const items: GridItem[] = [];
+    for (const c of collectionTiles) items.push({ kind: "tile", collection: c });
+    for (const r of filteredRoms) items.push({ kind: "rom", rom: r });
+    return items;
+  }, [collectionTiles, filteredRoms]);
+
+  // Report filtered roms and grid items to parent. The parent uses
+  // gridItems to dispatch activation per item type; filteredRoms remains
+  // a pure rom list for things that don't apply to tiles (e.g. context-menu
+  // actions, "next rom" navigation).
   useEffect(() => {
     onFilteredRomsChange?.(filteredRoms);
   }, [filteredRoms, onFilteredRomsChange]);
 
   useEffect(() => {
-    onItemCountChange?.(filteredRoms.length);
-  }, [filteredRoms.length, onItemCountChange]);
+    onGridItemsChange?.(gridItems);
+  }, [gridItems, onGridItemsChange]);
 
-  const viewMode = config?.libraryViewMode ?? "grid";
+  useEffect(() => {
+    onItemCountChange?.(gridItems.length);
+  }, [gridItems.length, onItemCountChange]);
 
   // Callback ref: attaches a ResizeObserver whenever the grid div is
   // mounted (or re-mounted — the `key={filterKey}` below forces a remount
@@ -393,7 +435,7 @@ export function GameGrid({
     );
   }
 
-  if (filteredRoms.length === 0) {
+  if (filteredRoms.length === 0 && collectionTiles.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center text-muted">
         <div className="mb-3 text-5xl">
@@ -488,19 +530,38 @@ export function GameGrid({
       className="grid grid-cols-[repeat(auto-fill,minmax(292px,1fr))] pt-10"
       style={{ gap: `${GRID_GAP}px` }}
     >
-      {filteredRoms.map((rom, idx) => (
-        <div
-          key={rom.filePath}
-          className="game-grid-card"
-          style={{ animationDelay: `${Math.min(idx * 40, 400)}ms` }}
-        >
-          <GameCard
-            rom={rom}
-            gridIndex={idx}
-            isFocused={focusActive && focusedIndex === idx}
-          />
-        </div>
-      ))}
+      {gridItems.map((item, idx) => {
+        const focused = focusActive && focusedIndex === idx;
+        const animDelay = `${Math.min(idx * 40, 400)}ms`;
+        if (item.kind === "tile") {
+          return (
+            <div
+              key={`tile-${item.collection.id}`}
+              className="game-grid-card"
+              style={{ animationDelay: animDelay }}
+            >
+              <CollectionTile
+                collection={item.collection}
+                gridIndex={idx}
+                isFocused={focused}
+              />
+            </div>
+          );
+        }
+        return (
+          <div
+            key={item.rom.filePath}
+            className="game-grid-card"
+            style={{ animationDelay: animDelay }}
+          >
+            <GameCard
+              rom={item.rom}
+              gridIndex={idx}
+              isFocused={focused}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

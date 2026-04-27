@@ -13,8 +13,12 @@ import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { GameDetailModal } from "./components/GameDetailModal";
 import { QuickLaunch } from "./components/QuickLaunch";
 import { CollectionsModal } from "./components/CollectionsModal";
+import { CollectionViewerModal } from "./components/CollectionViewerModal";
 import { BulkSelectBar } from "./components/BulkSelectBar";
 import { GlobalProgress } from "./components/GlobalProgress";
+import { AddRomsProgressToast } from "./components/AddRomsProgressToast";
+import { CoverFetchProgressToast } from "./components/CoverFetchProgressToast";
+import { ScanProgressToast } from "./components/ScanProgressToast";
 import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
@@ -300,7 +304,7 @@ export default function App() {
       page = <SettingsPage />;
       viewKey = "settings";
     } else {
-      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
+      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen || !!app.viewingCollectionId} />;
       viewKey = "library";
     }
   } else {
@@ -318,7 +322,7 @@ export default function App() {
         viewKey = "game";
         break;
       default:
-        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen} />;
+        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen || !!app.viewingCollectionId} />;
         viewKey = "library";
     }
   }
@@ -378,8 +382,14 @@ export default function App() {
       <DisambiguationDialog />
       {app.quickLaunchOpen && <QuickLaunch />}
       {app.collectionsModalOpen && <CollectionsModal />}
+      <CollectionViewerModal />
       <BulkSelectBar />
       <GlobalProgress />
+      <div className="fixed bottom-4 right-4 z-[80] flex flex-col gap-2 items-end">
+        <ScanProgressToast />
+        <CoverFetchProgressToast />
+        <AddRomsProgressToast />
+      </div>
       {app.detailModalRom && (
         <GameDetailModal
           rom={app.detailModalRom}

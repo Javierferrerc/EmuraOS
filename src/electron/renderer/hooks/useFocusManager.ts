@@ -62,7 +62,10 @@ function createReducer(counts: FocusCounts) {
 
     switch (action.type) {
       case "MOVE_UP": {
-        if (!state.active) return { ...state, active: true };
+        // First arrow press both activates focus AND performs the move,
+        // so the user gets immediate visual feedback on the first input
+        // instead of having to press the same key twice.
+        if (!state.active) state = { ...state, active: true };
         if (state.region === "topbar") {
           return state;
         }
@@ -79,7 +82,10 @@ function createReducer(counts: FocusCounts) {
       }
 
       case "MOVE_DOWN": {
-        if (!state.active) return { ...state, active: true };
+        // First arrow press both activates focus AND performs the move,
+        // so the user gets immediate visual feedback on the first input
+        // instead of having to press the same key twice.
+        if (!state.active) state = { ...state, active: true };
         if (state.region === "topbar") {
           return { ...state, region: "slider" };
         }
@@ -92,7 +98,10 @@ function createReducer(counts: FocusCounts) {
       }
 
       case "MOVE_LEFT": {
-        if (!state.active) return { ...state, active: true };
+        // First arrow press both activates focus AND performs the move,
+        // so the user gets immediate visual feedback on the first input
+        // instead of having to press the same key twice.
+        if (!state.active) state = { ...state, active: true };
         if (state.region === "topbar") {
           const next = Math.max(0, state.topbarIndex - 1);
           return { ...state, topbarIndex: next };
@@ -111,7 +120,10 @@ function createReducer(counts: FocusCounts) {
       }
 
       case "MOVE_RIGHT": {
-        if (!state.active) return { ...state, active: true };
+        // First arrow press both activates focus AND performs the move,
+        // so the user gets immediate visual feedback on the first input
+        // instead of having to press the same key twice.
+        if (!state.active) state = { ...state, active: true };
         if (state.region === "topbar") {
           const next = Math.min(
             Math.max(0, topbarItemCount - 1),
@@ -141,7 +153,10 @@ function createReducer(counts: FocusCounts) {
       case "PREV_FILTER":
       case "NEXT_FILTER":
         // These are handled by Layout; just ensure active
-        if (!state.active) return { ...state, active: true };
+        // First arrow press both activates focus AND performs the move,
+        // so the user gets immediate visual feedback on the first input
+        // instead of having to press the same key twice.
+        if (!state.active) state = { ...state, active: true };
         return state;
 
       case "SET_REGION":

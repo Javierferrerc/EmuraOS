@@ -4,7 +4,15 @@ import { z } from "zod";
 
 export const SystemIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50);
 export const EmulatorIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50);
-export const CollectionIdSchema = z.string().uuid();
+// Collection ids are generated locally as `col_<timestamp>` (see
+// UserLibrary.createCollection). Older / hand-edited libraries may also
+// contain UUIDs. Both shapes are accepted, but we still reject anything
+// that could be path-traversal or contain whitespace / shell metacharacters.
+export const CollectionIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/);
 
 // Windows-safe filename: no path separators or reserved characters
 export const FileNameSchema = z

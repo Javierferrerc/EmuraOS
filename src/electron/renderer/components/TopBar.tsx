@@ -3,7 +3,12 @@ import { useApp, type ActiveFilter } from "../context/AppContext";
 import logoEmura from "../assets/logo-emura.svg";
 import "./TopBar.css";
 
-export const TOPBAR_ITEM_COUNT = 6;
+// 7 navigable items: Search, AddROM, Rescan, Favorites, ViewMode,
+// Collections, Settings. The previous "Profile" button is disabled so
+// Settings stays at index 6 (kept stable to avoid breaking saved state)
+// — TOPBAR_ITEM_COUNT must therefore be 7 so MOVE_RIGHT can reach index
+// 6 (Math.min caps at count-1).
+export const TOPBAR_ITEM_COUNT = 7;
 export const TOPBAR_INDEX_SEARCH = 0;
 export const TOPBAR_INDEX_ADD_ROM = 1;
 export const TOPBAR_INDEX_RESCAN = 2;
@@ -95,8 +100,12 @@ export function TopBar({
   }, [viewMode, updateConfig]);
 
   const isFocused = (idx: number) => focusActive && focusedIndex === idx;
+  // Dedicated class — see TopBar.css for the focus shadow. We avoid the
+  // generic `ring-2 ring-focus` Tailwind pair because Tailwind's `ring-2`
+  // and our themed `box-shadow: var(--shadow-element)` rules end up
+  // racing on cascade order, leaving the focus ring invisible.
   const focusRingClass = (idx: number) =>
-    isFocused(idx) ? "ring-2 ring-focus" : "";
+    isFocused(idx) ? "topbar-item-focused" : "";
 
   return (
     <header className="flex items-center gap-4 px-5 py-5">

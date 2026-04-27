@@ -1,0 +1,151 @@
+/*
+ * CollectionTile — folder-style card mixed into the main GameGrid. Sized to
+ * roughly match a single GameCard column so the grid layout stays uniform.
+ *
+ * Mosaic uses a 2×2 CSS grid with rounded inner cells, sitting inside a
+ * larger rounded "panel" with subtle border + shadow. Focus state mirrors
+ * the GameCard ring so gamepad navigation feels consistent.
+ */
+
+/* Fills the parent .game-grid-card wrapper (height: 308px) exactly. The
+ * mosaic occupies the whole tile and the meta row is an absolutely
+ * positioned overlay that fades in on hover/focus — same UX language as
+ * GameCard so collections feel native to the grid.
+ *
+ * Background and border come from .info-row-glass (theme.css) so the
+ * tile inherits the same glass aesthetic as the rest of the app and
+ * adapts to the active theme automatically. We only override layout,
+ * sizing, and hover/focus glow here. */
+.collection-tile {
+  display: block;
+  padding: 0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+  text-align: left;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.collection-tile:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-element-hover),
+    0 0 30px 1px var(--color-card-glow);
+}
+
+.collection-tile--focused,
+.collection-tile:focus-visible {
+  box-shadow:
+    var(--shadow-element-hover),
+    0 0 0 2px color-mix(in srgb, var(--color-accent) 45%, transparent),
+    0 0 30px 1px var(--color-card-glow);
+}
+
+/* Mosaic fills the tile but with internal padding + gap so the four
+ * thumbnails read as little game-cards nested inside the collection.
+ * The outer tile (308px wrapper) is the same size as a GameCard; only
+ * the inner artwork is shrunk by the padding so the user can tell at a
+ * glance that the tile groups multiple games. Background is transparent
+ * so the .info-row-glass on the outer tile shows through the gutter. */
+.collection-tile__mosaic {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+  background: transparent;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.collection-tile__cell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collection-tile__cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.collection-tile__cell-empty {
+  font-size: 22px;
+  opacity: 0.25;
+}
+
+/* Hover/focus overlay — mirrors .game-card__overlay so collections feel
+ * native to the grid. Hidden at rest, fades in on hover and stays solid
+ * while the tile is gamepad-focused. The gradient runs the same way as
+ * GameCard's so reading the title against the mosaic stays readable. */
+.collection-tile__overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 36px 12px 12px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.45) 50%,
+    transparent 100%
+  );
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.collection-tile:hover .collection-tile__overlay,
+.collection-tile__overlay.is-focused {
+  opacity: 1;
+}
+
+.collection-tile__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.collection-tile__icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.collection-tile__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.collection-tile__count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  flex-shrink: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
