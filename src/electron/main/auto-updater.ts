@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, shell } from "electron";
 import path from "node:path";
 import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
@@ -175,18 +175,69 @@ export class AutoUpdater {
   }
 
   /**
-   * Launch the downloaded Squirrel installer and quit the current app.
+   * Launch the downloaded NSIS installer and quit the current app.
+   *
+   * Why we don't use child_process.spawn here:
+   *
+   *   The NSIS installer (`EmuraOS.Setup.X.Y.Z.exe` produced by
+   *   electron-builder) requires admin elevation to write into Program
+   *   Files. When `spawn(installerPath, ...)` runs the .exe directly,
+   *   Node calls Windows' CreateProcess WITHOUT going through the shell,
+   *   so UAC is never triggered and Windows refuses with EACCES.
+   *
+   *   Additionally, files freshly written to %TEMP% by an unprivileged
+   *   process can be locked or scanned by Windows Defender at the moment
+   *   spawn fires, which also surfaces as EACCES.
+   *
+   * shell.openPath uses ShellExecuteEx under the hood, which:
+   *   - Triggers the UAC consent prompt for installers that declare
+   *     `requestedExecutionLevel = requireAdministrator` in their
+   *     manifest (NSIS does this).
+   *   - Respects file associations and AV trust prompts.
+   *   - Returns a friendly string error on failure instead of an
+   *     `EACCES` thrown from a child-process callback the renderer
+   *     can't easily surface.
+   *
+   * If shell.openPath fails for any reason we fall back to launching via
+   * `cmd.exe /c start ""` which goes through the same ShellExecute path
+   * but as a separate command-line invocation — this covers edge cases
+   * like locked-down Group Policies that disable shell.openPath but
+   * still allow start.
    */
-  installUpdate(): void {
+  async installUpdate(): Promise<void> {
     const installerPath = this.downloadedInstallerPath;
     if (!installerPath) {
       throw new Error("No downloaded installer available");
     }
-    spawn(installerPath, [], {
-      detached: true,
-      stdio: "ignore",
-    }).unref();
-    app.quit();
+
+    console.log("[auto-update] launching installer:", installerPath);
+
+    const error = await shell.openPath(installerPath);
+    if (error) {
+      console.warn(
+        "[auto-update] shell.openPath failed, falling back to cmd start:",
+        error
+      );
+      try {
+        // `cmd /c start "" "path\\to\\installer.exe"` — the empty quoted
+        // first argument is the optional title, required when the path
+        // itself is quoted so cmd doesn't treat it as the title.
+        spawn("cmd", ["/c", "start", "", installerPath], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        }).unref();
+      } catch (spawnErr) {
+        throw new Error(
+          `Failed to launch installer: ${error}; fallback also failed: ${String(spawnErr)}`
+        );
+      }
+    }
+
+    // Give the shell a moment to actually dispatch the installer process
+    // before we quit — quitting too fast can race the ShellExecute call
+    // and leave the user with no installer running.
+    setTimeout(() => app.quit(), 800);
   }
 
   /**
