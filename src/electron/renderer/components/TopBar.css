@@ -24,6 +24,20 @@
   mask-composite: exclude;
   pointer-events: none;
   transform: translateZ(0);
+  transition: background 0.18s ease-out;
+}
+
+/* Hover — bring the gradient border to life with the theme accent so it
+ * reads as an active surface. Themed via --color-accent / --color-focus-ring
+ * so every theme (oscuro, light, retro CRT, gameboy, synthwave…) lights
+ * up its own way. */
+.topbar-search:hover::before {
+  background: linear-gradient(
+    95deg,
+    var(--color-accent) 0%,
+    color-mix(in srgb, var(--color-focus-ring) 60%, transparent) 60%,
+    transparent 100%
+  ) border-box;
 }
 
 .topbar-icon-btn {
@@ -38,6 +52,35 @@
 
 .topbar-icon-btn:hover {
   box-shadow: var(--shadow-element-hover);
+}
+
+/* Gamepad focus state — bespoke class so we can stack on top of the
+ * glass shadow without fighting Tailwind's `ring-*` utilities.
+ *
+ * We use BOTH `outline` and a layered `box-shadow` because:
+ *   - `outline` paints over any sibling/parent `overflow: hidden` and
+ *     doesn't affect layout (no padding shift), so it's a guaranteed
+ *     fallback even if another rule wins the box-shadow race.
+ *   - The layered box-shadow stacks the focus ring + an outer glow on
+ *     top of the existing glass shadow so the button doesn't suddenly
+ *     look flat when focused.
+ *
+ * `!important` is used here intentionally: this is a hard accessibility
+ * rule (gamepad navigation indicator) that must never be overridden by
+ * Tailwind utilities or theme tweaks downstream. */
+.topbar-search.topbar-item-focused,
+.topbar-icon-btn.topbar-item-focused {
+  outline: 2px solid var(--color-focus-ring) !important;
+  outline-offset: 1px !important;
+  box-shadow:
+    0 0 0 2px var(--color-focus-ring),
+    0 0 0 5px color-mix(in srgb, var(--color-focus-ring) 30%, transparent),
+    var(--shadow-element-hover) !important;
+  transform: scale(1.04);
+  transition:
+    transform 0.15s ease-out,
+    box-shadow 0.15s ease-out,
+    outline-color 0.15s ease-out;
 }
 
 .topbar-icon-btn::before {
@@ -57,4 +100,17 @@
   mask-composite: exclude;
   pointer-events: none;
   transform: translateZ(0);
+  transition: background 0.18s ease-out;
+}
+
+/* Hover — the gradient border picks up the theme accent so it's clearly
+ * visible. Two-class selector keeps specificity under the focus rule
+ * below so hovering a focused item doesn't drop the focus ring. */
+.topbar-icon-btn:hover::before {
+  background: linear-gradient(
+    134deg,
+    var(--color-accent) 0%,
+    color-mix(in srgb, var(--color-focus-ring) 55%, transparent) 50%,
+    transparent 100%
+  ) border-box;
 }
