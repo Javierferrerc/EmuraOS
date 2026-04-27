@@ -785,7 +785,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!bulkSelectTarget) return;
     const collectionId = bulkSelectTarget.collectionId;
     // Sequence the IPC calls — addToCollection is cheap but kept serial so
-    // the on-disk file isn't being read+written concurrently.
+    // the on-disk file isn't being read+written concurrently. We track the
+    // keys that actually persisted so the optimistic state update doesn't
+    // lie about failures (used to silently swallow validation errors and
+    // show roms as added even though disk hadn't changed).
+    const persisted: string[] = [];
     for (const key of bulkSelectedRoms) {
       const idx = key.indexOf(":");
       if (idx <= 0) continue;
@@ -797,22 +801,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           systemId,
           fileName
         );
+        persisted.push(key);
       } catch (err) {
         console.error("Failed to add rom to collection:", err);
       }
     }
-    // Optimistically update local state instead of refetching the whole list.
-    setCollections((prev) =>
-      prev.map((c) =>
-        c.id === collectionId
-          ? {
-              ...c,
-              roms: Array.from(new Set([...c.roms, ...bulkSelectedRoms])),
-              updatedAt: new Date().toISOString(),
-            }
-          : c
-      )
-    );
+    if (persisted.length > 0) {
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId
+            ? {
+                ...c,
+                roms: Array.from(new Set([...c.roms, ...persisted])),
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+    }
     setBulkSelectTarget(null);
     setBulkSelectedRoms(new Set());
   }, [bulkSelectTarget, bulkSelectedRoms]);
