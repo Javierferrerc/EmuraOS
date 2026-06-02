@@ -45,7 +45,10 @@ import {
   readGcPadConfig,
   writeGcPadConfig,
 } from "../../core/dolphin-gcpad.js";
-import { backfillThumbnails } from "../../core/thumbnail-cache.js";
+import {
+  backfillThumbnails,
+  ensureThumbnail,
+} from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
@@ -585,7 +588,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     "set-custom-cover",
-    (
+    async (
       _event: IpcMainInvokeEvent,
       systemId: unknown,
       romFileName: unknown,
@@ -630,6 +633,13 @@ export function registerIpcHandlers(
 
         // Copy the image to the covers directory
         copyFileSync(validatedSource, resolvedDest);
+
+        // Regenerate the grid thumbnail so GameCard's read-thumbnail-data-url
+        // returns the new image. Without this the renderer keeps falling back
+        // to the (still-cached) full cover or to the placeholder. Awaited so
+        // the renderer sees a fully-staged result on success.
+        const thumbPath = cache.getThumbnailPath(validatedSystem, validatedFile);
+        await ensureThumbnail(resolvedDest, thumbPath);
 
         // Update metadata cache
         const existing = cache.getMetadata(validatedSystem, validatedFile);
@@ -694,6 +704,18 @@ export function registerIpcHandlers(
         // Delete the cover file if it exists
         if (existsSync(resolvedCover)) {
           rmSync(resolvedCover, { force: true });
+        }
+        // Also delete the thumbnail — leaving it would let read-thumbnail
+        // keep returning the old cached image after a reset, since the
+        // thumbnail handler prefers the thumb file over the (now missing)
+        // cover.
+        const thumbPath = cache.getThumbnailPath(validatedSystem, validatedFile);
+        const resolvedThumb = path.resolve(thumbPath);
+        if (
+          resolvedThumb.startsWith(metadataRoot + path.sep) &&
+          existsSync(resolvedThumb)
+        ) {
+          rmSync(resolvedThumb, { force: true });
         }
 
         // Clear coverPath and coverSource from metadata

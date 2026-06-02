@@ -9,13 +9,17 @@ const SYSTEM_DISPLAY_NAMES: Record<string, string> = {
   gbc: "Game Boy Color",
   gba: "Game Boy Advance",
   nds: "Nintendo DS",
+  "3ds": "Nintendo 3DS",
   gamecube: "GameCube",
   wii: "Wii",
+  wiiu: "Wii U",
+  switch: "Nintendo Switch",
   megadrive: "Mega Drive",
   mastersystem: "Master System",
   dreamcast: "Dreamcast",
   psx: "PlayStation",
   ps2: "PlayStation 2",
+  ps3: "PlayStation 3",
   psp: "PSP",
 };
 

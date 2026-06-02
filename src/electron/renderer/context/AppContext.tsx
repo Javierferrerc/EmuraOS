@@ -75,6 +75,13 @@ interface AppState {
   lastDetection: DetectionResult | null;
   lastLaunchResult: LaunchResult | null;
   metadataMap: Record<string, Record<string, GameMetadata>>;
+  /**
+   * Per-ROM cover invalidation counter (`${systemId}:${fileName}` → integer).
+   * Bumped by bumpCoverVersion whenever a cover is replaced/reset on disk.
+   * Consumers like GameCard add the value to their thumbnail-fetching effect
+   * deps so the dataURL re-loads even when the on-disk path is unchanged.
+   */
+  coverVersionByRom: Record<string, number>;
   isScraping: boolean;
   scrapeProgress: ScrapeProgress | null;
   lastScrapeResult: ScrapeResult | null;
@@ -146,6 +153,13 @@ interface AppActions {
     systemId: string,
     romFileName: string
   ) => GameMetadata | null;
+  /**
+   * Increment the cover-version counter for a ROM. Call after any IPC that
+   * rewrites that game's cover (custom upload, libretro/SGDB pick, reset)
+   * so subscribed components re-fetch the cover dataURL even if the
+   * on-disk file path didn't change.
+   */
+  bumpCoverVersion: (systemId: string, fileName: string) => void;
   toggleFavorite: (systemId: string, fileName: string) => Promise<void>;
   isFavorite: (systemId: string, fileName: string) => boolean;
   createCollection: (name: string) => Promise<void>;
@@ -243,6 +257,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<LaunchResult | null>(null);
   const [metadataMap, setMetadataMap] = useState<
     Record<string, Record<string, GameMetadata>>
+  >({});
+  const [coverVersionByRom, setCoverVersionByRom] = useState<
+    Record<string, number>
   >({});
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState<ScrapeProgress | null>(
@@ -1058,6 +1075,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [metadataMap]
   );
 
+  const bumpCoverVersion = useCallback(
+    (systemId: string, fileName: string) => {
+      const k = `${systemId}:${fileName}`;
+      setCoverVersionByRom((prev) => ({ ...prev, [k]: (prev[k] ?? 0) + 1 }));
+    },
+    []
+  );
+
   const toggleFavorite = useCallback(
     async (systemId: string, fileName: string) => {
       try {
@@ -1246,6 +1271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lastDetection,
     lastLaunchResult,
     metadataMap,
+    coverVersionByRom,
     isScraping,
     scrapeProgress,
     lastScrapeResult,
@@ -1281,6 +1307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startScraping,
     startFetchingCovers,
     getMetadataForRom,
+    bumpCoverVersion,
     toggleFavorite,
     isFavorite: isFavoriteCheck,
     createCollection: createCollectionAction,

@@ -151,6 +151,7 @@ export function PortadasView({
             /* silent */
           }
         }
+        ctx.bumpCoverVersion(rom.systemId, rom.fileName);
         flashBadge(key, "reset");
         return;
       }
@@ -166,6 +167,9 @@ export function PortadasView({
         }
       }
       await ctx.loadAllMetadata();
+      // Notify GameCard et al. that this rom's cover bytes changed even
+      // though the on-disk path didn't, so they re-fetch the thumbnail.
+      ctx.bumpCoverVersion(rom.systemId, rom.fileName);
       flashBadge(key, "saved");
     },
     [ctx, flashBadge]
@@ -198,6 +202,7 @@ export function PortadasView({
       } catch { /* silent */ }
     }
 
+    ctx.bumpCoverVersion(rom.systemId, rom.fileName);
     flashBadge(key, "reset");
   }, [ctx, flashBadge]);
 

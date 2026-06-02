@@ -81,8 +81,9 @@ interface Group {
 
 const SYSTEM_NAMES: Record<string, string> = {
   nes: "NES", snes: "SNES", n64: "N64", gb: "GB", gbc: "GBC", gba: "GBA",
-  nds: "NDS", gamecube: "GCN", wii: "Wii", megadrive: "MD",
-  mastersystem: "SMS", dreamcast: "DC", psx: "PSX", ps2: "PS2", psp: "PSP",
+  nds: "NDS", "3ds": "3DS", gamecube: "GCN", wii: "Wii", wiiu: "Wii U",
+  switch: "NSW", megadrive: "MD", mastersystem: "SMS", dreamcast: "DC",
+  psx: "PSX", ps2: "PS2", ps3: "PS3", psp: "PSP",
 };
 
 export function QuickLaunch() {

@@ -14,13 +14,17 @@ const SYSTEM_NAMES: Record<string, string> = {
   gbc: "GBC",
   gba: "GBA",
   nds: "NDS",
+  "3ds": "3DS",
   gamecube: "GameCube",
   wii: "Wii",
+  wiiu: "Wii U",
+  switch: "Switch",
   megadrive: "Mega Drive",
   mastersystem: "Master System",
   dreamcast: "Dreamcast",
   psx: "PSX",
   ps2: "PS2",
+  ps3: "PS3",
   psp: "PSP",
 };
 

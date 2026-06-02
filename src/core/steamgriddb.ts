@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import { MetadataCache } from "./metadata-cache.js";
 import { ensureThumbnail } from "./thumbnail-cache.js";
 import { logSecurityEvent } from "./security-logger.js";
-import { normalizeTitle } from "./title-utils.js";
+import { normalizeTitle, tokenize } from "./title-utils.js";
 import type {
   DiscoveredRom,
   CoverFetchProgress,
@@ -64,14 +64,21 @@ export class SteamGridDb {
 
   /**
    * Extract the game title from a ROM filename by stripping the extension
-   * and any region/version tags in parentheses.
+   * and any region/version tags. Strips both `(USA)` style parens AND
+   * `[!]` / `[U]` / `[Hack]` style brackets used by GoodTools and similar
+   * dump organizations — those would otherwise leak into the SGDB query
+   * and prevent any title from matching.
    */
   extractTitle(romFileName: string): string {
     const name = basename(
       romFileName,
       romFileName.substring(romFileName.lastIndexOf("."))
     );
-    return name.replace(/\s*\([^)]*\)\s*/g, "").trim();
+    return name
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(/\s*\[[^\]]*\]\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   private async rateLimit(): Promise<void> {
@@ -92,6 +99,11 @@ export class SteamGridDb {
    * 1. Exact case-insensitive match.
    * 2. Normalized exact match.
    * 3. Normalized prefix match.
+   * 4. Token-overlap fallback: every token of the input title appears as a
+   *    token in the candidate name. Catches subtitle/article shifts like
+   *    "Sonic 2" → "Sonic the Hedgehog 2" or "Zelda Link to the Past" →
+   *    "The Legend of Zelda: A Link to the Past" that the previous prefix
+   *    tier missed.
    * Within the chosen tier: prefer verified, then tiebreak by shortest name.
    */
   pickBestSearchResult(
@@ -102,6 +114,7 @@ export class SteamGridDb {
 
     const titleLower = title.toLowerCase();
     const titleNorm = normalizeTitle(title);
+    const titleTokens = tokenize(title);
 
     const tier1 = results.filter((r) => r.name.toLowerCase() === titleLower);
     const tier2 = results.filter(
@@ -110,8 +123,24 @@ export class SteamGridDb {
     const tier3 = results.filter((r) =>
       normalizeTitle(r.name).startsWith(titleNorm)
     );
+    // Token-overlap is only meaningful when we have at least one non-stopword
+    // token; otherwise a one-character title would match almost anything.
+    const tier4 =
+      titleTokens.length === 0
+        ? []
+        : results.filter((r) => {
+            const candidateTokens = new Set(tokenize(r.name));
+            return titleTokens.every((t) => candidateTokens.has(t));
+          });
 
-    const chosen = tier1.length > 0 ? tier1 : tier2.length > 0 ? tier2 : tier3;
+    const chosen =
+      tier1.length > 0
+        ? tier1
+        : tier2.length > 0
+          ? tier2
+          : tier3.length > 0
+            ? tier3
+            : tier4;
     if (chosen.length === 0) return null;
 
     const verified = chosen.filter((r) => r.verified === true);

@@ -42,13 +42,17 @@ export const SYSTEM_COLORS: Record<string, SystemColorEntry> = {
   gbc:          { color: "#b794f4", darkColor: "#553c9a", iconColor: "#d4b5ff" },
   gba:          { color: "#7f9cf5", darkColor: "#3c4f8a", iconColor: "#a5b8ff" },
   nds:          { color: "#a0aec0", darkColor: "#4a5568", iconColor: "#cbd5e1" },
+  "3ds":        { color: "#06b6d4", darkColor: "#155e75", iconColor: "#22d3ee" },
   gamecube:     { color: "#9f7aea", darkColor: "#553c9a", iconColor: "#c4a5ff" },
   wii:          { color: "#63b3ed", darkColor: "#2a5a8a", iconColor: "#8ed1ff" },
+  wiiu:         { color: "#3182ce", darkColor: "#1e3a8a", iconColor: "#60a5fa" },
+  switch:       { color: "#e11d48", darkColor: "#831843", iconColor: "#fb7185" },
   megadrive:    { color: "#4299e1", darkColor: "#1a3a5c", iconColor: "#6bb5ff" },
   mastersystem: { color: "#3182ce", darkColor: "#1a3a6e", iconColor: "#5a9eff" },
   dreamcast:    { color: "#63b3ed", darkColor: "#2a5a8a", iconColor: "#8ed1ff" },
   psx:          { color: "#a0aec0", darkColor: "#4a5568", iconColor: "#cbd5e1" },
   ps2:          { color: "#4299e1", darkColor: "#1a365d", iconColor: "#6bb5ff" },
+  ps3:          { color: "#64748b", darkColor: "#1f2937", iconColor: "#94a3b8" },
   psp:          { color: "#a0aec0", darkColor: "#4a5568", iconColor: "#cbd5e1" },
 };
 
@@ -61,13 +65,17 @@ const SYSTEM_COLORS_LIGHT: Record<string, SystemColorEntry> = {
   gbc:          { color: "#7c3aed", darkColor: "#4c1d95", iconColor: "#6d28d9" },
   gba:          { color: "#4f46e5", darkColor: "#312e81", iconColor: "#4338ca" },
   nds:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
+  "3ds":        { color: "#0891b2", darkColor: "#155e75", iconColor: "#0e7490" },
   gamecube:     { color: "#7e22ce", darkColor: "#4a1576", iconColor: "#6b21a8" },
   wii:          { color: "#0891b2", darkColor: "#0e4f63", iconColor: "#0e7490" },
+  wiiu:         { color: "#1d4ed8", darkColor: "#1e3a8a", iconColor: "#1e40af" },
+  switch:       { color: "#be123c", darkColor: "#881337", iconColor: "#9f1239" },
   megadrive:    { color: "#2563eb", darkColor: "#1e3a8a", iconColor: "#1d4ed8" },
   mastersystem: { color: "#1d4ed8", darkColor: "#1e3a7a", iconColor: "#1e40af" },
   dreamcast:    { color: "#0284c7", darkColor: "#0c4a6e", iconColor: "#0369a1" },
   psx:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
   ps2:          { color: "#1d4ed8", darkColor: "#1e3a5f", iconColor: "#1e40af" },
+  ps3:          { color: "#475569", darkColor: "#1f2937", iconColor: "#334155" },
   psp:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
 };
 
@@ -85,6 +93,7 @@ const SYSTEM_ICONS: Record<string, string> = {
   // Both PlayStation generations share the same PS logo.
   psx: playstationIcon,
   ps2: playstationIcon,
+  ps3: playstationIcon,
   psp: pspIcon,
   mastersystem: mastersystemIcon,
 };
@@ -97,13 +106,17 @@ const SHORT_LABELS: Record<string, string> = {
   gbc: "GBC",
   gba: "GBA",
   nds: "NDS",
+  "3ds": "3DS",
   gamecube: "GCN",
   wii: "WII",
+  wiiu: "WIIU",
+  switch: "NSW",
   megadrive: "GEN",
   mastersystem: "SMS",
   dreamcast: "DC",
   psx: "PSX",
   ps2: "PS2",
+  ps3: "PS3",
   psp: "PSP",
 };
 

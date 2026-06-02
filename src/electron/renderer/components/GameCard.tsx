@@ -16,13 +16,17 @@ const SYSTEM_COLORS: Record<string, [string, string]> = {
   gbc: ["#A78BFA", "#5B3A9E"],
   gba: ["#818CF8", "#3D4A9E"],
   nds: ["#94A3B8", "#475569"],
+  "3ds": ["#22D3EE", "#155E75"],
   gamecube: ["#A855F7", "#5B2D8E"],
   wii: ["#0BDDFF", "#107B8C"],
+  wiiu: ["#3B82F6", "#1E3A8A"],
+  switch: ["#F43F5E", "#881337"],
   megadrive: ["#3B82F6", "#1E4A8E"],
   mastersystem: ["#60A5FA", "#2563EB"],
   dreamcast: ["#7DD3FC", "#2980B0"],
   psx: ["#94A3B8", "#4A5568"],
   ps2: ["#3B82F6", "#1E3A5F"],
+  ps3: ["#94A3B8", "#1F2937"],
   psp: ["#6B7280", "#374151"],
 };
 
@@ -35,13 +39,17 @@ const SYSTEM_COLORS_LIGHT: Record<string, [string, string]> = {
   gbc: ["#7c3aed", "#4c1d95"],
   gba: ["#4f46e5", "#312e81"],
   nds: ["#64748b", "#334155"],
+  "3ds": ["#0891b2", "#155e75"],
   gamecube: ["#7e22ce", "#4a1576"],
   wii: ["#0891b2", "#0e4f63"],
+  wiiu: ["#1d4ed8", "#1e3a8a"],
+  switch: ["#be123c", "#881337"],
   megadrive: ["#2563eb", "#1e3a8a"],
   mastersystem: ["#1d4ed8", "#1e3a7a"],
   dreamcast: ["#0284c7", "#0c4a6e"],
   psx: ["#64748b", "#334155"],
   ps2: ["#1d4ed8", "#1e3a5f"],
+  ps3: ["#475569", "#1f2937"],
   psp: ["#4b5563", "#1f2937"],
 };
 
@@ -53,13 +61,17 @@ const SYSTEM_NAMES: Record<string, string> = {
   gbc: "GBC",
   gba: "GBA",
   nds: "NDS",
+  "3ds": "3DS",
   gamecube: "GameCube",
   wii: "Wii",
+  wiiu: "Wii U",
+  switch: "Switch",
   megadrive: "Mega Drive",
   mastersystem: "Master System",
   dreamcast: "Dreamcast",
   psx: "PSX",
   ps2: "PS2",
+  ps3: "PS3",
   psp: "PSP",
 };
 
@@ -83,6 +95,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     bulkSelectedRoms,
     toggleBulkSelectRom,
     romAddedDates,
+    coverVersionByRom,
   } = useApp();
   const isNew = isRomNew(romAddedDates, playHistory, rom.systemId, rom.fileName);
   const inBulkSelect = bulkSelectTarget !== null;
@@ -199,17 +212,36 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   const playCount = playHistory[key]?.playCount ?? 0;
   const totalPlayTime = playHistory[key]?.totalPlayTime ?? 0;
 
+  // The coverVersion dep is the cache-bust: when the user replaces or
+  // resets a cover, set-custom-cover/etc. don't change the on-disk path
+  // (it's always cache.getCoverPath(...)). React would otherwise see the
+  // same metadata.coverPath and skip re-reading the dataURL, so the grid
+  // would keep showing the previous image. AppContext.bumpCoverVersion
+  // increments this value after a cover-mutating IPC, forcing the effect
+  // to re-run and pick up the new bytes.
+  const coverVersion =
+    coverVersionByRom[`${rom.systemId}:${rom.fileName}`] ?? 0;
   useEffect(() => {
     if (metadata?.coverPath) {
-      // Grid cards use the 200px thumbnail — falls back to the full cover
+      // Grid cards use the 600px thumbnail — falls back to the full cover
       // inside the handler if the thumbnail hasn't been generated yet.
       window.electronAPI
         .readThumbnailDataUrl(rom.systemId, rom.fileName)
         .then((url) => {
-          if (url) setCoverDataUrl(url);
+          if (url) {
+            setCoverDataUrl(url);
+            setImgError(false);
+          } else {
+            // No thumb AND no cover (e.g. after reset) — drop the previous
+            // dataURL so the placeholder/skeleton paints instead of the
+            // stale image.
+            setCoverDataUrl(null);
+          }
         });
+    } else {
+      setCoverDataUrl(null);
     }
-  }, [metadata?.coverPath, rom.systemId, rom.fileName]);
+  }, [metadata?.coverPath, rom.systemId, rom.fileName, coverVersion]);
 
   const handleDoubleClick = useCallback(() => {
     if (inBulkSelect) {
