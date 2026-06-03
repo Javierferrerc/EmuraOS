@@ -377,6 +377,12 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
       alt={displayName}
       className="h-full w-full object-cover"
       onError={() => setImgError(true)}
+      // <img> elements are draggable by default; that intercepts
+      // mouse-down before any draggable wrapper around the card can
+      // start its own drag (used by the collection-reorder D&D in
+      // CollectionViewerModal). Saving the cover via image-drag has
+      // no user-facing value, so we just disable it everywhere.
+      draggable={false}
     />
   ) : coverPending ? (
     <div className="cover-skeleton h-full w-full" aria-hidden />
