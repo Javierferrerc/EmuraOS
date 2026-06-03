@@ -31,6 +31,12 @@ export const RomCollectionKeySchema = z
   .max(500)
   .regex(/^[a-z0-9-]+:[^<>:"/\\|?*\x00-\x1f]+$/);
 
+/** Free-text note body for the per-rom notes feature. Empty string
+ *  is allowed and means "delete the note" on the server. 2000 chars
+ *  matches NOTE_MAX_LENGTH in user-library.ts — keep the two in
+ *  sync if you change one. */
+export const NoteContentSchema = z.string().max(2000);
+
 export const UrlSchema = z
   .string()
   .url()

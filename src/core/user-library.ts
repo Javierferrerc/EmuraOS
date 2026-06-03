@@ -20,8 +20,15 @@ function emptyLibrary(): UserLibraryFile {
     collections: [],
     recentlyPlayed: [],
     playHistory: {},
+    notes: {},
   };
 }
+
+/** Hard cap on a single note's length. Matches the IPC validator and
+ *  guards against accidentally pasting a huge document into the
+ *  textarea. ~2 KB of text covers any reasonable "save in dungeon 3"
+ *  style memo with room to spare. */
+export const NOTE_MAX_LENGTH = 2000;
 
 export class UserLibrary {
   private projectRoot: string;
@@ -216,6 +223,35 @@ export class UserLibrary {
     this.save(data);
   }
 
+  // --- Notes (Phase 21) ---
+
+  getNotes(): Record<string, string> {
+    return this.load().notes ?? {};
+  }
+
+  getNote(systemId: string, fileName: string): string {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    return this.load().notes?.[key] ?? "";
+  }
+
+  /** Persist a note. Empty / whitespace-only string deletes the entry
+   *  to keep the on-disk map clean instead of accumulating empty
+   *  strings as users clear their notes. Truncates to NOTE_MAX_LENGTH
+   *  as a defence in depth — the IPC layer already rejects oversized
+   *  payloads, but a future caller might bypass it. */
+  setNote(systemId: string, fileName: string, text: string): void {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    const data = this.load();
+    if (!data.notes) data.notes = {};
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+      delete data.notes[key];
+    } else {
+      data.notes[key] = trimmed.slice(0, NOTE_MAX_LENGTH);
+    }
+    this.save(data);
+  }
+
   // --- Recently Played / Play History ---
 
   recordPlay(systemId: string, fileName: string): void {
@@ -244,14 +280,43 @@ export class UserLibrary {
   }
 
   addPlayTime(systemId: string, fileName: string, seconds: number): void {
+    if (seconds <= 0) return;
     const key = UserLibrary.makeKey(systemId, fileName);
     const data = this.load();
     const record = data.playHistory[key];
     if (record) {
       record.totalPlayTime = (record.totalPlayTime ?? 0) + seconds;
       data.playHistory[key] = record;
-      this.save(data);
     }
+    // Accumulate into the day bucket regardless of whether the
+    // per-game record exists. Cross-midnight sessions are attributed
+    // to the day the session ends (when addPlayTime fires); good
+    // enough for a visual heatmap.
+    if (!data.playSessions) data.playSessions = {};
+    const today = new Date().toISOString().slice(0, 10);
+    data.playSessions[today] = (data.playSessions[today] ?? 0) + seconds;
+    this.save(data);
+  }
+
+  /** Daily play-time buckets for the heatmap. Side-effect on first
+   *  call: when the playSessions field is absent, we seed it by
+   *  attributing each game's totalPlayTime to its lastPlayed day.
+   *  That's a rough estimate (multi-session games show as one big
+   *  bucket on their final play day), but it's the only signal we
+   *  have for history pre-dating the feature, and it beats showing
+   *  an empty grid. */
+  getPlaySessions(): Record<string, number> {
+    const data = this.load();
+    if (data.playSessions) return data.playSessions;
+    const seeded: Record<string, number> = {};
+    for (const record of Object.values(data.playHistory)) {
+      if (!record.lastPlayed || !record.totalPlayTime) continue;
+      const day = record.lastPlayed.slice(0, 10);
+      seeded[day] = (seeded[day] ?? 0) + record.totalPlayTime;
+    }
+    data.playSessions = seeded;
+    this.save(data);
+    return seeded;
   }
 
   getPlayRecord(

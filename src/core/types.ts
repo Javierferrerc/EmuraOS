@@ -338,6 +338,17 @@ export interface UserLibraryFile {
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
   romAddedDates?: Record<string, string>; // "systemId:fileName" → ISO date
+  /** Free-text notes keyed by `${systemId}:${fileName}`. Empty/missing
+   *  string is treated as "no note". Phase 21 — added incrementally,
+   *  no migration needed: existing files just omit the field and the
+   *  getter returns an empty map. */
+  notes?: Record<string, string>;
+  /** Daily play-time aggregate keyed by `YYYY-MM-DD` → seconds. Powers
+   *  the calendar heatmap. First read after this field lands one-shot
+   *  backfills from playHistory (one bucket per game on its lastPlayed
+   *  day), so users with prior history see something meaningful right
+   *  away. Subsequent addPlayTime calls accumulate live. */
+  playSessions?: Record<string, number>;
 }
 
 // ── Emulator Configuration System ──────────────────────────────────

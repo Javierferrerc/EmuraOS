@@ -115,6 +115,14 @@ interface AppState {
   disambiguationPending: DisambiguationState | null;
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
+  /** Free-text per-rom notes keyed by `${systemId}:${fileName}`. Loaded
+   *  once at mount; updated optimistically by setRomNote. */
+  notes: Record<string, string>;
+  /** Daily play-time aggregate (`YYYY-MM-DD` → seconds). Powers the
+   *  calendar heatmap in Settings → Biblioteca. Loaded once at mount;
+   *  not auto-refreshed mid-session — opening Settings closes the
+   *  game session anyway, so stale-by-one-session is the worst case. */
+  playSessions: Record<string, number>;
   detailModalRom: DiscoveredRom | null;
   quickLaunchOpen: boolean;
   /** True while the controller-mapping modal (MandosTab) is waiting for a
@@ -187,6 +195,12 @@ interface AppActions {
    *  new order. Used by the drag&drop reorder UI in CollectionViewerModal.
    *  Optimistically updates local state and the persisted store. */
   reorderCollection: (collectionId: string, keys: string[]) => Promise<void>;
+  /** Get the current note for a rom (empty string if none). Reads from
+   *  in-memory state, no IPC. */
+  getRomNote: (systemId: string, fileName: string) => string;
+  /** Persist a rom note. Empty string deletes. Updates local state
+   *  optimistically before the IPC round-trip. */
+  setRomNote: (systemId: string, fileName: string, content: string) => Promise<void>;
   toggleFullscreen: () => void;
   setGamepadConnected: (connected: boolean) => void;
   submitCemuKeys: (content: string) => Promise<void>;
@@ -316,6 +330,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     emulatorsPath: string;
   } | null>(null);
   const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [playSessions, setPlaySessions] = useState<Record<string, number>>({});
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
   const [quickLaunchOpen, setQuickLaunchOpen] = useState(false);
   const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
@@ -429,13 +445,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        const [cfg, sys, scan, metadata, userLib, addedDates] = await Promise.all([
+        const [cfg, sys, scan, metadata, userLib, addedDates, allNotes, sessions] = await Promise.all([
           window.electronAPI.getConfig(),
           window.electronAPI.getSystems(),
           window.electronAPI.scanRoms(),
           window.electronAPI.getAllMetadata(),
           window.electronAPI.getUserLibrary(),
           window.electronAPI.getRomAddedDates(),
+          window.electronAPI.getAllNotes(),
+          window.electronAPI.getPlaySessions(),
         ]);
         setConfig(cfg);
         setSystems(sys);
@@ -446,6 +464,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRecentlyPlayed(userLib.recentlyPlayed);
         setPlayHistory(userLib.playHistory);
         setRomAddedDates(addedDates);
+        setNotes(allNotes);
+        setPlaySessions(sessions);
 
         // Auto-fetch covers from Libretro if there are ROMs without covers
         const hasRomsWithoutCovers = scan.systems.some((system) =>
@@ -1293,6 +1313,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const getRomNote = useCallback(
+    (systemId: string, fileName: string) => {
+      return notes[`${systemId}:${fileName}`] ?? "";
+    },
+    [notes]
+  );
+
+  const setRomNote = useCallback(
+    async (systemId: string, fileName: string, content: string) => {
+      const key = `${systemId}:${fileName}`;
+      const trimmed = content.trim();
+      // Optimistic update — mirror the server's "empty deletes" rule so
+      // local state stays consistent with what reload will return.
+      setNotes((prev) => {
+        const next = { ...prev };
+        if (trimmed.length === 0) delete next[key];
+        else next[key] = trimmed;
+        return next;
+      });
+      try {
+        await window.electronAPI.setRomNote(systemId, fileName, content);
+      } catch (err) {
+        console.error("Failed to save note:", err);
+        // Restore from disk on failure so we don't show a phantom note
+        // the user can't actually save.
+        try {
+          const fresh = await window.electronAPI.getAllNotes();
+          setNotes(fresh);
+        } catch {
+          /* swallow */
+        }
+      }
+    },
+    []
+  );
+
   const value: AppContextType = {
     config,
     systems,
@@ -1383,6 +1439,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     copyRomPath,
     resolvedPaths,
     romAddedDates,
+    notes,
+    playSessions,
+    getRomNote,
+    setRomNote,
     detailModalRom,
     openGameDetail,
     closeGameDetail,

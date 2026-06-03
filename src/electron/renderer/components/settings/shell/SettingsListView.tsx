@@ -228,6 +228,16 @@ function renderRow(
       return <PathRow setting={row} ctx={ctx} focused={focused} />;
     case "color":
       return <ColorRow setting={row} ctx={ctx} focused={focused} />;
+    case "custom":
+      // The custom kind is an escape hatch — the schema's render()
+      // returns whatever React tree the section wants. We wrap it in
+      // a generic container so visually it still sits where a real
+      // row would, but otherwise stay out of its way.
+      return (
+        <div className="settings-row settings-row--custom px-4 py-2">
+          {row.render(ctx)}
+        </div>
+      );
     default: {
       // Exhaustiveness check
       const _never: never = row;

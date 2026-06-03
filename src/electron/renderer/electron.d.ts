@@ -125,6 +125,9 @@ export interface ElectronAPI {
   reorderCollection(collectionId: string, keys: string[]): Promise<void>;
   getRecentlyPlayed(limit?: number): Promise<string[]>;
   getRomAddedDates(): Promise<Record<string, string>>;
+  getAllNotes(): Promise<Record<string, string>>;
+  setRomNote(systemId: string, fileName: string, content: string): Promise<void>;
+  getPlaySessions(): Promise<Record<string, number>>;
 
   // Embedded overlay
   launchGameEmbedded(rom: DiscoveredRom, emulatorId?: string): Promise<EmbeddedLaunchResult>;

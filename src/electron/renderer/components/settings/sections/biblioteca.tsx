@@ -4,6 +4,7 @@ import type {
   InfoSetting,
 } from "../../../schemas/settings-schema-types";
 import { formatPlayTime } from "../../../utils/formatPlayTime";
+import { CalendarHeatmap } from "./biblioteca/CalendarHeatmap";
 
 /**
  * Helper: parse "systemId:fileName" key and return the rom display name
@@ -336,6 +337,21 @@ export const bibliotecaSection: SettingsSection = {
               label: "Colecciones",
               value: (ctx) => `${ctx.collections.length}`,
               tone: "default",
+            },
+          ],
+        },
+        {
+          id: "bib-stats-activity",
+          title: "Actividad (último año)",
+          rows: [
+            {
+              id: "bib.activity-heatmap",
+              kind: "custom",
+              label: "Heatmap",
+              nonFocusable: true,
+              render: (ctx) => (
+                <CalendarHeatmap sessions={ctx.playSessions} />
+              ),
             },
           ],
         },

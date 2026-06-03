@@ -75,6 +75,7 @@ import {
   SmartCollectionFilterSchema,
   CollectionNameSchema,
   RomCollectionKeySchema,
+  NoteContentSchema,
   RecentlyPlayedLimitSchema,
   ForceRefreshSchema,
   UrlSchema,
@@ -1152,6 +1153,32 @@ export function registerIpcHandlers(
     const lib = new UserLibrary(getProjectRoot());
     return lib.getRomAddedDates();
   });
+
+  ipcMain.handle("get-all-notes", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getNotes();
+  });
+
+  ipcMain.handle("get-play-sessions", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getPlaySessions();
+  });
+
+  ipcMain.handle(
+    "set-rom-note",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      fileName: unknown,
+      content: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
+      const validatedContent = NoteContentSchema.parse(content);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.setNote(validatedSystem, validatedFile, validatedContent);
+    }
+  );
 
   ipcMain.handle(
     "record-play-time",

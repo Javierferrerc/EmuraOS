@@ -1,4 +1,4 @@
-import type { ComponentType, MutableRefObject } from "react";
+import type { ComponentType, MutableRefObject, ReactNode } from "react";
 import type {
   AppConfig,
   Collection,
@@ -61,6 +61,9 @@ export interface SettingsContext {
    *  cover upload / reset so consuming cards re-fetch their thumbnail even
    *  when the on-disk path didn't change. */
   bumpCoverVersion: (systemId: string, fileName: string) => void;
+  /** Daily play-time aggregate (`YYYY-MM-DD` → seconds). Source for the
+   *  calendar heatmap in biblioteca → Estadísticas. */
+  playSessions: Record<string, number>;
 
   // --- Scan result ---
   scanResult: ScanResult | null;
@@ -200,6 +203,18 @@ export interface ColorSetting extends BaseSetting {
   defaultValue: string;
 }
 
+/**
+ * Escape hatch for rows that need to render arbitrary React content —
+ * e.g. the Phase 21 play-history heatmap. The schema stays declarative
+ * everywhere else; this kind is only for visualisations that don't fit
+ * the existing label/value widgets. Mark `nonFocusable: true` for
+ * purely visual content so the row is skipped by gamepad navigation.
+ */
+export interface CustomSetting extends BaseSetting {
+  kind: "custom";
+  render: (ctx: SettingsContext) => ReactNode;
+}
+
 export type Setting =
   | ToggleSetting
   | DropdownSetting
@@ -208,7 +223,8 @@ export type Setting =
   | InfoSetting
   | FolderSetting
   | PathSetting
-  | ColorSetting;
+  | ColorSetting
+  | CustomSetting;
 
 export interface SettingsGroup {
   id: string;

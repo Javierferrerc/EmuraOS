@@ -95,6 +95,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-recently-played", limit),
 
   getRomAddedDates: () => ipcRenderer.invoke("get-rom-added-dates"),
+  getAllNotes: () => ipcRenderer.invoke("get-all-notes"),
+  setRomNote: (systemId: string, fileName: string, content: string) =>
+    ipcRenderer.invoke("set-rom-note", systemId, fileName, content),
+  getPlaySessions: () => ipcRenderer.invoke("get-play-sessions"),
   recordPlayTime: (systemId: string, fileName: string, seconds: number) =>
     ipcRenderer.invoke("record-play-time", systemId, fileName, seconds),
 

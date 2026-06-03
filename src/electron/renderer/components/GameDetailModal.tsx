@@ -30,9 +30,18 @@ const SYSTEM_NAMES: Record<string, string> = {
   wiiu: "Wii U",
 };
 
+const NOTE_MAX_LENGTH = 2000;
+const NOTE_AUTOSAVE_MS = 500;
+
 export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
-  const { getMetadataForRom, playHistory, isFavorite, toggleFavorite } =
-    useApp();
+  const {
+    getMetadataForRom,
+    playHistory,
+    isFavorite,
+    toggleFavorite,
+    getRomNote,
+    setRomNote,
+  } = useApp();
 
   const metadata = getMetadataForRom(rom.systemId, rom.fileName);
   const key = `${rom.systemId}:${rom.fileName}`;
@@ -46,6 +55,44 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
     null
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Local-buffer the note while the user types so React isn't fighting
+  // the textarea's caret on every keystroke. The persisted store catches
+  // up via a debounced save below; an additional onBlur flush guards
+  // against the case where the modal closes before the debounce fires.
+  const [noteDraft, setNoteDraft] = useState(() =>
+    getRomNote(rom.systemId, rom.fileName)
+  );
+  const [noteSaved, setNoteSaved] = useState(false);
+
+  // Sync the draft when the modal re-targets a different rom without
+  // unmounting (defensive — current callers always remount, but cheap).
+  useEffect(() => {
+    setNoteDraft(getRomNote(rom.systemId, rom.fileName));
+    setNoteSaved(false);
+  }, [rom.systemId, rom.fileName, getRomNote]);
+
+  // Debounced autosave. Skip when the draft matches what's already
+  // persisted so a no-op edit (open + close) doesn't trigger an IPC.
+  useEffect(() => {
+    const persisted = getRomNote(rom.systemId, rom.fileName);
+    if (noteDraft === persisted) return;
+    const t = setTimeout(() => {
+      void setRomNote(rom.systemId, rom.fileName, noteDraft);
+      setNoteSaved(true);
+      // Wash the "Guardado" indicator after a moment so it doesn't
+      // linger as visual chrome.
+      setTimeout(() => setNoteSaved(false), 1500);
+    }, NOTE_AUTOSAVE_MS);
+    return () => clearTimeout(t);
+  }, [noteDraft, rom.systemId, rom.fileName, getRomNote, setRomNote]);
+
+  const handleNoteBlur = useCallback(() => {
+    const persisted = getRomNote(rom.systemId, rom.fileName);
+    if (noteDraft !== persisted) {
+      void setRomNote(rom.systemId, rom.fileName, noteDraft);
+    }
+  }, [noteDraft, rom.systemId, rom.fileName, getRomNote, setRomNote]);
 
   // Load cover
   useEffect(() => {
@@ -271,6 +318,38 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
               />
             </div>
           )}
+
+          {/* Notes — Phase 21 slice A. Free-text per-rom memo: save points,
+              cheats to remember, "terminado en X". Autosaves while typing
+              and on blur. */}
+          <div className={screenshotDataUrl ? "mt-4" : ""}>
+            <div className="mb-1 flex items-baseline justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Notas
+              </h3>
+              <span
+                className={`text-[10px] transition-opacity ${
+                  noteSaved ? "opacity-100" : "opacity-0"
+                } text-emerald-300`}
+              >
+                Guardado
+              </span>
+            </div>
+            <textarea
+              value={noteDraft}
+              onChange={(e) =>
+                setNoteDraft(e.target.value.slice(0, NOTE_MAX_LENGTH))
+              }
+              onBlur={handleNoteBlur}
+              placeholder="Notas personales para este juego (saves, trucos, recordatorios…)"
+              maxLength={NOTE_MAX_LENGTH}
+              rows={4}
+              className="w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed text-primary placeholder:text-[var(--color-text-muted)] outline-none focus:border-white/30"
+            />
+            <div className="mt-1 flex justify-end text-[10px] text-muted">
+              {noteDraft.length}/{NOTE_MAX_LENGTH}
+            </div>
+          </div>
         </div>
 
         {/* Close button */}
