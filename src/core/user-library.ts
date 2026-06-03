@@ -188,6 +188,34 @@ export class UserLibrary {
     }
   }
 
+  /**
+   * Replace the roms list of a manual collection with the same set of keys
+   * in a different order. The caller (the drag&drop reorder UI) computes
+   * the new permutation client-side and sends the whole list; this method
+   * verifies it's a true permutation of the current contents before
+   * persisting so a buggy renderer can't drop or inject roms via this path.
+   *
+   * No-op on smart collections (their order is computed) and on collections
+   * whose contents have drifted from the supplied key set.
+   */
+  reorderCollection(collectionId: string, keys: string[]): void {
+    const data = this.load();
+    const col = data.collections.find((c) => c.id === collectionId);
+    if (!col || col.kind === "smart") return;
+
+    if (keys.length !== col.roms.length) return;
+    const current = new Set(col.roms);
+    const incoming = new Set(keys);
+    if (incoming.size !== keys.length) return; // duplicate guard
+    for (const k of keys) {
+      if (!current.has(k)) return; // unknown key — refuse
+    }
+
+    col.roms = [...keys];
+    col.updatedAt = new Date().toISOString();
+    this.save(data);
+  }
+
   // --- Recently Played / Play History ---
 
   recordPlay(systemId: string, fileName: string): void {

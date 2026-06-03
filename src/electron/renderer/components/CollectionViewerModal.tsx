@@ -41,11 +41,18 @@ export function CollectionViewerModal() {
     getMetadataForRom,
     launchGame,
     isGameRunning,
+    reorderCollection,
   } = useApp();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [columnCount, setColumnCount] = useState(4);
   const openedAtRef = useRef(0);
+  // Index of the card the user is currently dragging (mouse only — gamepad
+  // and keyboard don't initiate drag here). `dragOverIndex` is the slot
+  // the dragged card is hovering above; we render an insertion bar there
+  // so the user sees where the drop will land before releasing.
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const collection = useMemo(
     () =>
@@ -173,6 +180,54 @@ export function CollectionViewerModal() {
 
   const isSmart = collection.kind === "smart";
   const totalLabel = roms.length === 1 ? "1 juego" : `${roms.length} juegos`;
+  // Smart collections compute their roms from a filter — reordering is
+  // meaningless and would just snap back on next render.
+  const canReorder = !isSmart && roms.length > 1;
+
+  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+    if (!canReorder) return;
+    setDraggingIndex(idx);
+    // Required for Firefox to dispatch dragstart at all. Value is ignored —
+    // the drag context lives entirely in component state.
+    e.dataTransfer.setData("text/plain", String(idx));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    if (!canReorder || draggingIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== idx) setDragOverIndex(idx);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (idx: number) => (e: React.DragEvent) => {
+    if (!canReorder || draggingIndex === null) {
+      setDragOverIndex(null);
+      return;
+    }
+    e.preventDefault();
+    const from = draggingIndex;
+    const to = idx;
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+    if (from === to) return;
+
+    const keys = roms.map((r) => `${r.systemId}:${r.fileName}`);
+    const [moved] = keys.splice(from, 1);
+    // After splicing `from` out, every index > from shifts left by one.
+    // Dropping onto the visual position `to` means "land where this slot
+    // is", so when dragging right (from < to) we offset `to` by -1 to
+    // hit the post-splice position; when dragging left, `to` is already
+    // correct since nothing before `from` moved.
+    const insertAt = from < to ? to - 1 : to;
+    keys.splice(insertAt, 0, moved);
+    reorderCollection(collection.id, keys);
+  };
 
   return createPortal(
     <div
@@ -237,19 +292,35 @@ export function CollectionViewerModal() {
               className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))]"
               style={{ gap: `${GRID_GAP}px` }}
             >
-              {roms.map((rom, idx) => (
-                <div
-                  key={`${rom.systemId}:${rom.fileName}`}
-                  className="game-grid-card"
-                  data-modal-grid-index={idx}
-                >
-                  <GameCard
-                    rom={rom}
-                    gridIndex={idx}
-                    isFocused={idx === focusedIndex}
-                  />
-                </div>
-              ))}
+              {roms.map((rom, idx) => {
+                const isDragging = draggingIndex === idx;
+                const isDragOver =
+                  dragOverIndex === idx && draggingIndex !== null && draggingIndex !== idx;
+                return (
+                  <div
+                    key={`${rom.systemId}:${rom.fileName}`}
+                    className={`game-grid-card ${
+                      isDragging ? "opacity-40" : ""
+                    } ${
+                      isDragOver
+                        ? "ring-2 ring-[var(--color-accent)] rounded-lg"
+                        : ""
+                    }`}
+                    data-modal-grid-index={idx}
+                    draggable={canReorder}
+                    onDragStart={handleDragStart(idx)}
+                    onDragOver={handleDragOver(idx)}
+                    onDrop={handleDrop(idx)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <GameCard
+                      rom={rom}
+                      gridIndex={idx}
+                      isFocused={idx === focusedIndex}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

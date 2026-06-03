@@ -57,6 +57,10 @@ export interface SettingsContext {
   playHistory: Record<string, PlayRecord>;
   collections: Collection[];
   metadataMap: Record<string, Record<string, GameMetadata>>;
+  /** See AppContext.bumpCoverVersion — used by PortadasView after a custom
+   *  cover upload / reset so consuming cards re-fetch their thumbnail even
+   *  when the on-disk path didn't change. */
+  bumpCoverVersion: (systemId: string, fileName: string) => void;
 
   // --- Scan result ---
   scanResult: ScanResult | null;

@@ -183,6 +183,10 @@ interface AppActions {
     systemId: string,
     fileName: string
   ) => Promise<void>;
+  /** Replace a manual collection's rom list with the same set of keys in a
+   *  new order. Used by the drag&drop reorder UI in CollectionViewerModal.
+   *  Optimistically updates local state and the persisted store. */
+  reorderCollection: (collectionId: string, keys: string[]) => Promise<void>;
   toggleFullscreen: () => void;
   setGamepadConnected: (connected: boolean) => void;
   submitCemuKeys: (content: string) => Promise<void>;
@@ -1257,6 +1261,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const reorderCollectionAction = useCallback(
+    async (collectionId: string, keys: string[]) => {
+      // Optimistic local update first so the grid stays in sync with the
+      // drag drop without waiting for the round trip. The server-side
+      // reorderCollection refuses non-permutations, so on the off chance
+      // the IPC fails we still re-sync from disk below.
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId && c.kind !== "smart"
+            ? {
+                ...c,
+                roms: [...keys],
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+      try {
+        await window.electronAPI.reorderCollection(collectionId, keys);
+      } catch (err) {
+        console.error("Failed to reorder collection:", err);
+        try {
+          const fresh = await window.electronAPI.getCollections();
+          setCollections(fresh);
+        } catch {
+          /* swallow — disk state will be the source of truth on next launch */
+        }
+      }
+    },
+    []
+  );
+
   const value: AppContextType = {
     config,
     systems,
@@ -1317,6 +1353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteCollection: deleteCollectionAction,
     addToCollection: addToCollectionAction,
     removeFromCollection: removeFromCollectionAction,
+    reorderCollection: reorderCollectionAction,
     toggleFullscreen,
     setGamepadConnected,
     submitCemuKeys,

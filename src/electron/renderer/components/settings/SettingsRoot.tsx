@@ -101,6 +101,7 @@ export function SettingsRoot() {
       playHistory: app.playHistory,
       collections: app.collections,
       metadataMap: app.metadataMap,
+      bumpCoverVersion: app.bumpCoverVersion,
 
       // Scan / scrape / cover fetch
       isLoading: app.isLoading,
@@ -156,6 +157,7 @@ export function SettingsRoot() {
       app.playHistory,
       app.collections,
       app.metadataMap,
+      app.bumpCoverVersion,
       app.isLoading,
       app.refreshScan,
       app.isScraping,

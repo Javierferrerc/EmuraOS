@@ -74,6 +74,7 @@ import {
   ExecutablePathSchema,
   SmartCollectionFilterSchema,
   CollectionNameSchema,
+  RomCollectionKeySchema,
   RecentlyPlayedLimitSchema,
   ForceRefreshSchema,
   UrlSchema,
@@ -1115,6 +1116,26 @@ export function registerIpcHandlers(
       const validatedFile = FileNameSchema.parse(fileName);
       const lib = new UserLibrary(getProjectRoot());
       lib.removeFromCollection(validatedColl, validatedSystem, validatedFile);
+    }
+  );
+
+  ipcMain.handle(
+    "reorder-collection",
+    (
+      _event: IpcMainInvokeEvent,
+      collectionId: unknown,
+      keys: unknown
+    ) => {
+      const validatedColl = CollectionIdSchema.parse(collectionId);
+      // Cap at 5000 entries — no manual collection should ever approach
+      // this, and it keeps a hostile renderer from forcing arbitrarily
+      // long parse loops.
+      const validatedKeys = z
+        .array(RomCollectionKeySchema)
+        .max(5000)
+        .parse(keys);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.reorderCollection(validatedColl, validatedKeys);
     }
   );
 

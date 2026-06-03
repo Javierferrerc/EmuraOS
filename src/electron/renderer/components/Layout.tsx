@@ -12,6 +12,7 @@ import {
 } from "./TopBar";
 import { SystemSlider } from "./SystemSlider";
 import { GameGrid } from "./GameGrid";
+import { ActiveFiltersBar } from "./ActiveFiltersBar";
 import { BottomBar } from "./BottomBar";
 import { SettingsPage } from "./SettingsPage";
 import {
@@ -606,6 +607,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
         onSelect={handleSliderSelect}
         magnificationEnabled={config?.systemSliderMagnificationEnabled ?? true}
       />
+      <ActiveFiltersBar />
       <main className="game-grid-scroll flex-1 overflow-y-auto px-6 pb-4">
         <GameGrid
           focusedIndex={

@@ -89,6 +89,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("add-to-collection", collectionId, systemId, fileName),
   removeFromCollection: (collectionId: string, systemId: string, fileName: string) =>
     ipcRenderer.invoke("remove-from-collection", collectionId, systemId, fileName),
+  reorderCollection: (collectionId: string, keys: string[]) =>
+    ipcRenderer.invoke("reorder-collection", collectionId, keys),
   getRecentlyPlayed: (limit?: number) =>
     ipcRenderer.invoke("get-recently-played", limit),
 

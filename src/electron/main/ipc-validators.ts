@@ -21,6 +21,16 @@ export const FileNameSchema = z
   .max(260)
   .regex(/^[^<>:"/\\|?*\x00-\x1f]+$/);
 
+/** Composite "<systemId>:<fileName>" key as stored inside collections.
+ *  Validated structurally — leaves field-level checks to the splitter on
+ *  the server. The 500-char ceiling guards against pathological payloads
+ *  for the reorder-collection IPC, which accepts an array of these. */
+export const RomCollectionKeySchema = z
+  .string()
+  .min(3)
+  .max(500)
+  .regex(/^[a-z0-9-]+:[^<>:"/\\|?*\x00-\x1f]+$/);
+
 export const UrlSchema = z
   .string()
   .url()

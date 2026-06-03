@@ -122,6 +122,7 @@ export interface ElectronAPI {
     systemId: string,
     fileName: string
   ): Promise<void>;
+  reorderCollection(collectionId: string, keys: string[]): Promise<void>;
   getRecentlyPlayed(limit?: number): Promise<string[]>;
   getRomAddedDates(): Promise<Record<string, string>>;
 
