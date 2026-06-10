@@ -46,6 +46,22 @@ import {
   writeGcPadConfig,
 } from "../../core/dolphin-gcpad.js";
 import {
+  detectGameId,
+  readDolphinGameConfig,
+  resolveDolphinUserDir,
+  writeDolphinGameConfig,
+} from "../../core/dolphin-game-config.js";
+import {
+  coreDisplayName,
+  resolveRetroArchConfigDir,
+  writeRetroArchGameConfig,
+} from "../../core/retroarch-game-config.js";
+import {
+  runPostLaunchScript,
+  runPreLaunchScript,
+  type LaunchScriptEnv,
+} from "../../core/launch-scripts.js";
+import {
   backfillThumbnails,
   ensureThumbnail,
 } from "../../core/thumbnail-cache.js";
@@ -82,6 +98,9 @@ import {
   AddRomsSchema,
   OptionalEmulatorIdSchema,
   FolderPathSchema,
+  NullableEmulatorIdSchema,
+  DolphinGameConfigPatchSchema,
+  RetroArchGameConfigPatchSchema,
 } from "./ipc-validators.js";
 
 function getDataPath(): string {
@@ -167,6 +186,130 @@ export function registerIpcHandlers(
   // Play-time tracking for embedded sessions
   let sessionStartedAt: number | null = null;
   let sessionRom: { systemId: string; fileName: string } | null = null;
+  // Phase 22 — remember the active emulator id and rom title so the
+  // post-launch script hook (fired from onSessionEnded) has the same env
+  // bundle the pre-launch hook received. We also stash the file path so
+  // a detached emulator that never emits a session-end can be ignored
+  // cleanly without holding stale state.
+  let sessionLaunchContext: {
+    emulatorId: string;
+    title: string;
+    romPath: string;
+  } | null = null;
+
+  /**
+   * Phase 22 — common pre-spawn work shared by `launch-game` and
+   * `launch-game-embedded`:
+   *   1. Look up any per-game emulator override stored in user-library.json
+   *      and let it win over both the system default and any explicit
+   *      `emulatorId` the caller passed (UI clicks already encode the
+   *      override; CLI / shortcuts also benefit).
+   *   2. If the resolved emulator is Dolphin and the game has a detectable
+   *      6-char GameID, write the curated per-game `<GameID>.ini` so the
+   *      Widescreen Hack / overclock / etc. toggles take effect on launch
+   *      without touching Dolphin's global config.
+   *   3. Run the pre-launch wrapper script (if configured) and await it
+   *      with a 5s timeout so a hanging hook can't trap the user.
+   *
+   * Returns the effective `emulatorId` so the caller hands it to the
+   * launcher and stashes it in `sessionLaunchContext` for the symmetric
+   * post-launch hook.
+   */
+  async function resolveLaunchOverrides(
+    rom: DiscoveredRom,
+    callerEmulatorId: string | undefined,
+    mapper: EmulatorMapper,
+    emulatorsPath: string
+  ): Promise<string | undefined> {
+    const lib = new UserLibrary(getProjectRoot());
+    const override = lib.getGameOverride(rom.systemId, rom.fileName);
+    const effective = override?.emulatorId ?? callerEmulatorId;
+
+    if (override?.dolphin) {
+      const resolved = effective
+        ? mapper.resolveById(effective, rom.systemId, emulatorsPath)
+        : mapper.resolve(rom.systemId, emulatorsPath);
+      if (resolved && resolved.definition.id === "dolphin") {
+        try {
+          const userDir = resolveDolphinUserDir(
+            resolved.executablePath,
+            app.getPath("appData"),
+            app.getPath("documents")
+          );
+          const gameId = detectGameId(rom.filePath);
+          if (userDir && gameId) {
+            writeDolphinGameConfig(userDir, gameId, override.dolphin);
+          } else if (userDir && !gameId) {
+            console.warn(
+              "[dolphin-config] could not detect GameID for",
+              rom.fileName,
+              "— skipping per-game config write"
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "[dolphin-config] failed to apply per-game override:",
+            err
+          );
+        }
+      }
+    }
+
+    if (override?.retroarch) {
+      const resolved = effective
+        ? mapper.resolveById(effective, rom.systemId, emulatorsPath)
+        : mapper.resolve(rom.systemId, emulatorsPath);
+      if (resolved && resolved.definition.id === "retroarch") {
+        try {
+          const coreArg =
+            resolved.definition.args[rom.systemId] ??
+            resolved.definition.defaultArgs;
+          const core = coreArg ? coreDisplayName(coreArg) : null;
+          const configDir = resolveRetroArchConfigDir(
+            resolved.executablePath,
+            app.getPath("appData")
+          );
+          if (configDir && core) {
+            writeRetroArchGameConfig(
+              configDir,
+              core,
+              rom.filePath,
+              override.retroarch
+            );
+          } else if (!core) {
+            console.warn(
+              "[retroarch-config] no known core display name for",
+              rom.systemId,
+              "— skipping per-game override write"
+            );
+          }
+        } catch (err) {
+          console.warn(
+            "[retroarch-config] failed to apply per-game override:",
+            err
+          );
+        }
+      }
+    }
+
+    const cm = new ConfigManager(getProjectRoot());
+    const preScript = cm.get().preLaunchScript;
+    if (preScript) {
+      const env: LaunchScriptEnv = {
+        systemId: rom.systemId,
+        romPath: rom.filePath,
+        title: rom.fileName,
+        emulatorId: effective ?? "",
+      };
+      try {
+        await runPreLaunchScript(preScript, env);
+      } catch (err) {
+        console.warn("[launch-scripts] pre-launch hook failed:", err);
+      }
+    }
+
+    return effective;
+  }
 
   function getOrCreateOverlay(): EmulatorOverlay | null {
     const win = getMainWindow();
@@ -184,7 +327,7 @@ export function registerIpcHandlers(
             sessionStartedAt,
           });
         },
-        onSessionEnded: () => {
+        onSessionEnded: (exitCode) => {
           // Persist accumulated play time
           if (sessionStartedAt && sessionRom) {
             const durationSeconds = Math.round(
@@ -203,8 +346,33 @@ export function registerIpcHandlers(
               }
             }
           }
+
+          // Phase 22 — fire post-launch wrapper script. Fire-and-forget; its
+          // exit status never blocks the UI returning to the library.
+          // `exitCode` is the emulator's real exit code (null when we tore
+          // the session down ourselves) and reaches the script as
+          // EMURA_EXIT_CODE.
+          if (sessionRom && sessionLaunchContext) {
+            try {
+              const cm = new ConfigManager(getProjectRoot());
+              const scriptPath = cm.get().postLaunchScript;
+              if (scriptPath) {
+                runPostLaunchScript(scriptPath, {
+                  systemId: sessionRom.systemId,
+                  romPath: sessionLaunchContext.romPath,
+                  title: sessionLaunchContext.title,
+                  emulatorId: sessionLaunchContext.emulatorId,
+                  exitCode,
+                });
+              }
+            } catch (err) {
+              console.warn("[launch-scripts] post-launch hook failed:", err);
+            }
+          }
+
           sessionStartedAt = null;
           sessionRom = null;
+          sessionLaunchContext = null;
 
           if (win.isFullScreen()) win.setFullScreen(false);
           win.webContents.send("game-session-ended");
@@ -289,31 +457,42 @@ export function registerIpcHandlers(
     }));
   });
 
-  ipcMain.handle("launch-game", (_event, rom: unknown, emulatorId?: unknown) => {
-    const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
-    const validatedEmuId = OptionalEmulatorIdSchema.parse(emulatorId);
-    const configManager = new ConfigManager(getProjectRoot());
-    const mapper = new EmulatorMapper(getEmulatorsPath());
-    const launcher = new GameLauncher(mapper);
-    const emulatorsPath = configManager.getEmulatorsPath();
-    const resolved = validatedEmuId
-      ? mapper.resolveById(validatedEmuId, validated.systemId, emulatorsPath)
-      : mapper.resolve(validated.systemId, emulatorsPath);
-    if (resolved) {
-      runPerEmulatorSetup(
-        resolved.definition.id,
-        validated.systemId,
-        resolved.executablePath,
-        configManager.getRomsPath()
+  ipcMain.handle(
+    "launch-game",
+    async (_event, rom: unknown, emulatorId?: unknown) => {
+      const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
+      const validatedEmuId = OptionalEmulatorIdSchema.parse(emulatorId);
+      const configManager = new ConfigManager(getProjectRoot());
+      const mapper = new EmulatorMapper(getEmulatorsPath());
+      const launcher = new GameLauncher(mapper);
+      const emulatorsPath = configManager.getEmulatorsPath();
+
+      const effectiveEmuId = await resolveLaunchOverrides(
+        validated,
+        validatedEmuId,
+        mapper,
+        emulatorsPath
       );
+
+      const resolved = effectiveEmuId
+        ? mapper.resolveById(effectiveEmuId, validated.systemId, emulatorsPath)
+        : mapper.resolve(validated.systemId, emulatorsPath);
+      if (resolved) {
+        runPerEmulatorSetup(
+          resolved.definition.id,
+          validated.systemId,
+          resolved.executablePath,
+          configManager.getRomsPath()
+        );
+      }
+      const result = launcher.launch(validated, emulatorsPath, effectiveEmuId);
+      if (result.success) {
+        const lib = new UserLibrary(getProjectRoot());
+        lib.recordPlay(validated.systemId, validated.fileName);
+      }
+      return result;
     }
-    const result = launcher.launch(validated, emulatorsPath, validatedEmuId);
-    if (result.success) {
-      const lib = new UserLibrary(getProjectRoot());
-      lib.recordPlay(validated.systemId, validated.fileName);
-    }
-    return result;
-  });
+  );
 
   ipcMain.handle("detect-emulators", async (event) => {
     const configManager = new ConfigManager(getProjectRoot());
@@ -1153,6 +1332,100 @@ export function registerIpcHandlers(
     return lib.getRomAddedDates();
   });
 
+  // ── Phase 22 — Per-game overrides ────────────────────────────────
+
+  ipcMain.handle("get-game-overrides", () => {
+    const lib = new UserLibrary(getProjectRoot());
+    return lib.getGameOverrides();
+  });
+
+  ipcMain.handle(
+    "set-emulator-override",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      fileName: unknown,
+      emulatorId: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
+      const validatedEmu = NullableEmulatorIdSchema.parse(emulatorId);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.setEmulatorOverride(validatedSystem, validatedFile, validatedEmu);
+    }
+  );
+
+  ipcMain.handle(
+    "set-dolphin-game-config",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      fileName: unknown,
+      patch: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
+      // null clears the whole Dolphin block; a partial object merges.
+      const validatedPatch =
+        patch === null ? null : DolphinGameConfigPatchSchema.parse(patch);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.setDolphinOverride(validatedSystem, validatedFile, validatedPatch);
+    }
+  );
+
+  // Used by GameDetailModal to decide whether to render the Dolphin
+  // override section at all. Returns null when the ROM's first 6 bytes
+  // aren't a valid GameID (compressed RVZ/CISO etc.) so the UI can show
+  // a "GameID not detectable" hint instead of broken controls.
+  ipcMain.handle(
+    "detect-dolphin-game-id",
+    (_event: IpcMainInvokeEvent, romPath: unknown) => {
+      const validatedPath = z.string().min(1).max(500).parse(romPath);
+      return detectGameId(validatedPath);
+    }
+  );
+
+  ipcMain.handle(
+    "set-retroarch-game-config",
+    (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      fileName: unknown,
+      patch: unknown
+    ) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const validatedFile = FileNameSchema.parse(fileName);
+      // null clears the whole RetroArch block; a partial object merges.
+      const validatedPatch =
+        patch === null ? null : RetroArchGameConfigPatchSchema.parse(patch);
+      const lib = new UserLibrary(getProjectRoot());
+      lib.setRetroArchOverride(validatedSystem, validatedFile, validatedPatch);
+    }
+  );
+
+  // Used by GameDetailModal to decide whether to render the RetroArch
+  // override section. Returns the core's RetroArch display name (the
+  // override folder name) for the system, or null when RetroArch isn't the
+  // resolved emulator or the core isn't one we have a verified name for.
+  ipcMain.handle(
+    "resolve-retroarch-core",
+    (_event: IpcMainInvokeEvent, systemId: unknown) => {
+      const validatedSystem = SystemIdSchema.parse(systemId);
+      const configManager = new ConfigManager(getProjectRoot());
+      const mapper = new EmulatorMapper(getEmulatorsPath());
+      const resolved = mapper.resolveById(
+        "retroarch",
+        validatedSystem,
+        configManager.getEmulatorsPath()
+      );
+      if (!resolved) return null;
+      const coreArg =
+        resolved.definition.args[validatedSystem] ??
+        resolved.definition.defaultArgs;
+      return coreArg ? coreDisplayName(coreArg) : null;
+    }
+  );
+
   ipcMain.handle(
     "record-play-time",
     (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown, seconds: unknown) => {
@@ -1189,8 +1462,16 @@ export function registerIpcHandlers(
       const mapper = new EmulatorMapper(getEmulatorsPath());
       const launcher = new GameLauncher(mapper);
       const emulatorsPath = configManager.getEmulatorsPath();
-      const resolved = validatedEmuId
-        ? mapper.resolveById(validatedEmuId, validated.systemId, emulatorsPath)
+
+      const effectiveEmuId = await resolveLaunchOverrides(
+        validated,
+        validatedEmuId,
+        mapper,
+        emulatorsPath
+      );
+
+      const resolved = effectiveEmuId
+        ? mapper.resolveById(effectiveEmuId, validated.systemId, emulatorsPath)
         : mapper.resolve(validated.systemId, emulatorsPath);
 
       if (!resolved) {
@@ -1202,6 +1483,16 @@ export function registerIpcHandlers(
           error: `No emulator found for system "${validated.systemId}"`,
         };
       }
+
+      // Phase 22 — record launch context so the symmetric post-launch script
+      // hook in onSessionEnded receives the same env bundle the pre-launch
+      // hook saw. Detached/fallback launches (no embedded overlay) don't
+      // emit session-end events, so post-launch only fires for embedded.
+      sessionLaunchContext = {
+        emulatorId: resolved.definition.id,
+        title: validated.fileName,
+        romPath: validated.filePath,
+      };
 
       runPerEmulatorSetup(
         resolved.definition.id,

@@ -66,7 +66,10 @@ import { setGameActive, claimF10Fire } from "./game-state.js";
 
 interface OverlayCallbacks {
   onSessionStarted: (event: GameSessionEvent) => void;
-  onSessionEnded: () => void;
+  /** `exitCode` is the emulator process's exit code when the session ended
+   *  because the process itself exited; null when we tore the session down
+   *  ourselves (stopGame / dead-window detection) and never saw a code. */
+  onSessionEnded: (exitCode: number | null) => void;
 }
 
 interface GameAreaBounds {
@@ -270,6 +273,7 @@ export class EmulatorOverlay {
       this.process = child;
       this.currentRom = rom;
       this.currentEmulatorId = resolved.definition.id;
+      this.lastExitCode = null;
 
       child.stderr?.on("data", (data: Buffer) => {
         console.warn("[overlay] emulator stderr:", data.toString());
@@ -277,6 +281,7 @@ export class EmulatorOverlay {
 
       child.on("exit", (code) => {
         console.log("[overlay] emulator exited with code:", code);
+        this.lastExitCode = code;
         this.cleanup();
       });
 
@@ -1350,6 +1355,10 @@ export class EmulatorOverlay {
   }
 
   private cleanedUp = false;
+  /** Exit code from the most recent emulator process, captured in the
+   *  child `exit` handler and forwarded to `onSessionEnded`. Null until a
+   *  process exits, and for sessions we tear down ourselves. */
+  private lastExitCode: number | null = null;
 
   private cleanup(): void {
     // Idempotent: cleanup can be invoked from multiple paths (stopGame,
@@ -1407,6 +1416,6 @@ export class EmulatorOverlay {
     this.prevF11Down = false;
 
     setGameActive(false);
-    this.callbacks.onSessionEnded();
+    this.callbacks.onSessionEnded(this.lastExitCode);
   }
 }

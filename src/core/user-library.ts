@@ -7,6 +7,9 @@ import type {
   PlayRecord,
   RomReference,
   SmartCollectionFilter,
+  GameOverride,
+  DolphinGameConfig,
+  RetroArchGameConfig,
 } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -293,6 +296,131 @@ export class UserLibrary {
 
   getRomAddedDates(): Record<string, string> {
     return this.load().romAddedDates ?? {};
+  }
+
+  // --- Per-Game Overrides (Phase 22) ---
+
+  getGameOverrides(): Record<string, GameOverride> {
+    return this.load().gameOverrides ?? {};
+  }
+
+  getGameOverride(systemId: string, fileName: string): GameOverride | null {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    return this.load().gameOverrides?.[key] ?? null;
+  }
+
+  /** Replace or extend the override entry for a game. Passing an empty
+   *  object after a clear (no emulator + no dolphin keys) prunes the entry
+   *  so the on-disk map doesn't accumulate empty objects as users toggle
+   *  features on and off. */
+  private writeOverride(
+    systemId: string,
+    fileName: string,
+    mutate: (current: GameOverride) => GameOverride
+  ): void {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    const data = this.load();
+    if (!data.gameOverrides) data.gameOverrides = {};
+    const current: GameOverride = data.gameOverrides[key] ?? {};
+    const next = mutate({ ...current });
+    const isEmpty =
+      !next.emulatorId &&
+      (!next.dolphin || Object.keys(next.dolphin).length === 0) &&
+      (!next.retroarch || Object.keys(next.retroarch).length === 0);
+    if (isEmpty) {
+      delete data.gameOverrides[key];
+    } else {
+      data.gameOverrides[key] = next;
+    }
+    this.save(data);
+  }
+
+  setEmulatorOverride(
+    systemId: string,
+    fileName: string,
+    emulatorId: string | null
+  ): void {
+    this.writeOverride(systemId, fileName, (override) => {
+      if (emulatorId) {
+        override.emulatorId = emulatorId;
+      } else {
+        delete override.emulatorId;
+      }
+      return override;
+    });
+  }
+
+  /** Merge partial Dolphin keys into the per-game block. Passing `null`
+   *  for a value removes that single key so the GameConfig writer falls
+   *  back to Dolphin's global setting. Passing an empty object clears the
+   *  entire Dolphin block. Per-field `null` is accepted (Zod-validated
+   *  payloads use it as the "clear this key" sentinel). */
+  setDolphinOverride(
+    systemId: string,
+    fileName: string,
+    patch:
+      | { [K in keyof DolphinGameConfig]?: DolphinGameConfig[K] | null }
+      | null
+  ): void {
+    this.writeOverride(systemId, fileName, (override) => {
+      if (patch === null) {
+        delete override.dolphin;
+        return override;
+      }
+      const merged: DolphinGameConfig = { ...(override.dolphin ?? {}) };
+      for (const [k, v] of Object.entries(patch) as Array<
+        [keyof DolphinGameConfig, DolphinGameConfig[keyof DolphinGameConfig]]
+      >) {
+        if (v === undefined || v === null) {
+          delete merged[k];
+        } else {
+          (merged as Record<string, unknown>)[k] = v;
+        }
+      }
+      if (Object.keys(merged).length === 0) {
+        delete override.dolphin;
+      } else {
+        override.dolphin = merged;
+      }
+      return override;
+    });
+  }
+
+  /** Merge partial RetroArch keys into the per-game block. Same semantics as
+   *  {@link setDolphinOverride}: per-field `null` clears that key, a `null`
+   *  patch clears the whole RetroArch block. */
+  setRetroArchOverride(
+    systemId: string,
+    fileName: string,
+    patch:
+      | { [K in keyof RetroArchGameConfig]?: RetroArchGameConfig[K] | null }
+      | null
+  ): void {
+    this.writeOverride(systemId, fileName, (override) => {
+      if (patch === null) {
+        delete override.retroarch;
+        return override;
+      }
+      const merged: RetroArchGameConfig = { ...(override.retroarch ?? {}) };
+      for (const [k, v] of Object.entries(patch) as Array<
+        [
+          keyof RetroArchGameConfig,
+          RetroArchGameConfig[keyof RetroArchGameConfig]
+        ]
+      >) {
+        if (v === undefined || v === null) {
+          delete merged[k];
+        } else {
+          (merged as Record<string, unknown>)[k] = v;
+        }
+      }
+      if (Object.keys(merged).length === 0) {
+        delete override.retroarch;
+      } else {
+        override.retroarch = merged;
+      }
+      return override;
+    });
   }
 
   // --- Bulk ---

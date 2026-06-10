@@ -96,8 +96,16 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
     toggleBulkSelectRom,
     romAddedDates,
     coverVersionByRom,
+    getGameOverride,
+    emulatorDefs,
   } = useApp();
   const isNew = isRomNew(romAddedDates, playHistory, rom.systemId, rom.fileName);
+  // Phase 22 — surface a per-game emulator override on the card so the user
+  // can tell at a glance which games don't use their system default.
+  const override = getGameOverride(rom.systemId, rom.fileName);
+  const overrideEmulator = override?.emulatorId
+    ? emulatorDefs.find((e) => e.id === override.emulatorId) ?? null
+    : null;
   const inBulkSelect = bulkSelectTarget !== null;
   const isBulkSelected = bulkSelectedRoms.has(
     `${rom.systemId}:${rom.fileName}`
@@ -518,6 +526,20 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
+        </div>
+      )}
+
+      {/* Per-game emulator override badge — bottom-right. Always visible
+          when the game is pinned to a non-default emulator so it's
+          distinguishable in the grid without opening the detail modal.
+          Non-interactive; the override is changed from GameDetailModal. */}
+      {overrideEmulator && !inBulkSelect && (
+        <div
+          className="absolute bottom-2 right-2 z-10 max-w-[60%] truncate rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white shadow-md backdrop-blur-sm"
+          title={`Se lanza con ${overrideEmulator.name} (override)`}
+          aria-label={`Emulador forzado: ${overrideEmulator.name}`}
+        >
+          {overrideEmulator.name}
         </div>
       )}
 

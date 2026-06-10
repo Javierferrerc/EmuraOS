@@ -126,6 +126,12 @@ export const AppConfigPartialSchema = z
       .optional(),
     fuzzySearchEnabled: z.boolean().optional(),
     hiddenRoms: z.array(z.string().max(500)).max(10000).optional(),
+    // Phase 22 — paths are validated structurally only; the runtime checks
+    // existence + interpreter mapping. Empty string is allowed and means
+    // "no script".
+    preLaunchScript: z.string().max(500).optional(),
+    postLaunchScript: z.string().max(500).optional(),
+    preLaunchCountdownEnabled: z.boolean().optional(),
   })
   .strict();
 
@@ -195,3 +201,48 @@ export const AddRomsSchema = z.array(AddRomEntrySchema).min(1).max(200);
 export const OptionalEmulatorIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50).optional();
 
 export const FolderPathSchema = z.string().min(1).max(500);
+
+// ── Phase 22 — Per-game overrides ──────────────────────────────────
+
+/** Setting an override to null clears it (the IPC handler honours the
+ *  distinction between "missing" and "null"). */
+export const NullableEmulatorIdSchema = z
+  .string()
+  .regex(/^[a-z0-9-]+$/)
+  .max(50)
+  .nullable();
+
+/** Curated set of Dolphin per-game toggles the UI is allowed to mutate.
+ *  Mirrors `DolphinGameConfig` in core/types.ts — keep in sync. Setting a
+ *  field to null clears it (falls back to Dolphin's global setting). */
+export const DolphinGameConfigPatchSchema = z
+  .object({
+    overclockEnable: z.boolean().nullable().optional(),
+    overclockFactor: z.number().min(0.1).max(5).nullable().optional(),
+    emulationSpeed: z.number().min(0).max(5).nullable().optional(),
+    aspectRatio: z
+      .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
+      .nullable()
+      .optional(),
+    skipEFBAccess: z.boolean().nullable().optional(),
+    wideScreenHack: z.boolean().nullable().optional(),
+    disablePort2: z.boolean().nullable().optional(),
+  })
+  .strict();
+
+/** Curated set of RetroArch per-game toggles the UI may mutate. Mirrors
+ *  `RetroArchGameConfig` in core/types.ts — keep in sync. Per-field null
+ *  clears that key (falls back to the global retroarch.cfg). */
+export const RetroArchGameConfigPatchSchema = z
+  .object({
+    bilinearFilter: z.boolean().nullable().optional(),
+    integerScale: z.boolean().nullable().optional(),
+    aspectRatio: z
+      .union([z.literal(0), z.literal(1)])
+      .nullable()
+      .optional(),
+    runAhead: z.boolean().nullable().optional(),
+    runAheadFrames: z.number().int().min(1).max(6).nullable().optional(),
+    rewind: z.boolean().nullable().optional(),
+  })
+  .strict();

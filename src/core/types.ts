@@ -94,6 +94,20 @@ export interface AppConfig {
   // menu. Data stays on disk — only the UI hides them. An "Unhide all"
   // control in Settings brings them back.
   hiddenRoms?: string[];
+  // Phase 22 — Launch wrapper scripts
+  /** Absolute path to a script run before spawning the emulator. Receives
+   *  EMURA_SYSTEM, EMURA_ROM_PATH, EMURA_TITLE, EMURA_EMULATOR_ID as env
+   *  vars. Awaited with a 5s timeout so a hanging script can't lock the
+   *  launch flow. Empty / missing string disables the hook. */
+  preLaunchScript?: string;
+  /** Absolute path to a script run after the emulator exits. Receives the
+   *  same env vars plus EMURA_EXIT_CODE. Fire-and-forget — its exit status
+   *  doesn't affect the launcher. */
+  postLaunchScript?: string;
+  /** When true, the 3-2-1 pre-launch countdown overlay is shown before the
+   *  emulator window appears. Defaults to false (no countdown) so the
+   *  feature is opt-in. Respects prefers-reduced-motion automatically. */
+  preLaunchCountdownEnabled?: boolean;
 }
 
 export interface EmulatorDefinition {
@@ -338,6 +352,70 @@ export interface UserLibraryFile {
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
   romAddedDates?: Record<string, string>; // "systemId:fileName" → ISO date
+  /** Phase 22 — per-game launch overrides keyed by `${systemId}:${fileName}`.
+   *  Missing entry means "use defaults"; the field itself is optional so
+   *  older files round-trip without touching the structure. */
+  gameOverrides?: Record<string, GameOverride>;
+}
+
+// ── Phase 22 — Per-game control ────────────────────────────────────
+
+/** Toggles persisted into Dolphin's `User/GameSettings/<GameID>.ini`.
+ *  We expose a curated subset of keys (the ones a normal user actually
+ *  wants to toggle) rather than the full GameINI surface. Each field
+ *  maps to a concrete INI section/key in dolphin-game-config.ts. */
+export interface DolphinGameConfig {
+  /** [Core] CPUThread / Overclock toggle. */
+  overclockEnable?: boolean;
+  /** [Core] Overclock value (1.0 = 100%, range 0.5–3.0). */
+  overclockFactor?: number;
+  /** [Core] EmulationSpeed (1.0 = 100%, 0 = unlimited). */
+  emulationSpeed?: number;
+  /** [Video_Settings] AspectRatio. 0=Auto 1=4:3 2=16:9 3=Stretch. */
+  aspectRatio?: 0 | 1 | 2 | 3;
+  /** [Video_Hacks] EFBSkipCache + EFBToTextureEnable shortcut. */
+  skipEFBAccess?: boolean;
+  /** [Video_Settings] wideScreenHack — patches games' rendering matrices
+   *  for true 16:9 instead of letterboxed 4:3. */
+  wideScreenHack?: boolean;
+  /** [Controls] Disable port 2 input so a stray pad doesn't pause. */
+  disablePort2?: boolean;
+}
+
+/** Curated subset of RetroArch settings persisted into the per-game
+ *  override file `<configDir>/config/<CoreName>/<rom>.cfg`. Each field maps
+ *  to a concrete retroarch.cfg key in retroarch-game-config.ts. Applied only
+ *  when the resolved emulator is RetroArch and the core has a known display
+ *  name. */
+export interface RetroArchGameConfig {
+  /** video_smooth — bilinear filtering on/off. */
+  bilinearFilter?: boolean;
+  /** video_scale_integer — snap output to integer multiples of native res. */
+  integerScale?: boolean;
+  /** aspect_ratio_index. 0 = 4:3, 1 = 16:9 (the two long-stable indices). */
+  aspectRatio?: 0 | 1;
+  /** run_ahead_enabled — speculative frame run-ahead for lower input lag. */
+  runAhead?: boolean;
+  /** run_ahead_frames — how many frames to run ahead (1–6 typical). */
+  runAheadFrames?: number;
+  /** rewind_enable — keep a rewind buffer for this game. */
+  rewind?: boolean;
+}
+
+/** Stored under UserLibraryFile.gameOverrides[key]. Each field is
+ *  independently optional so partial overrides (just emulator, just
+ *  Dolphin tweaks) stay small on disk. */
+export interface GameOverride {
+  /** Force this emulator id instead of the system default. Must be one
+   *  that declares support for the game's system; the launcher refuses
+   *  unknown ids and falls back to the default. */
+  emulatorId?: string;
+  /** Dolphin-only structured overrides — only applied when the resolved
+   *  emulator is Dolphin and the GameID can be detected. */
+  dolphin?: DolphinGameConfig;
+  /** RetroArch-only structured overrides — only applied when the resolved
+   *  emulator is RetroArch and the system maps to a known core. */
+  retroarch?: RetroArchGameConfig;
 }
 
 // ── Emulator Configuration System ──────────────────────────────────

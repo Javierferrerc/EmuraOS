@@ -8,6 +8,7 @@ import { GameModeView } from "./components/GameModeView";
 import { CemuKeysModal } from "./components/CemuKeysModal";
 import { CemuKeysMissingModal } from "./components/CemuKeysMissingModal";
 import { GameLoadingOverlay } from "./components/GameLoadingOverlay";
+import { PreLaunchCountdown } from "./components/PreLaunchCountdown";
 import { UpdateModal } from "./components/UpdateModal";
 import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { GameDetailModal } from "./components/GameDetailModal";
@@ -403,6 +404,7 @@ export default function App() {
       {/* Launch loading overlay — mounted last so DOM order + z-index 9999
           + isolation guarantee it wins stacking over any modal. Conditional
           on `launchingGame` inside the component itself. */}
+      <PreLaunchCountdown />
       <GameLoadingOverlay />
       {showCheatsheet && (
         <ShortcutsCheatsheet onClose={() => setShowCheatsheet(false)} />
