@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApp } from "../context/AppContext";
 import { formatPlayTime } from "../utils/formatPlayTime";
-import type { DiscoveredRom } from "../../../core/types";
+import type {
+  DiscoveredRom,
+  DolphinGameConfig,
+  RetroArchGameConfig,
+} from "../../../core/types";
 
 interface Props {
   rom: DiscoveredRom;
@@ -31,8 +35,17 @@ const SYSTEM_NAMES: Record<string, string> = {
 };
 
 export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
-  const { getMetadataForRom, playHistory, isFavorite, toggleFavorite } =
-    useApp();
+  const {
+    getMetadataForRom,
+    playHistory,
+    isFavorite,
+    toggleFavorite,
+    emulatorDefs,
+    getGameOverride,
+    setEmulatorOverride,
+    setDolphinGameConfig,
+    setRetroArchGameConfig,
+  } = useApp();
 
   const metadata = getMetadataForRom(rom.systemId, rom.fileName);
   const key = `${rom.systemId}:${rom.fileName}`;
@@ -121,6 +134,90 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
   const handleToggleFav = useCallback(() => {
     toggleFavorite(rom.systemId, rom.fileName);
   }, [toggleFavorite, rom.systemId, rom.fileName]);
+
+  // ── Phase 22 — Per-game emulator override + Dolphin config ──
+  const override = getGameOverride(rom.systemId, rom.fileName);
+  const candidateEmulators = useMemo(
+    () => emulatorDefs.filter((e) => e.systems.includes(rom.systemId)),
+    [emulatorDefs, rom.systemId]
+  );
+  const effectiveEmulatorId = override?.emulatorId ?? "";
+  const resolvedEmulatorId = effectiveEmulatorId || candidateEmulators[0]?.id;
+  const isDolphinActive = resolvedEmulatorId === "dolphin";
+  const isRetroArchActive = resolvedEmulatorId === "retroarch";
+
+  // Probe the ROM for a 6-char Dolphin GameID. Null when the format is
+  // compressed (RVZ/CISO) so we can show a hint instead of broken controls.
+  const [dolphinGameId, setDolphinGameId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isDolphinActive) {
+      setDolphinGameId(null);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      .detectDolphinGameId(rom.filePath)
+      .then((id) => {
+        if (!cancelled) setDolphinGameId(id);
+      })
+      .catch(() => {
+        if (!cancelled) setDolphinGameId(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDolphinActive, rom.filePath]);
+
+  const dolphin = override?.dolphin ?? {};
+
+  const updateDolphinKey = useCallback(
+    <K extends keyof DolphinGameConfig>(
+      key: K,
+      value: DolphinGameConfig[K] | null
+    ) => {
+      void setDolphinGameConfig(rom.systemId, rom.fileName, {
+        [key]: value,
+      } as Partial<DolphinGameConfig>);
+    },
+    [setDolphinGameConfig, rom.systemId, rom.fileName]
+  );
+
+  // Resolve the RetroArch core's override-folder name. Null means the system
+  // maps to a core we don't have a verified display name for, so writing the
+  // override would land in the wrong folder — we show a hint instead.
+  const [retroArchCore, setRetroArchCore] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isRetroArchActive) {
+      setRetroArchCore(null);
+      return;
+    }
+    let cancelled = false;
+    window.electronAPI
+      .resolveRetroArchCore(rom.systemId)
+      .then((core) => {
+        if (!cancelled) setRetroArchCore(core);
+      })
+      .catch(() => {
+        if (!cancelled) setRetroArchCore(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRetroArchActive, rom.systemId]);
+
+  const retroarch = override?.retroarch ?? {};
+
+  const updateRetroArchKey = useCallback(
+    <K extends keyof RetroArchGameConfig>(
+      key: K,
+      value: RetroArchGameConfig[K] | null
+    ) => {
+      void setRetroArchGameConfig(rom.systemId, rom.fileName, {
+        [key]: value,
+      } as Partial<RetroArchGameConfig>);
+    },
+    [setRetroArchGameConfig, rom.systemId, rom.fileName]
+  );
 
   const formattedTime = formatPlayTime(record?.totalPlayTime ?? 0);
   const lastPlayedStr = record?.lastPlayed
@@ -260,7 +357,7 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
 
           {/* Screenshot */}
           {screenshotDataUrl && (
-            <div>
+            <div className="mb-4">
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">
                 Screenshot
               </h3>
@@ -269,6 +366,270 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
                 alt="Screenshot"
                 className="w-full rounded-lg"
               />
+            </div>
+          )}
+
+          {/* Phase 22 — Per-game launch overrides */}
+          {candidateEmulators.length > 0 && (
+            <div className="mb-4">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">
+                Ajustes para este juego
+              </h3>
+              <label className="mb-3 flex flex-col gap-1">
+                <span className="text-xs text-secondary">Lanzar con</span>
+                <select
+                  value={override?.emulatorId ?? ""}
+                  onChange={(e) =>
+                    setEmulatorOverride(
+                      rom.systemId,
+                      rom.fileName,
+                      e.target.value || null
+                    )
+                  }
+                  className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-sm text-primary"
+                >
+                  <option value="">Por defecto del sistema</option>
+                  {candidateEmulators.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {isDolphinActive && (
+                <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Tweaks de Dolphin
+                    </span>
+                    {dolphinGameId && (
+                      <span className="text-[10px] text-muted">
+                        GameID: {dolphinGameId}
+                      </span>
+                    )}
+                  </div>
+                  {!dolphinGameId && (
+                    <p className="text-xs text-muted">
+                      No se pudo detectar el GameID (formato comprimido como
+                      RVZ/CISO). Los ajustes no se escribirán hasta que se
+                      lance un formato sin comprimir.
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={dolphin.wideScreenHack ?? false}
+                      onChange={(e) =>
+                        updateDolphinKey(
+                          "wideScreenHack",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Widescreen Hack (16:9 real)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={dolphin.skipEFBAccess ?? false}
+                      onChange={(e) =>
+                        updateDolphinKey(
+                          "skipEFBAccess",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Skip EFB Access (más FPS, posibles glitches)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={dolphin.disablePort2 ?? false}
+                      onChange={(e) =>
+                        updateDolphinKey(
+                          "disablePort2",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Desactivar puerto 2 (evita pausa accidental)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={dolphin.overclockEnable ?? false}
+                      onChange={(e) =>
+                        updateDolphinKey(
+                          "overclockEnable",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Overclock CPU
+                  </label>
+                  {dolphin.overclockEnable && (
+                    <label className="flex items-center gap-2 text-sm text-secondary">
+                      <span className="w-28 text-xs">Factor CPU</span>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={3}
+                        step={0.25}
+                        value={dolphin.overclockFactor ?? 1}
+                        onChange={(e) =>
+                          updateDolphinKey(
+                            "overclockFactor",
+                            Number(e.target.value)
+                          )
+                        }
+                        className="flex-1"
+                      />
+                      <span className="w-12 text-right tabular-nums text-xs">
+                        {(dolphin.overclockFactor ?? 1).toFixed(2)}×
+                      </span>
+                    </label>
+                  )}
+                  {override?.dolphin && (
+                    <button
+                      onClick={() =>
+                        setDolphinGameConfig(rom.systemId, rom.fileName, null)
+                      }
+                      className="text-xs text-muted underline hover:text-secondary"
+                    >
+                      Limpiar tweaks de Dolphin
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {isRetroArchActive && (
+                <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Tweaks de RetroArch
+                    </span>
+                    {retroArchCore && (
+                      <span className="text-[10px] text-muted">
+                        Core: {retroArchCore}
+                      </span>
+                    )}
+                  </div>
+                  {!retroArchCore && (
+                    <p className="text-xs text-muted">
+                      El core de este sistema no está mapeado para overrides
+                      per-game; los ajustes no se escribirán.
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={retroarch.bilinearFilter ?? false}
+                      onChange={(e) =>
+                        updateRetroArchKey(
+                          "bilinearFilter",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Filtro bilineal (suavizado)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={retroarch.integerScale ?? false}
+                      onChange={(e) =>
+                        updateRetroArchKey(
+                          "integerScale",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Escala entera (sin distorsión)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <span className="w-28 text-xs">Relación de aspecto</span>
+                    <select
+                      value={
+                        retroarch.aspectRatio === undefined
+                          ? ""
+                          : String(retroarch.aspectRatio)
+                      }
+                      onChange={(e) =>
+                        updateRetroArchKey(
+                          "aspectRatio",
+                          e.target.value === ""
+                            ? null
+                            : (Number(e.target.value) as 0 | 1)
+                        )
+                      }
+                      className="flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-sm text-primary"
+                    >
+                      <option value="">Por defecto</option>
+                      <option value="0">4:3</option>
+                      <option value="1">16:9</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={retroarch.runAhead ?? false}
+                      onChange={(e) =>
+                        updateRetroArchKey(
+                          "runAhead",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Run-ahead (menos lag de input)
+                  </label>
+                  {retroarch.runAhead && (
+                    <label className="flex items-center gap-2 text-sm text-secondary">
+                      <span className="w-28 text-xs">Frames run-ahead</span>
+                      <input
+                        type="range"
+                        min={1}
+                        max={6}
+                        step={1}
+                        value={retroarch.runAheadFrames ?? 1}
+                        onChange={(e) =>
+                          updateRetroArchKey(
+                            "runAheadFrames",
+                            Number(e.target.value)
+                          )
+                        }
+                        className="flex-1"
+                      />
+                      <span className="w-12 text-right tabular-nums text-xs">
+                        {retroarch.runAheadFrames ?? 1}
+                      </span>
+                    </label>
+                  )}
+                  <label className="flex items-center gap-2 text-sm text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={retroarch.rewind ?? false}
+                      onChange={(e) =>
+                        updateRetroArchKey(
+                          "rewind",
+                          e.target.checked ? true : null
+                        )
+                      }
+                    />
+                    Rewind (rebobinar)
+                  </label>
+                  {override?.retroarch && (
+                    <button
+                      onClick={() =>
+                        setRetroArchGameConfig(rom.systemId, rom.fileName, null)
+                      }
+                      className="text-xs text-muted underline hover:text-secondary"
+                    >
+                      Limpiar tweaks de RetroArch
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

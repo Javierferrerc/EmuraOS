@@ -30,6 +30,9 @@ import type {
   UpdateInfo,
   SmartCollectionFilter,
   AddRomsProgress,
+  GameOverride,
+  DolphinGameConfig,
+  RetroArchGameConfig,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -115,6 +118,14 @@ interface AppState {
   disambiguationPending: DisambiguationState | null;
   resolvedPaths: { romsPath: string; emulatorsPath: string } | null;
   romAddedDates: Record<string, string>;
+  /** Phase 22 — per-game overrides keyed by `${systemId}:${fileName}`.
+   *  Hydrated once on boot via getGameOverrides() and mutated locally so
+   *  the modal reflects changes without a round-trip to disk. */
+  gameOverrides: Record<string, GameOverride>;
+  /** Phase 22 — transient state for the 3-2-1 countdown overlay. Set just
+   *  before a launch starts and cleared either when the seconds hit 0 or
+   *  when the game session begins. Null means no countdown visible. */
+  preLaunchCountdown: { rom: DiscoveredRom; coverDataUrl: string | null } | null;
   detailModalRom: DiscoveredRom | null;
   quickLaunchOpen: boolean;
   /** True while the controller-mapping modal (MandosTab) is waiting for a
@@ -225,6 +236,26 @@ interface AppActions {
   commitBulkSelect: () => Promise<void>;
   openCollectionViewer: (collectionId: string) => void;
   closeCollectionViewer: () => void;
+  // Phase 22 — per-game overrides
+  getGameOverride: (systemId: string, fileName: string) => GameOverride | null;
+  setEmulatorOverride: (
+    systemId: string,
+    fileName: string,
+    emulatorId: string | null
+  ) => Promise<void>;
+  setDolphinGameConfig: (
+    systemId: string,
+    fileName: string,
+    patch: Partial<DolphinGameConfig> | null
+  ) => Promise<void>;
+  setRetroArchGameConfig: (
+    systemId: string,
+    fileName: string,
+    patch: Partial<RetroArchGameConfig> | null
+  ) => Promise<void>;
+  /** Dismiss the countdown overlay (used by the user pressing Escape or
+   *  by the natural 3 → 0 timer reaching zero). */
+  dismissPreLaunchCountdown: () => void;
 }
 
 type AppContextType = AppState & AppActions;
@@ -316,6 +347,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     emulatorsPath: string;
   } | null>(null);
   const [romAddedDates, setRomAddedDates] = useState<Record<string, string>>({});
+  // Phase 22 — overrides + countdown
+  const [gameOverrides, setGameOverrides] = useState<
+    Record<string, GameOverride>
+  >({});
+  const [preLaunchCountdown, setPreLaunchCountdown] = useState<
+    { rom: DiscoveredRom; coverDataUrl: string | null } | null
+  >(null);
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
   const [quickLaunchOpen, setQuickLaunchOpen] = useState(false);
   const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
@@ -388,6 +426,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // setStates batch into one render so the loader unmounts at the
       // same frame GameModeView mounts, avoiding any flash.
       setLaunchingGame(null);
+      // Phase 22 — the emulator window is up, so any lingering pre-launch
+      // countdown has served its purpose. Clear it here too in case the
+      // emulator appeared faster than the fixed countdown timer.
+      setPreLaunchCountdown(null);
     });
     window.electronAPI.onGameSessionEnded(() => {
       setIsGameRunning(false);
@@ -429,14 +471,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        const [cfg, sys, scan, metadata, userLib, addedDates] = await Promise.all([
-          window.electronAPI.getConfig(),
-          window.electronAPI.getSystems(),
-          window.electronAPI.scanRoms(),
-          window.electronAPI.getAllMetadata(),
-          window.electronAPI.getUserLibrary(),
-          window.electronAPI.getRomAddedDates(),
-        ]);
+        const [cfg, sys, scan, metadata, userLib, addedDates, overrides] =
+          await Promise.all([
+            window.electronAPI.getConfig(),
+            window.electronAPI.getSystems(),
+            window.electronAPI.scanRoms(),
+            window.electronAPI.getAllMetadata(),
+            window.electronAPI.getUserLibrary(),
+            window.electronAPI.getRomAddedDates(),
+            window.electronAPI.getGameOverrides(),
+          ]);
         setConfig(cfg);
         setSystems(sys);
         setScanResult(scan);
@@ -446,6 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setRecentlyPlayed(userLib.recentlyPlayed);
         setPlayHistory(userLib.playHistory);
         setRomAddedDates(addedDates);
+        setGameOverrides(overrides);
 
         // Auto-fetch covers from Libretro if there are ROMs without covers
         const hasRomsWithoutCovers = scan.systems.some((system) =>
@@ -896,23 +941,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // intermediate cube.
       const overlayEnabled =
         configRef.current?.gameLoadingOverlayEnabled ?? true;
+      const countdownEnabled =
+        configRef.current?.preLaunchCountdownEnabled ?? false;
+
+      // Resolve cover once — both the countdown overlay and the loading
+      // cube want it, so we only hit disk once.
+      let coverDataUrl: string | null = null;
+      const lastDot = rom.fileName.lastIndexOf(".");
+      const metadataKey =
+        lastDot > 0 ? rom.fileName.substring(0, lastDot) : rom.fileName;
+      const metadata = metadataMap[rom.systemId]?.[metadataKey] ?? null;
+      if (metadata?.coverPath) {
+        try {
+          coverDataUrl = await window.electronAPI.readCoverDataUrl(
+            metadata.coverPath
+          );
+        } catch (err) {
+          console.warn("Failed to read cover for launch overlay:", err);
+        }
+      }
+
+      // Phase 22 — pre-launch countdown. Skipped entirely under
+      // prefers-reduced-motion so the animation doesn't fight the user's
+      // accessibility setting; the visual overlay component itself also
+      // checks the media query and renders a brief fade in that case.
+      if (countdownEnabled) {
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)"
+        ).matches;
+        setPreLaunchCountdown({ rom, coverDataUrl });
+        const waitMs = reducedMotion ? 400 : 3000;
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, waitMs);
+        });
+        setPreLaunchCountdown(null);
+      }
 
       if (overlayEnabled) {
-        const lastDot = rom.fileName.lastIndexOf(".");
-        const metadataKey =
-          lastDot > 0 ? rom.fileName.substring(0, lastDot) : rom.fileName;
-        const metadata = metadataMap[rom.systemId]?.[metadataKey] ?? null;
-
-        let coverDataUrl: string | null = null;
-        if (metadata?.coverPath) {
-          try {
-            coverDataUrl = await window.electronAPI.readCoverDataUrl(
-              metadata.coverPath
-            );
-          } catch (err) {
-            console.warn("Failed to read cover for loading overlay:", err);
-          }
-        }
         setLaunchingGame({ rom, coverDataUrl });
       }
 
@@ -1207,6 +1272,156 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setViewingCollectionId(null);
   }, []);
 
+  // ── Phase 22 — Per-game overrides ──────────────────────────────────
+
+  const getGameOverride = useCallback(
+    (systemId: string, fileName: string): GameOverride | null => {
+      const key = `${systemId}:${fileName}`;
+      return gameOverrides[key] ?? null;
+    },
+    [gameOverrides]
+  );
+
+  const setEmulatorOverrideAction = useCallback(
+    async (
+      systemId: string,
+      fileName: string,
+      emulatorId: string | null
+    ) => {
+      try {
+        await window.electronAPI.setEmulatorOverride(
+          systemId,
+          fileName,
+          emulatorId
+        );
+        const key = `${systemId}:${fileName}`;
+        setGameOverrides((prev) => {
+          const next = { ...prev };
+          const current: GameOverride = { ...(next[key] ?? {}) };
+          if (emulatorId) {
+            current.emulatorId = emulatorId;
+          } else {
+            delete current.emulatorId;
+          }
+          const isEmpty =
+            !current.emulatorId &&
+            (!current.dolphin ||
+              Object.keys(current.dolphin).length === 0) &&
+            (!current.retroarch ||
+              Object.keys(current.retroarch).length === 0);
+          if (isEmpty) delete next[key];
+          else next[key] = current;
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to set emulator override:", err);
+      }
+    },
+    []
+  );
+
+  const setDolphinGameConfigAction = useCallback(
+    async (
+      systemId: string,
+      fileName: string,
+      patch: Partial<DolphinGameConfig> | null
+    ) => {
+      try {
+        await window.electronAPI.setDolphinGameConfig(
+          systemId,
+          fileName,
+          patch
+        );
+        const key = `${systemId}:${fileName}`;
+        setGameOverrides((prev) => {
+          const next = { ...prev };
+          const current: GameOverride = { ...(next[key] ?? {}) };
+          if (patch === null) {
+            delete current.dolphin;
+          } else {
+            const merged: Record<string, unknown> = {
+              ...(current.dolphin ?? {}),
+            };
+            for (const [k, v] of Object.entries(patch)) {
+              if (v === undefined || v === null) delete merged[k];
+              else merged[k] = v;
+            }
+            if (Object.keys(merged).length === 0) {
+              delete current.dolphin;
+            } else {
+              current.dolphin = merged as DolphinGameConfig;
+            }
+          }
+          const isEmpty =
+            !current.emulatorId &&
+            (!current.dolphin ||
+              Object.keys(current.dolphin).length === 0) &&
+            (!current.retroarch ||
+              Object.keys(current.retroarch).length === 0);
+          if (isEmpty) delete next[key];
+          else next[key] = current;
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to set Dolphin per-game config:", err);
+      }
+    },
+    []
+  );
+
+  const setRetroArchGameConfigAction = useCallback(
+    async (
+      systemId: string,
+      fileName: string,
+      patch: Partial<RetroArchGameConfig> | null
+    ) => {
+      try {
+        await window.electronAPI.setRetroArchGameConfig(
+          systemId,
+          fileName,
+          patch
+        );
+        const key = `${systemId}:${fileName}`;
+        setGameOverrides((prev) => {
+          const next = { ...prev };
+          const current: GameOverride = { ...(next[key] ?? {}) };
+          if (patch === null) {
+            delete current.retroarch;
+          } else {
+            const merged: Record<string, unknown> = {
+              ...(current.retroarch ?? {}),
+            };
+            for (const [k, v] of Object.entries(patch)) {
+              if (v === undefined || v === null) delete merged[k];
+              else merged[k] = v;
+            }
+            if (Object.keys(merged).length === 0) {
+              delete current.retroarch;
+            } else {
+              current.retroarch = merged as RetroArchGameConfig;
+            }
+          }
+          const isEmpty =
+            !current.emulatorId &&
+            (!current.dolphin ||
+              Object.keys(current.dolphin).length === 0) &&
+            (!current.retroarch ||
+              Object.keys(current.retroarch).length === 0);
+          if (isEmpty) delete next[key];
+          else next[key] = current;
+          return next;
+        });
+      } catch (err) {
+        console.error("Failed to set RetroArch per-game config:", err);
+      }
+    },
+    []
+  );
+
+  const dismissPreLaunchCountdown = useCallback(() => {
+    setPreLaunchCountdown(null);
+  }, []);
+
   const addToCollectionAction = useCallback(
     async (collectionId: string, systemId: string, fileName: string) => {
       try {
@@ -1402,6 +1617,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     viewingCollectionId,
     openCollectionViewer,
     closeCollectionViewer,
+    gameOverrides,
+    preLaunchCountdown,
+    getGameOverride,
+    setEmulatorOverride: setEmulatorOverrideAction,
+    setDolphinGameConfig: setDolphinGameConfigAction,
+    setRetroArchGameConfig: setRetroArchGameConfigAction,
+    dismissPreLaunchCountdown,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

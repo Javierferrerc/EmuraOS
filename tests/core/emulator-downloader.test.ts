@@ -86,11 +86,17 @@ class FakeDrive {
     return async (url: string) => {
       const u = new URL(url);
 
-      // alt=media download endpoint:  /drive/v3/files/{fileId}?alt=media&key=...
-      if (u.searchParams.get("alt") === "media") {
-        const match = u.pathname.match(/\/files\/([^/]+)$/);
-        const fileId = match?.[1];
-        const file = this.files.find((f) => f.id === fileId);
+      // Public download endpoint used by GDriveClient.downloadFile:
+      //   https://drive.usercontent.google.com/download?id={fileId}&export=download
+      // The fileId is a query param (not in the pathname). We also accept the
+      // legacy alt=media form (/files/{fileId}?alt=media) for completeness.
+      const downloadId =
+        u.searchParams.get("id") ??
+        (u.searchParams.get("alt") === "media"
+          ? u.pathname.match(/\/files\/([^/]+)$/)?.[1]
+          : undefined);
+      if (downloadId) {
+        const file = this.files.find((f) => f.id === downloadId);
         if (!file || !file.content) {
           return new Response(null, { status: 404 });
         }
@@ -271,14 +277,16 @@ describe("EmulatorDownloader", () => {
         exeBytes.byteLength
       );
 
-      // Track which file ids trigger alt=media calls.
-      const altMediaIds: string[] = [];
+      // Track which file ids trigger a content download.
+      const downloadedIds: string[] = [];
       fetchMock.mockImplementation(async (url: string) => {
         const u = new URL(url);
-        if (u.searchParams.get("alt") === "media") {
-          const fileId = u.pathname.match(/\/files\/([^/]+)$/)?.[1];
-          if (fileId) altMediaIds.push(fileId);
-        }
+        const fileId =
+          u.searchParams.get("id") ??
+          (u.searchParams.get("alt") === "media"
+            ? u.pathname.match(/\/files\/([^/]+)$/)?.[1]
+            : undefined);
+        if (fileId) downloadedIds.push(fileId);
         return drive.buildFetch()(url);
       });
 
@@ -290,8 +298,8 @@ describe("EmulatorDownloader", () => {
       // resumed from disk.
       const exeFile = drive.files.find((f) => f.name === "pcsx2.exe")!;
       const gsFile = drive.files.find((f) => f.name === "gs.dll")!;
-      expect(altMediaIds).not.toContain(exeFile.id);
-      expect(altMediaIds).toContain(gsFile.id);
+      expect(downloadedIds).not.toContain(exeFile.id);
+      expect(downloadedIds).toContain(gsFile.id);
     });
   });
 

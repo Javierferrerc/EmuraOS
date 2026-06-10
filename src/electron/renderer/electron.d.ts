@@ -25,6 +25,9 @@ import type {
   UpdateDownloadProgress,
   AddRomsProgress,
   SgdbCandidate,
+  GameOverride,
+  DolphinGameConfig,
+  RetroArchGameConfig,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -125,6 +128,27 @@ export interface ElectronAPI {
   reorderCollection(collectionId: string, keys: string[]): Promise<void>;
   getRecentlyPlayed(limit?: number): Promise<string[]>;
   getRomAddedDates(): Promise<Record<string, string>>;
+  recordPlayTime(systemId: string, fileName: string, seconds: number): Promise<void>;
+
+  // Phase 22 — Per-game overrides
+  getGameOverrides(): Promise<Record<string, GameOverride>>;
+  setEmulatorOverride(
+    systemId: string,
+    fileName: string,
+    emulatorId: string | null
+  ): Promise<void>;
+  setDolphinGameConfig(
+    systemId: string,
+    fileName: string,
+    patch: Partial<DolphinGameConfig> | null
+  ): Promise<void>;
+  detectDolphinGameId(romPath: string): Promise<string | null>;
+  setRetroArchGameConfig(
+    systemId: string,
+    fileName: string,
+    patch: Partial<RetroArchGameConfig> | null
+  ): Promise<void>;
+  resolveRetroArchCore(systemId: string): Promise<string | null>;
 
   // Embedded overlay
   launchGameEmbedded(rom: DiscoveredRom, emulatorId?: string): Promise<EmbeddedLaunchResult>;

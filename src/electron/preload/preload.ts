@@ -98,6 +98,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
   recordPlayTime: (systemId: string, fileName: string, seconds: number) =>
     ipcRenderer.invoke("record-play-time", systemId, fileName, seconds),
 
+  // Phase 22 — Per-game overrides
+  getGameOverrides: () => ipcRenderer.invoke("get-game-overrides"),
+  setEmulatorOverride: (
+    systemId: string,
+    fileName: string,
+    emulatorId: string | null
+  ) =>
+    ipcRenderer.invoke("set-emulator-override", systemId, fileName, emulatorId),
+  setDolphinGameConfig: (
+    systemId: string,
+    fileName: string,
+    patch: Record<string, unknown> | null
+  ) =>
+    ipcRenderer.invoke("set-dolphin-game-config", systemId, fileName, patch),
+  detectDolphinGameId: (romPath: string) =>
+    ipcRenderer.invoke("detect-dolphin-game-id", romPath),
+  setRetroArchGameConfig: (
+    systemId: string,
+    fileName: string,
+    patch: Record<string, unknown> | null
+  ) =>
+    ipcRenderer.invoke("set-retroarch-game-config", systemId, fileName, patch),
+  resolveRetroArchCore: (systemId: string) =>
+    ipcRenderer.invoke("resolve-retroarch-core", systemId),
+
   onCoreDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("core-download-progress", (_event, progress) =>
       callback(progress)

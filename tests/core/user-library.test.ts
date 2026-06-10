@@ -196,6 +196,71 @@ describe("UserLibrary", () => {
     });
   });
 
+  // --- Per-Game Overrides (Phase 22) ---
+
+  describe("game overrides", () => {
+    it("starts with no overrides", () => {
+      expect(lib.getGameOverrides()).toEqual({});
+      expect(lib.getGameOverride("gamecube", "smg.iso")).toBeNull();
+    });
+
+    it("persists an emulator override", () => {
+      lib.setEmulatorOverride("ps2", "ico.iso", "retroarch");
+      expect(lib.getGameOverride("ps2", "ico.iso")).toEqual({
+        emulatorId: "retroarch",
+      });
+    });
+
+    it("clears an emulator override by passing null", () => {
+      lib.setEmulatorOverride("ps2", "ico.iso", "retroarch");
+      lib.setEmulatorOverride("ps2", "ico.iso", null);
+      expect(lib.getGameOverride("ps2", "ico.iso")).toBeNull();
+    });
+
+    it("merges Dolphin keys without clobbering existing ones", () => {
+      lib.setDolphinOverride("gamecube", "smg.iso", {
+        wideScreenHack: true,
+      });
+      lib.setDolphinOverride("gamecube", "smg.iso", {
+        skipEFBAccess: true,
+      });
+      expect(lib.getGameOverride("gamecube", "smg.iso")?.dolphin).toEqual({
+        wideScreenHack: true,
+        skipEFBAccess: true,
+      });
+    });
+
+    it("clears a single Dolphin key with null", () => {
+      lib.setDolphinOverride("gamecube", "smg.iso", {
+        wideScreenHack: true,
+        skipEFBAccess: true,
+      });
+      lib.setDolphinOverride("gamecube", "smg.iso", { wideScreenHack: null });
+      expect(lib.getGameOverride("gamecube", "smg.iso")?.dolphin).toEqual({
+        skipEFBAccess: true,
+      });
+    });
+
+    it("prunes the entry when both emulator and dolphin are gone", () => {
+      lib.setEmulatorOverride("ps2", "ico.iso", "retroarch");
+      lib.setDolphinOverride("ps2", "ico.iso", { wideScreenHack: true });
+      lib.setEmulatorOverride("ps2", "ico.iso", null);
+      lib.setDolphinOverride("ps2", "ico.iso", null);
+      expect(lib.getGameOverride("ps2", "ico.iso")).toBeNull();
+      expect(lib.getGameOverrides()).toEqual({});
+    });
+
+    it("survives a new instance", () => {
+      lib.setEmulatorOverride("gamecube", "smg.iso", "dolphin");
+      lib.setDolphinOverride("gamecube", "smg.iso", { wideScreenHack: true });
+      const lib2 = new UserLibrary(TEST_PROJECT_ROOT);
+      expect(lib2.getGameOverride("gamecube", "smg.iso")).toEqual({
+        emulatorId: "dolphin",
+        dolphin: { wideScreenHack: true },
+      });
+    });
+  });
+
   // --- Bulk ---
 
   describe("getAll", () => {
