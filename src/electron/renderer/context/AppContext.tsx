@@ -33,6 +33,8 @@ import type {
   GameOverride,
   DolphinGameConfig,
   RetroArchGameConfig,
+  RaStatus,
+  RaAchievementsResult,
 } from "../../../core/types.js";
 
 export type ActiveFilter =
@@ -126,6 +128,9 @@ interface AppState {
    *  before a launch starts and cleared either when the seconds hit 0 or
    *  when the game session begins. Null means no countdown visible. */
   preLaunchCountdown: { rom: DiscoveredRom; coverDataUrl: string | null } | null;
+  /** Phase 23 — RetroAchievements account status (non-secret), hydrated on
+   *  boot. Null until the first raStatus() resolves. */
+  raStatus: RaStatus | null;
   detailModalRom: DiscoveredRom | null;
   quickLaunchOpen: boolean;
   /** True while the controller-mapping modal (MandosTab) is waiting for a
@@ -256,6 +261,20 @@ interface AppActions {
   /** Dismiss the countdown overlay (used by the user pressing Escape or
    *  by the natural 3 → 0 timer reaching zero). */
   dismissPreLaunchCountdown: () => void;
+  // Phase 23 — RetroAchievements
+  /** Connect: derive + persist the emulator token from username/password
+   *  (and optional web API key). Refreshes config + status on success. */
+  raLogin: (
+    username: string,
+    password: string,
+    webApiKey?: string
+  ) => Promise<{ success: boolean; username?: string; error?: string }>;
+  /** Disconnect: wipe RA credentials. */
+  raLogout: () => Promise<void>;
+  /** Re-read the non-secret RA status from main. */
+  refreshRaStatus: () => Promise<void>;
+  /** Fetch the achievements + user progress for a ROM (lazy, on modal open). */
+  getAchievementsForRom: (rom: DiscoveredRom) => Promise<RaAchievementsResult>;
 }
 
 type AppContextType = AppState & AppActions;
@@ -354,6 +373,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [preLaunchCountdown, setPreLaunchCountdown] = useState<
     { rom: DiscoveredRom; coverDataUrl: string | null } | null
   >(null);
+  // Phase 23 — RetroAchievements account status (non-secret).
+  const [raStatus, setRaStatus] = useState<RaStatus | null>(null);
   const [detailModalRom, setDetailModalRom] = useState<DiscoveredRom | null>(null);
   const [quickLaunchOpen, setQuickLaunchOpen] = useState(false);
   const [controllerCaptureOpen, setControllerCaptureOpen] = useState(false);
@@ -471,7 +492,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function init() {
       try {
-        const [cfg, sys, scan, metadata, userLib, addedDates, overrides] =
+        const [cfg, sys, scan, metadata, userLib, addedDates, overrides, raSt] =
           await Promise.all([
             window.electronAPI.getConfig(),
             window.electronAPI.getSystems(),
@@ -480,6 +501,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             window.electronAPI.getUserLibrary(),
             window.electronAPI.getRomAddedDates(),
             window.electronAPI.getGameOverrides(),
+            window.electronAPI.raStatus(),
           ]);
         setConfig(cfg);
         setSystems(sys);
@@ -491,6 +513,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPlayHistory(userLib.playHistory);
         setRomAddedDates(addedDates);
         setGameOverrides(overrides);
+        setRaStatus(raSt);
 
         // Auto-fetch covers from Libretro if there are ROMs without covers
         const hasRomsWithoutCovers = scan.systems.some((system) =>
@@ -1422,6 +1445,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPreLaunchCountdown(null);
   }, []);
 
+  // ── Phase 23 — RetroAchievements ──────────────────────────────────
+
+  const refreshRaStatus = useCallback(async () => {
+    try {
+      setRaStatus(await window.electronAPI.raStatus());
+    } catch (err) {
+      console.error("Failed to read RetroAchievements status:", err);
+    }
+  }, []);
+
+  const raLoginAction = useCallback(
+    async (username: string, password: string, webApiKey?: string) => {
+      try {
+        const result = await window.electronAPI.raLogin(
+          username,
+          password,
+          webApiKey
+        );
+        if (result.success) {
+          // The token + creds were persisted in main; pull the fresh config
+          // and status back so the UI reflects the connected account.
+          setConfig(await window.electronAPI.getConfig());
+          await refreshRaStatus();
+        }
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("RetroAchievements login failed:", err);
+        return { success: false, error: message };
+      }
+    },
+    [refreshRaStatus]
+  );
+
+  const raLogoutAction = useCallback(async () => {
+    try {
+      await window.electronAPI.raLogout();
+      setConfig(await window.electronAPI.getConfig());
+      await refreshRaStatus();
+    } catch (err) {
+      console.error("RetroAchievements logout failed:", err);
+    }
+  }, [refreshRaStatus]);
+
+  const getAchievementsForRom = useCallback((rom: DiscoveredRom) => {
+    return window.electronAPI.getAchievementsForRom(rom);
+  }, []);
+
   const addToCollectionAction = useCallback(
     async (collectionId: string, systemId: string, fileName: string) => {
       try {
@@ -1624,6 +1695,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDolphinGameConfig: setDolphinGameConfigAction,
     setRetroArchGameConfig: setRetroArchGameConfigAction,
     dismissPreLaunchCountdown,
+    raStatus,
+    raLogin: raLoginAction,
+    raLogout: raLogoutAction,
+    refreshRaStatus,
+    getAchievementsForRom,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

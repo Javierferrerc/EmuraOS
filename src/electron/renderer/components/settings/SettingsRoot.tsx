@@ -24,6 +24,7 @@ import { bibliotecaSection } from "./sections/biblioteca";
 import { portadasSection } from "./sections/portadas/index";
 import { rutasSection } from "./sections/rutas";
 import { emuladoresSection } from "./sections/emuladores/index";
+import { retroachievementsSection } from "./sections/retroachievements";
 import { avanzadoSection } from "./sections/avanzado";
 
 const SECTIONS: SettingsSection[] = [
@@ -33,6 +34,7 @@ const SECTIONS: SettingsSection[] = [
   portadasSection,
   rutasSection,
   emuladoresSection,
+  retroachievementsSection,
   avanzadoSection,
 ];
 import { SettingsLayout } from "./shell/SettingsLayout";
@@ -144,6 +146,11 @@ export function SettingsRoot() {
 
       // Resolved paths
       resolvedPaths: app.resolvedPaths ?? undefined,
+
+      // Phase 23 — RetroAchievements
+      raStatus: app.raStatus,
+      raLogin: app.raLogin,
+      raLogout: app.raLogout,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -188,6 +195,9 @@ export function SettingsRoot() {
       app.isGameRunning,
       app.currentGame,
       app.resolvedPaths,
+      app.raStatus,
+      app.raLogin,
+      app.raLogout,
     ]
   );
 

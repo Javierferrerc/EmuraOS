@@ -22,6 +22,7 @@ import { CoverFetchProgressToast } from "./components/CoverFetchProgressToast";
 import { ScanProgressToast } from "./components/ScanProgressToast";
 import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
+import { NexusShell } from "./nexus/NexusShell";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
@@ -290,6 +291,33 @@ export default function App() {
   const bgBlur = app.config?.backgroundBlur ?? 0;
   const bgOpacity = app.config?.backgroundOpacity ?? 30;
 
+  // Settings entry point shared by the NEXUS shell (its status-bar gear).
+  // Mirrors how the rest of the app routes to settings under each flag.
+  const openSettings = () => {
+    if (NEW_SETTINGS_ENABLED) navigation.navigateTo("/settings");
+    else app.setCurrentView("settings");
+  };
+
+  // The library view renders either the standard Layout or, when the user
+  // picks the "nexus" theme, the full alternate NEXUS shell. Both consume the
+  // same AppContext data; only the chrome differs.
+  const isNexus = app.config?.theme === "nexus";
+  const libraryPage = isNexus ? (
+    <NexusShell onOpenSettings={openSettings} />
+  ) : (
+    <Layout
+      inputDisabled={
+        showWizard ||
+        showAddRomWizard ||
+        isGameRunning ||
+        !!app.detailModalRom ||
+        app.quickLaunchOpen ||
+        app.collectionsModalOpen ||
+        !!app.viewingCollectionId
+      }
+    />
+  );
+
   let page;
   // Stable key per top-level view so the fade animation plays only on
   // view changes (library ↔ settings ↔ game), not on sub-route updates
@@ -305,7 +333,7 @@ export default function App() {
       page = <SettingsPage />;
       viewKey = "settings";
     } else {
-      page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen || !!app.viewingCollectionId} />;
+      page = libraryPage;
       viewKey = "library";
     }
   } else {
@@ -323,7 +351,7 @@ export default function App() {
         viewKey = "game";
         break;
       default:
-        page = <Layout inputDisabled={showWizard || showAddRomWizard || isGameRunning || !!app.detailModalRom || app.quickLaunchOpen || app.collectionsModalOpen || !!app.viewingCollectionId} />;
+        page = libraryPage;
         viewKey = "library";
     }
   }

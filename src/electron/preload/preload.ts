@@ -123,6 +123,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resolveRetroArchCore: (systemId: string) =>
     ipcRenderer.invoke("resolve-retroarch-core", systemId),
 
+  // Phase 23 — RetroAchievements
+  raLogin: (username: string, password: string, webApiKey?: string) =>
+    ipcRenderer.invoke("ra-login", { username, password, webApiKey }),
+  raLogout: () => ipcRenderer.invoke("ra-logout"),
+  raStatus: () => ipcRenderer.invoke("ra-status"),
+  getAchievementsForRom: (rom: unknown) =>
+    ipcRenderer.invoke("get-achievements-for-rom", rom),
+
   onCoreDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("core-download-progress", (_event, progress) =>
       callback(progress)

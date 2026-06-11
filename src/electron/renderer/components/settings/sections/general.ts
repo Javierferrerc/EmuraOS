@@ -22,6 +22,7 @@ export const generalSection: SettingsSection = {
             { value: "gameboy-green", label: "Game Boy verde" },
             { value: "snes-purple", label: "SNES púrpura" },
             { value: "synthwave", label: "Neon Synthwave" },
+            { value: "nexus", label: "Nexus" },
           ],
           get: (ctx) => ctx.config?.theme ?? "dark",
           set: async (value, ctx) => {
@@ -33,7 +34,8 @@ export const generalSection: SettingsSection = {
                 | "crt-amber"
                 | "gameboy-green"
                 | "snes-purple"
-                | "synthwave",
+                | "synthwave"
+                | "nexus",
             });
           },
         },

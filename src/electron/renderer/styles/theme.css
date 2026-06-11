@@ -314,6 +314,62 @@
   --color-dropdown-bg: rgba(10, 20, 10, 0.98);
 }
 
+/* ── Nexus ────────────────────────────────────────────────────────
+   Premium console-hybrid dark theme. Neutral white-alpha surfaces (no
+   blue tint), blue accent with violet card gradient, soft elevation
+   shadows. Ported from the "Game Console / NEXUS" design. */
+
+[data-theme="nexus"] {
+  --color-bg: #07080b;
+  --color-bg-gradient: linear-gradient(180deg, #0a0c11 0%, #07080b 100%);
+
+  /* Surfaces — flat white-alpha glass, matching --panel / --panel-2 / --panel-3 */
+  --color-surface-0: rgba(255, 255, 255, 0.045);
+  --color-surface-1: rgba(255, 255, 255, 0.07);
+  --color-surface-2: rgba(255, 255, 255, 0.1);
+
+  --color-text-primary: #eef1f7;
+  --color-text-secondary: rgba(238, 241, 247, 0.64);
+  --color-text-muted: rgba(238, 241, 247, 0.4);
+
+  --color-accent: #3b82f6;
+  --color-accent-hover: #60a5fa;
+  --color-focus-ring: #60a5fa;
+
+  --color-good: #4ade80;
+  --color-warn: #f5c451;
+  --color-bad: #f43f5e;
+
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.18);
+
+  --color-glass-bg: rgba(255, 255, 255, 0.07);
+  --color-glass-border: rgba(255, 255, 255, 0.16);
+
+  --color-card-glow: rgba(59, 130, 246, 0.3);
+  --color-card-border-start: #60a5fa;
+  --color-card-border-end: #a855f7;
+
+  --color-ctx-bg: rgba(10, 12, 17, 0.95);
+  --color-ctx-border: rgba(255, 255, 255, 0.1);
+  --color-ctx-hover: rgba(255, 255, 255, 0.07);
+
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.16);
+
+  --color-dropdown-bg: #0f1218;
+
+  /* Soft elevation — the design leans on shadows for its premium feel */
+  --shadow-element: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-element-hover: 0 8px 28px rgba(0, 0, 0, 0.5);
+
+  /* Slightly tighter radii to match the design (--radius 16px, --r-sm 11px) */
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
 @layer utilities {
   .bg-app {
     background: var(--color-bg-gradient);

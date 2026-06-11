@@ -81,6 +81,7 @@ const THEMES: Array<{ value: NonNullable<AppConfig["theme"]>; label: string }> =
     { value: "gameboy-green", label: "Game Boy verde" },
     { value: "snes-purple", label: "SNES púrpura" },
     { value: "synthwave", label: "Neon Synthwave" },
+    { value: "nexus", label: "Nexus" },
   ];
 
 export function buildCommandPaletteActions(

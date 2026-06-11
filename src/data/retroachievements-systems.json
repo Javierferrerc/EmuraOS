@@ -1,0 +1,18 @@
+{
+  "_comment": "Maps this launcher's systemId to its RetroAchievements numeric console ID and the local ROM hash method. consoleId comes from RA's API_GetConsoleIDs (stable values). hashMethod selects the rcheevos-compatible local hashing used to resolve a game on RA: 'full-md5' (MD5 of the whole file), 'nes' (strip 16-byte iNES header when present), 'snes' (strip 512-byte copier header when present), 'n64' (normalize byte order to big-endian .z64 then MD5). null means RA supports the console for credential propagation but local hashing isn't implemented yet (disc-based / complex formats), so the achievements panel shows a 'not hashable yet' hint. Systems RA doesn't support (3ds, switch, wiiu, ps3) are intentionally absent.",
+  "nes": { "consoleId": 7, "hashMethod": "nes" },
+  "snes": { "consoleId": 3, "hashMethod": "snes" },
+  "n64": { "consoleId": 2, "hashMethod": "n64" },
+  "gb": { "consoleId": 4, "hashMethod": "full-md5" },
+  "gbc": { "consoleId": 6, "hashMethod": "full-md5" },
+  "gba": { "consoleId": 5, "hashMethod": "full-md5" },
+  "megadrive": { "consoleId": 1, "hashMethod": "full-md5" },
+  "mastersystem": { "consoleId": 11, "hashMethod": "full-md5" },
+  "nds": { "consoleId": 18, "hashMethod": null },
+  "gamecube": { "consoleId": 16, "hashMethod": null },
+  "wii": { "consoleId": 19, "hashMethod": null },
+  "dreamcast": { "consoleId": 40, "hashMethod": null },
+  "psx": { "consoleId": 12, "hashMethod": null },
+  "ps2": { "consoleId": 21, "hashMethod": null },
+  "psp": { "consoleId": 41, "hashMethod": null }
+}

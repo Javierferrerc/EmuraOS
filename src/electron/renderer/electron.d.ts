@@ -28,6 +28,8 @@ import type {
   GameOverride,
   DolphinGameConfig,
   RetroArchGameConfig,
+  RaStatus,
+  RaAchievementsResult,
 } from "../../core/types";
 
 export interface ElectronAPI {
@@ -149,6 +151,16 @@ export interface ElectronAPI {
     patch: Partial<RetroArchGameConfig> | null
   ): Promise<void>;
   resolveRetroArchCore(systemId: string): Promise<string | null>;
+
+  // Phase 23 — RetroAchievements
+  raLogin(
+    username: string,
+    password: string,
+    webApiKey?: string
+  ): Promise<{ success: boolean; username?: string; error?: string }>;
+  raLogout(): Promise<void>;
+  raStatus(): Promise<RaStatus>;
+  getAchievementsForRom(rom: DiscoveredRom): Promise<RaAchievementsResult>;
 
   // Embedded overlay
   launchGameEmbedded(rom: DiscoveredRom, emulatorId?: string): Promise<EmbeddedLaunchResult>;

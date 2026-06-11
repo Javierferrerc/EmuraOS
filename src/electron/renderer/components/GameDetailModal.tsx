@@ -6,7 +6,9 @@ import type {
   DiscoveredRom,
   DolphinGameConfig,
   RetroArchGameConfig,
+  RaAchievementsResult,
 } from "../../../core/types";
+import { AchievementsPanel } from "./AchievementsPanel";
 
 interface Props {
   rom: DiscoveredRom;
@@ -45,6 +47,8 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
     setEmulatorOverride,
     setDolphinGameConfig,
     setRetroArchGameConfig,
+    getAchievementsForRom,
+    raStatus,
   } = useApp();
 
   const metadata = getMetadataForRom(rom.systemId, rom.fileName);
@@ -219,6 +223,39 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
     [setRetroArchGameConfig, rom.systemId, rom.fileName]
   );
 
+  // Phase 23 — lazily fetch RetroAchievements progress when the modal opens.
+  // Skipped entirely until the account is connected with a web API key.
+  const raConfigured = Boolean(raStatus?.connected && raStatus?.hasWebApiKey);
+  const [raResult, setRaResult] = useState<RaAchievementsResult | null>(null);
+  const [raLoading, setRaLoading] = useState(false);
+  useEffect(() => {
+    if (!raConfigured) {
+      setRaResult(null);
+      return;
+    }
+    let cancelled = false;
+    setRaLoading(true);
+    setRaResult(null);
+    getAchievementsForRom(rom)
+      .then((res) => {
+        if (!cancelled) setRaResult(res);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRaResult({
+            status: "error",
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRaLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [raConfigured, rom, getAchievementsForRom]);
+
   const formattedTime = formatPlayTime(record?.totalPlayTime ?? 0);
   const lastPlayedStr = record?.lastPlayed
     ? new Date(record.lastPlayed).toLocaleDateString(undefined, {
@@ -366,6 +403,16 @@ export function GameDetailModal({ rom, onClose, onLaunch }: Props) {
                 alt="Screenshot"
                 className="w-full rounded-lg"
               />
+            </div>
+          )}
+
+          {/* Phase 23 — RetroAchievements panel (only when connected) */}
+          {raConfigured && (
+            <div className="mb-4">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">
+                Logros
+              </h3>
+              <AchievementsPanel loading={raLoading} result={raResult} />
             </div>
           )}
 

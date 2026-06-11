@@ -94,6 +94,7 @@ export const AppConfigPartialSchema = z
         "gameboy-green",
         "snes-purple",
         "synthwave",
+        "nexus",
       ])
       .optional(),
     devMode: z.boolean().optional(),
@@ -132,8 +133,23 @@ export const AppConfigPartialSchema = z
     preLaunchScript: z.string().max(500).optional(),
     postLaunchScript: z.string().max(500).optional(),
     preLaunchCountdownEnabled: z.boolean().optional(),
+    // Phase 23 — RetroAchievements
+    retroAchievementsUsername: z.string().max(100).optional(),
+    retroAchievementsPassword: z.string().max(200).optional(),
+    retroAchievementsWebApiKey: z.string().max(200).optional(),
+    retroAchievementsToken: z.string().max(200).optional(),
+    retroAchievementsEnabled: z.boolean().optional(),
+    retroAchievementsHardcore: z.boolean().optional(),
   })
   .strict();
+
+// Phase 23 — credentials for the connect flow. Password is required here
+// (used once to derive the token) but never echoed back to the renderer.
+export const RaLoginSchema = z.object({
+  username: z.string().min(1).max(100),
+  password: z.string().min(1).max(200),
+  webApiKey: z.string().max(200).optional(),
+});
 
 export const BoundsSchema = z.object({
   x: z.number().int(),

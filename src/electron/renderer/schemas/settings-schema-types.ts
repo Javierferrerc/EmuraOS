@@ -11,6 +11,7 @@ import type {
   EmulatorDownloadProgress,
   GameMetadata,
   PlayRecord,
+  RaStatus,
   ReadinessReport,
   ScanResult,
   ScrapeProgress,
@@ -110,6 +111,15 @@ export interface SettingsContext {
 
   // --- Resolved paths (absolute paths for folder hints) ---
   resolvedPaths?: { romsPath: string; emulatorsPath: string };
+
+  // --- Phase 23 — RetroAchievements ---
+  raStatus: RaStatus | null;
+  raLogin: (
+    username: string,
+    password: string,
+    webApiKey?: string
+  ) => Promise<{ success: boolean; username?: string; error?: string }>;
+  raLogout: () => Promise<void>;
 }
 
 interface BaseSetting {
