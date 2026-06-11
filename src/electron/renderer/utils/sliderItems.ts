@@ -1,4 +1,4 @@
-import type { SystemDefinition } from "../../../core/types";
+import type { AppConfig, SystemDefinition } from "../../../core/types";
 import { SYSTEM_GROUPS, getGroupForSystem } from "./systemGroups";
 import { deriveSystemColors } from "./colorUtils";
 
@@ -122,7 +122,7 @@ const SHORT_LABELS: Record<string, string> = {
 
 export function buildSliderItems(
   systemsWithRoms: SystemDefinition[],
-  theme: "dark" | "light" | "retro-crt" = "dark",
+  theme: NonNullable<AppConfig["theme"]> = "dark",
   customColors?: Record<string, string>
 ): SliderItem[] {
   const palette = theme === "light" ? SYSTEM_COLORS_LIGHT : SYSTEM_COLORS;
