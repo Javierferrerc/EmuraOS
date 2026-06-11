@@ -1,4 +1,11 @@
 import { logSecurityEvent } from "./security-logger.js";
+import type {
+  RaLoginResult,
+  RaAchievement,
+  RaGameProgress,
+} from "./types.js";
+
+export type { RaLoginResult, RaAchievement, RaGameProgress };
 
 /**
  * RetroAchievements client covering the three calls the launcher needs:
@@ -21,38 +28,6 @@ const CONNECT_BASE = "https://retroachievements.org/dorequest.php";
 const WEB_API_BASE = "https://retroachievements.org/API";
 const MEDIA_BASE = "https://media.retroachievements.org";
 const RATE_LIMIT_MS = 300;
-
-export interface RaLoginResult {
-  success: boolean;
-  username?: string;
-  token?: string;
-  error?: string;
-}
-
-export interface RaAchievement {
-  id: number;
-  title: string;
-  description: string;
-  points: number;
-  /** Badge image URL (earned art). Locked art is the same id + "_lock". */
-  badgeUrl: string;
-  badgeUrlLocked: string;
-  /** ISO-ish date string from RA, or null when the user hasn't earned it. */
-  dateEarned: string | null;
-  dateEarnedHardcore: string | null;
-}
-
-export interface RaGameProgress {
-  gameId: number;
-  title: string;
-  consoleName: string;
-  iconUrl: string | null;
-  numAchievements: number;
-  numAwarded: number;
-  numAwardedHardcore: number;
-  userCompletion: string;
-  achievements: RaAchievement[];
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

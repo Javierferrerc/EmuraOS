@@ -61,7 +61,8 @@ export interface AppConfig {
     | "crt-amber"
     | "gameboy-green"
     | "snes-purple"
-    | "synthwave";
+    | "synthwave"
+    | "nexus";
   devMode?: boolean;
   // One-shot flag: set to true after we auto-apply the Citra gamepad
   // profile on the first 3DS launch. Prevents re-patching qt-config.ini
@@ -108,6 +109,25 @@ export interface AppConfig {
    *  emulator window appears. Defaults to false (no countdown) so the
    *  feature is opt-in. Respects prefers-reduced-motion automatically. */
   preLaunchCountdownEnabled?: boolean;
+
+  // Phase 23 — RetroAchievements
+  /** RA account username. */
+  retroAchievementsUsername?: string;
+  /** RA account password. Used only to derive the emulator token on
+   *  "Connect"; kept (like the ScreenScraper credentials) so re-deriving a
+   *  token later doesn't require re-typing it. Not injected anywhere. */
+  retroAchievementsPassword?: string;
+  /** Web API key from the RA settings page — authenticates the read-only
+   *  web API calls that power the achievements panel. */
+  retroAchievementsWebApiKey?: string;
+  /** Token derived from login2, injected into emulator configs as the
+   *  cheevos token. Set by the connect flow, not user-edited. */
+  retroAchievementsToken?: string;
+  /** Master switch — when false we never inject credentials or fetch
+   *  achievements even if the account is connected. */
+  retroAchievementsEnabled?: boolean;
+  /** Inject hardcore mode (no save states / cheats) into emulators. */
+  retroAchievementsHardcore?: boolean;
 }
 
 export interface EmulatorDefinition {
@@ -476,3 +496,59 @@ export interface UpdateCheckResult {
   latestVersion?: string;
   updateInfo?: UpdateInfo;
 }
+
+// ── Phase 23 — RetroAchievements ───────────────────────────────────
+
+/** Result of the connect/login flow. */
+export interface RaLoginResult {
+  success: boolean;
+  username?: string;
+  token?: string;
+  error?: string;
+}
+
+/** Non-secret RA account state exposed to the renderer. */
+export interface RaStatus {
+  connected: boolean;
+  username: string;
+  enabled: boolean;
+  hardcore: boolean;
+  hasWebApiKey: boolean;
+}
+
+/** A single achievement plus the user's earned state for it. */
+export interface RaAchievement {
+  id: number;
+  title: string;
+  description: string;
+  points: number;
+  /** Badge image URL (earned art) and its locked variant. */
+  badgeUrl: string;
+  badgeUrlLocked: string;
+  /** ISO-ish date string from RA, or null when not yet earned. */
+  dateEarned: string | null;
+  dateEarnedHardcore: string | null;
+}
+
+/** A game's achievement set + the user's progress against it. */
+export interface RaGameProgress {
+  gameId: number;
+  title: string;
+  consoleName: string;
+  iconUrl: string | null;
+  numAchievements: number;
+  numAwarded: number;
+  numAwardedHardcore: number;
+  userCompletion: string;
+  achievements: RaAchievement[];
+}
+
+/** Discriminated result of "fetch achievements for this ROM", so the UI can
+ *  render a precise hint for every dead-end instead of a generic error. */
+export type RaAchievementsResult =
+  | { status: "ok"; progress: RaGameProgress }
+  | { status: "not-configured" } // no account / web API key set
+  | { status: "disabled" } // RA master switch off
+  | { status: "unhashable" } // disc/unsupported system — no local hash
+  | { status: "not-found" } // hash computed but not in RA's database
+  | { status: "error"; message: string };

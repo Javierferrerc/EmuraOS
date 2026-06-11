@@ -61,6 +61,18 @@ import {
   runPreLaunchScript,
   type LaunchScriptEnv,
 } from "../../core/launch-scripts.js";
+import { RetroAchievementsClient } from "../../core/retroachievements-client.js";
+import { hashRomFile } from "../../core/rom-hasher.js";
+import {
+  isRaInjectable,
+  injectRetroArch,
+  injectDolphin,
+  injectDuckStation,
+  resolveRetroArchCfgPath,
+  resolveDolphinIniPath,
+  resolveDuckStationIniPath,
+  type RaCredentials,
+} from "../../core/retroachievements-config.js";
 import {
   backfillThumbnails,
   ensureThumbnail,
@@ -101,6 +113,7 @@ import {
   NullableEmulatorIdSchema,
   DolphinGameConfigPatchSchema,
   RetroArchGameConfigPatchSchema,
+  RaLoginSchema,
 } from "./ipc-validators.js";
 
 function getDataPath(): string {
@@ -293,7 +306,57 @@ export function registerIpcHandlers(
     }
 
     const cm = new ConfigManager(getProjectRoot());
-    const preScript = cm.get().preLaunchScript;
+    const cfg = cm.get();
+
+    // Phase 23 — inject RetroAchievements credentials into the resolved
+    // emulator's config so achievements work on launch. Only for emulators
+    // whose token lives in the config file (RetroArch/Dolphin/DuckStation);
+    // PCSX2/PPSSPP keep their token in OS secret storage and must be logged
+    // in manually. Best-effort: a failure never blocks the launch.
+    if (
+      cfg.retroAchievementsEnabled &&
+      cfg.retroAchievementsUsername &&
+      cfg.retroAchievementsToken
+    ) {
+      const resolved = effective
+        ? mapper.resolveById(effective, rom.systemId, emulatorsPath)
+        : mapper.resolve(rom.systemId, emulatorsPath);
+      const emuId = resolved?.definition.id;
+      if (resolved && emuId && isRaInjectable(emuId)) {
+        const creds: RaCredentials = {
+          username: cfg.retroAchievementsUsername,
+          token: cfg.retroAchievementsToken,
+          enabled: true,
+          hardcore: cfg.retroAchievementsHardcore ?? false,
+        };
+        try {
+          if (emuId === "retroarch") {
+            const p = resolveRetroArchCfgPath(
+              resolved.executablePath,
+              app.getPath("appData")
+            );
+            if (p) injectRetroArch(p, creds);
+          } else if (emuId === "dolphin") {
+            const userDir = resolveDolphinUserDir(
+              resolved.executablePath,
+              app.getPath("appData"),
+              app.getPath("documents")
+            );
+            if (userDir) injectDolphin(resolveDolphinIniPath(userDir), creds);
+          } else if (emuId === "duckstation") {
+            const p = resolveDuckStationIniPath(
+              resolved.executablePath,
+              app.getPath("documents")
+            );
+            if (p) injectDuckStation(p, creds);
+          }
+        } catch (err) {
+          console.warn("[retroachievements] credential injection failed:", err);
+        }
+      }
+    }
+
+    const preScript = cfg.preLaunchScript;
     if (preScript) {
       const env: LaunchScriptEnv = {
         systemId: rom.systemId,
@@ -1423,6 +1486,98 @@ export function registerIpcHandlers(
         resolved.definition.args[validatedSystem] ??
         resolved.definition.defaultArgs;
       return coreArg ? coreDisplayName(coreArg) : null;
+    }
+  );
+
+  // ── Phase 23 — RetroAchievements ─────────────────────────────────
+
+  // Connect: derive the emulator token from username+password via login2 and
+  // persist it (plus the web API key) so future launches inject credentials.
+  // Never returns the token/password to the renderer.
+  ipcMain.handle(
+    "ra-login",
+    async (_event: IpcMainInvokeEvent, payload: unknown) => {
+      const { username, password, webApiKey } = RaLoginSchema.parse(payload);
+      const client = new RetroAchievementsClient();
+      const result = await client.login(username, password);
+      if (!result.success || !result.token) {
+        return { success: false, error: result.error ?? "Login fallido" };
+      }
+      const cm = new ConfigManager(getProjectRoot());
+      cm.update({
+        retroAchievementsUsername: result.username ?? username,
+        retroAchievementsPassword: password,
+        retroAchievementsToken: result.token,
+        retroAchievementsWebApiKey: webApiKey ?? cm.get().retroAchievementsWebApiKey,
+        retroAchievementsEnabled: true,
+      });
+      cm.save();
+      return { success: true, username: result.username ?? username };
+    }
+  );
+
+  // Disconnect: wipe all RA credentials and disable the feature.
+  ipcMain.handle("ra-logout", () => {
+    const cm = new ConfigManager(getProjectRoot());
+    cm.update({
+      retroAchievementsUsername: "",
+      retroAchievementsPassword: "",
+      retroAchievementsToken: "",
+      retroAchievementsWebApiKey: "",
+      retroAchievementsEnabled: false,
+    });
+    cm.save();
+  });
+
+  // Status for the renderer — never exposes secrets, only presence flags.
+  ipcMain.handle("ra-status", () => {
+    const cfg = new ConfigManager(getProjectRoot()).get();
+    return {
+      connected: Boolean(cfg.retroAchievementsToken),
+      username: cfg.retroAchievementsUsername ?? "",
+      enabled: Boolean(cfg.retroAchievementsEnabled),
+      hardcore: Boolean(cfg.retroAchievementsHardcore),
+      hasWebApiKey: Boolean(cfg.retroAchievementsWebApiKey),
+    };
+  });
+
+  // Achievements for one ROM: hash → resolve game id → fetch user progress.
+  // Returns a discriminated result so the UI shows a precise hint for each
+  // dead-end (not-configured / disabled / unhashable / not-found / error).
+  ipcMain.handle(
+    "get-achievements-for-rom",
+    async (_event: IpcMainInvokeEvent, rom: unknown) => {
+      const validated = DiscoveredRomSchema.parse(rom) as DiscoveredRom;
+      const cfg = new ConfigManager(getProjectRoot()).get();
+      if (cfg.retroAchievementsEnabled === false) {
+        return { status: "disabled" };
+      }
+      const username = cfg.retroAchievementsUsername;
+      const webApiKey = cfg.retroAchievementsWebApiKey;
+      if (!username || !webApiKey) {
+        return { status: "not-configured" };
+      }
+      const hash = hashRomFile(validated.filePath, validated.systemId);
+      if (!hash) return { status: "unhashable" };
+      try {
+        const client = new RetroAchievementsClient();
+        const gameId = await client.resolveGameId(hash);
+        if (!gameId) return { status: "not-found" };
+        const progress = await client.getGameProgress(
+          username,
+          webApiKey,
+          gameId
+        );
+        if (!progress) {
+          return { status: "error", message: "No se pudo leer el progreso" };
+        }
+        return { status: "ok", progress };
+      } catch (err) {
+        return {
+          status: "error",
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
   );
 
