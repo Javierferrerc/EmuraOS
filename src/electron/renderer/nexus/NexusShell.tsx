@@ -15,11 +15,13 @@ import {
   buildRows,
   filterByPlatform,
   pickHero,
+  pickContinue,
   type NexusGame,
 } from "./nexusModel";
 import type { NexusLayout } from "./nexusTypes";
 import { NexusStatusBar } from "./NexusStatusBar";
 import { NexusSidebar } from "./NexusSidebar";
+import { NexusSwitchNav } from "./NexusSwitchNav";
 import { NexusHome } from "./NexusHome";
 import { NexusDetailPanel } from "./NexusDetailPanel";
 import { NexusSearchOverlay } from "./NexusSearchOverlay";
@@ -32,6 +34,9 @@ interface NexusShellProps {
 
 const LS_PLATFORM = "nx.platform";
 const LS_LAYOUT = "nx.layout";
+const LS_NAV = "nx.nav";
+
+type NexusNav = "switch" | "sidebar";
 
 export function NexusShell({ onOpenSettings }: NexusShellProps) {
   const app = useApp();
@@ -52,8 +57,13 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   const [platform, setPlatform] = useState<string>(
     () => localStorage.getItem(LS_PLATFORM) || "all"
   );
+  // Default configuration per the requested build: console-style platform
+  // switcher + grid library topped by a "Continuar" hero.
   const [layout, setLayout] = useState<NexusLayout>(
-    () => (localStorage.getItem(LS_LAYOUT) as NexusLayout) || "hero"
+    () => (localStorage.getItem(LS_LAYOUT) as NexusLayout) || "grid"
+  );
+  const [nav, setNav] = useState<NexusNav>(
+    () => (localStorage.getItem(LS_NAV) as NexusNav) || "switch"
   );
   const [detailGame, setDetailGame] = useState<NexusGame | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -107,6 +117,16 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   const filtered = useMemo(() => filterByPlatform(allGames, platform), [allGames, platform]);
   const rows = useMemo(() => buildRows(filtered, recentlyPlayed), [filtered, recentlyPlayed]);
   const hero = useMemo(() => pickHero(filtered, recentlyPlayed), [filtered, recentlyPlayed]);
+  // "Continuar" hero for the grid layout — only a genuinely in-progress game.
+  const continueHero = useMemo(
+    () => pickContinue(filtered, recentlyPlayed),
+    [filtered, recentlyPlayed]
+  );
+  // The hero-layout banner shows "Continuar" when its game is recently played.
+  const heroContinue = useMemo(
+    () => (hero ? recentlyPlayed.includes(hero.key) : false),
+    [hero, recentlyPlayed]
+  );
 
   const platformLabel = useMemo(() => {
     if (platform === "all") return "Toda la biblioteca";
@@ -122,6 +142,14 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   const changeLayout = useCallback((l: NexusLayout) => {
     setLayout(l);
     localStorage.setItem(LS_LAYOUT, l);
+  }, []);
+
+  const toggleNav = useCallback(() => {
+    setNav((n) => {
+      const next: NexusNav = n === "switch" ? "sidebar" : "switch";
+      localStorage.setItem(LS_NAV, next);
+      return next;
+    });
   }, []);
 
   const handleLaunch = useCallback(
@@ -173,21 +201,38 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
         />
 
         <div className="nx-main">
-          <NexusSidebar
-            items={platformItems}
-            counts={counts}
-            activePlatform={platform}
-            onSelect={selectPlatform}
-            onOpenSearch={() => setSearchOpen(true)}
-            layout={layout}
-            onLayoutChange={changeLayout}
-          />
+          {nav === "sidebar" && (
+            <NexusSidebar
+              items={platformItems}
+              counts={counts}
+              activePlatform={platform}
+              onSelect={selectPlatform}
+              onOpenSearch={() => setSearchOpen(true)}
+              layout={layout}
+              onLayoutChange={changeLayout}
+              onToggleNav={toggleNav}
+            />
+          )}
           <div className="nx-content">
+            {nav === "switch" && (
+              <NexusSwitchNav
+                items={platformItems}
+                counts={counts}
+                activePlatform={platform}
+                onSelect={selectPlatform}
+                onOpenSearch={() => setSearchOpen(true)}
+                layout={layout}
+                onLayoutChange={changeLayout}
+                onToggleNav={toggleNav}
+              />
+            )}
             <NexusHome
               key={`${platform}:${layout}`}
               rows={rows}
               gridGames={filtered}
               hero={hero}
+              heroContinue={heroContinue}
+              continueHero={continueHero}
               layout={layout}
               platformLabel={platformLabel}
               active={homeActive}

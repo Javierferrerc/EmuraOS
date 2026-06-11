@@ -32,6 +32,7 @@ export function NexusSidebar({
   onOpenSearch,
   layout,
   onLayoutChange,
+  onToggleNav,
 }: NexusSidebarProps) {
   return (
     <nav className="nx-sidebar">
@@ -99,6 +100,17 @@ export function NexusSidebar({
             <GridIcon size={20} />
           </span>
           <span className="nx-sb-name">Cuadrícula</span>
+        </button>
+        <button
+          className="nx-sb-item"
+          style={{ ["--tint" as string]: "var(--accent)" }}
+          onClick={onToggleNav}
+          title="Cambiar a selector tipo consola"
+        >
+          <span className="nx-sb-glyph">
+            <ConsoleIcon size={20} />
+          </span>
+          <span className="nx-sb-name">Modo consola</span>
         </button>
       </div>
     </nav>
