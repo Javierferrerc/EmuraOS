@@ -159,6 +159,17 @@ export const SidebarIcon = ({ size = 18, className }: IconProps) =>
     className
   );
 
+export const RailIcon = ({ size = 18, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <rect x="3" y="7" width="5.5" height="10" rx="1.6" />
+      <rect x="10.25" y="7" width="5.5" height="10" rx="1.6" />
+      <rect x="17.5" y="9" width="3.5" height="6" rx="1.4" />
+    </>,
+    className
+  );
+
 export const ConsoleIcon = ({ size = 18, className }: IconProps) =>
   svg(
     size,

@@ -27,7 +27,13 @@
   --ease: cubic-bezier(0.4, 0.8, 0.3, 1);
 
   position: relative;
-  height: 100%;
+  /* Fill the parent flex column robustly (flex-grow instead of a percentage
+   * chain, which collapses if any ancestor height fails to resolve and leaves
+   * the grid unbounded — no scroll region, content clipped). */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   color: var(--text);
   font-family: "Sora", system-ui, sans-serif;
@@ -52,14 +58,31 @@
 /* ── App shell ───────────────────────────────────────────── */
 .nx-app {
   position: relative;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* Single column constrained to the container — WITHOUT this the implicit
+   * `auto` column grows to the widest content (the platform carousel / game
+   * grid), making the whole app wider than the viewport: the status bar
+   * stretches off-screen (its right-aligned clock drifts while navigating)
+   * and the grid is clipped horizontally instead of flowing into vertical
+   * scroll. `minmax(0,1fr)` pins it to the viewport and lets children shrink. */
+  grid-template-columns: minmax(0, 1fr);
   background:
     radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 55%),
     radial-gradient(90% 70% at 0% 110%, rgba(120, 140, 255, 0.06), transparent 60%),
     linear-gradient(180deg, var(--bg-2), var(--bg));
   overflow: hidden;
+}
+/* Background image present → translucent backdrop so App's image layer shows
+   through, like the main theme. The accent radials stay; only the opaque dark
+   base becomes semi-transparent. */
+.nexus-root.has-bg .nx-app {
+  background:
+    radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 55%),
+    radial-gradient(90% 70% at 0% 110%, rgba(120, 140, 255, 0.05), transparent 60%),
+    linear-gradient(180deg, rgba(10, 12, 17, 0.62), rgba(7, 8, 11, 0.7));
 }
 .nx-ambient {
   position: absolute;
@@ -73,6 +96,7 @@
   position: relative;
   z-index: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
 }
 .nx-content {
@@ -111,17 +135,83 @@
   z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
   height: 60px;
   padding: 0 22px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(10, 12, 18, 0.7), rgba(10, 12, 18, 0.25));
   backdrop-filter: blur(18px);
 }
+
+/* Global view controls relocated into the status bar */
+.nx-sb-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.nx-sb-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.nx-sb-tool-btn:hover {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line-2);
+}
+.nx-sb-seg {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.nx-sb-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all 0.14s;
+}
+.nx-sb-seg-btn:hover {
+  color: var(--text);
+}
+.nx-sb-seg-btn.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 10px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.nx-sb-seg-btn.icon {
+  padding: 0 10px;
+}
+.nx-sb-seg.icons .nx-sb-seg-btn.active {
+  background: var(--panel-3);
+  color: #fff;
+  box-shadow: none;
+}
 .nx-sb-profile {
   display: flex;
   align-items: center;
   gap: 11px;
+  flex-shrink: 0;
   background: none;
   border: 0;
   padding: 4px 8px 4px 4px;
@@ -158,16 +248,24 @@
   color: var(--text-faint);
 }
 .nx-sb-center {
+  /* In-flow and flexible: takes the space between the left tools and the right
+   * status cluster and centres the clock within it, so it adapts to the window
+   * width and never overlaps the controls at smaller sizes. */
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   line-height: 1.05;
+  pointer-events: none;
 }
 .nx-sb-time {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .nx-sb-colon {
   animation: nx-blink 2s steps(1) infinite;
@@ -183,11 +281,13 @@
   color: var(--text-faint);
   text-transform: capitalize;
   margin-top: 1px;
+  white-space: nowrap;
 }
 .nx-sb-right {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
   color: var(--text-dim);
 }
 .nx-sb-ico {
@@ -368,6 +468,102 @@
   margin-top: 8px;
 }
 
+/* Grouped sidebar (family → console) */
+.nx-sb-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px -6px 0 0;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+.nx-sb-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+.nx-sb-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+}
+.nx-sb-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+.nx-sb-fam {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  transition: all 0.14s;
+  text-align: left;
+}
+.nx-sb-fam:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.nx-sb-fam.active {
+  background: color-mix(in oklab, var(--tint) 14%, transparent);
+  color: #fff;
+}
+.nx-sb-fam.nav-focused {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.nx-sb-fam-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px color-mix(in oklab, var(--tint) 55%, transparent);
+}
+.nx-sb-fam-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.nx-sb-fam-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.nx-sb-systems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 4px;
+}
+.nx-sb-item.all {
+  margin-bottom: 2px;
+}
+.nx-sb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.nx-sb-item.active .nx-sb-dot {
+  box-shadow: 0 0 9px var(--tint);
+}
+.nx-sb-year {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Switch nav (console carousel) ───────────────────────── */
 .nx-switch {
   position: relative;
@@ -418,6 +614,12 @@
   border-color: color-mix(in oklab, var(--tint) 50%, transparent);
   background: color-mix(in oklab, var(--tint) 16%, rgba(255, 255, 255, 0.03));
   box-shadow: 0 8px 30px color-mix(in oklab, var(--tint) 22%, transparent);
+}
+.nx-switch-card.nav-focused {
+  box-shadow: 0 0 0 2.5px var(--accent), 0 8px 30px color-mix(in oklab, var(--tint) 22%, transparent);
+}
+.nx-sb-item.nav-focused {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
 }
 .nx-switch-glow {
   position: absolute;
@@ -478,6 +680,187 @@
   color: var(--text);
   background: var(--panel-2);
   transform: translateY(-1px);
+}
+
+/* ── Rail nav (family → console horizontal strip) ────────── */
+.nx-rail {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 26px 8px;
+}
+.nx-rail-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.nx-rail-track {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  padding: 4px 2px;
+  scroll-snap-type: x proximity;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+.nx-rail-track::-webkit-scrollbar {
+  display: none;
+}
+.nx-rail-fam {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 0 12px 0 14px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 0.14s;
+}
+.nx-rail-fam:first-child {
+  border-left: 0;
+}
+.nx-rail-fam:hover,
+.nx-rail-fam.active {
+  color: var(--text);
+}
+.nx-rail-fam-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px color-mix(in oklab, var(--tint) 60%, transparent);
+}
+.nx-rail-fam.nav-focused {
+  color: #fff;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+  border-radius: 8px;
+}
+.nx-rail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: 54px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text-dim);
+  transition: all 0.2s var(--ease);
+  position: relative;
+  overflow: hidden;
+  scroll-snap-align: center;
+}
+.nx-rail-chip:hover {
+  background: var(--panel-2);
+  color: var(--text);
+  transform: translateY(-2px);
+}
+.nx-rail-chip.active {
+  color: #fff;
+  border-color: color-mix(in oklab, var(--tint) 50%, transparent);
+  background: color-mix(in oklab, var(--tint) 15%, rgba(255, 255, 255, 0.03));
+  box-shadow: 0 6px 22px color-mix(in oklab, var(--tint) 24%, transparent);
+}
+.nx-rail-chip.nav-focused {
+  box-shadow: 0 0 0 2.5px var(--accent), 0 6px 22px color-mix(in oklab, var(--tint) 24%, transparent);
+}
+.nx-rail-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(70% 100% at 18% 0%, color-mix(in oklab, var(--tint) 40%, transparent), transparent 65%);
+  transition: opacity 0.2s;
+}
+.nx-rail-chip.active .nx-rail-glow {
+  opacity: 1;
+}
+.nx-rail-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--tint);
+}
+.nx-rail-glyph img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.nx-rail-chip.active .nx-rail-glyph {
+  filter: drop-shadow(0 0 8px color-mix(in oklab, var(--tint) 55%, transparent));
+}
+.nx-rail-txt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  text-align: left;
+}
+.nx-rail-name {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.nx-rail-sub {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.nx-rail-chip.active .nx-rail-sub {
+  color: color-mix(in oklab, var(--text) 60%, transparent);
+}
+.nx-rail-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: rgba(12, 15, 21, 0.85);
+  backdrop-filter: blur(10px);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.nx-rail-arrow.left {
+  left: 6px;
+}
+.nx-rail-arrow.right {
+  right: 6px;
+}
+.nx-rail-arrow.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.nx-rail-arrow:hover {
+  transform: translateY(-50%) scale(1.08);
+}
+.nx-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 /* Segmented layout toggle (Destacado | Cuadrícula) */

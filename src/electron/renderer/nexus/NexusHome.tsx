@@ -9,12 +9,32 @@
  * the scroll container / row track via getBoundingClientRect deltas.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { NexusGame, NexusRow } from "./nexusModel";
-import type { NexusLayout } from "./nexusTypes";
+import type { NexusLayout, NavDir, NexusHomeHandle } from "./nexusTypes";
 import { NexusGameCard } from "./NexusGameCard";
 import { NexusHeroBanner } from "./NexusHeroBanner";
+import { useHorizontalWheel } from "./useHorizontalWheel";
 import { SparkIcon, GridIcon } from "./NexusIcons";
+
+/** A carousel row whose vertical wheel scrolls it horizontally. */
+function RowTrack({ children }: { children: React.ReactNode }) {
+  const ref = useHorizontalWheel<HTMLDivElement>();
+  return (
+    <div className="nx-row-track" ref={ref}>
+      {children}
+    </div>
+  );
+}
 
 interface NexusHomeProps {
   rows: NexusRow[];
@@ -24,7 +44,6 @@ interface NexusHomeProps {
   continueHero: NexusGame | null;
   layout: NexusLayout;
   platformLabel: string;
-  active: boolean;
   isFavorite: (game: NexusGame) => boolean;
   onOpen: (game: NexusGame) => void;
   onLaunch: (game: NexusGame) => void;
@@ -34,20 +53,22 @@ interface NexusHomeProps {
 const GRID_MIN = 168;
 const GRID_GAP = 18;
 
-export function NexusHome({
-  rows,
-  gridGames,
-  hero,
-  heroContinue,
-  continueHero,
-  layout,
-  platformLabel,
-  active,
-  isFavorite,
-  onOpen,
-  onLaunch,
-  onToggleFavorite,
-}: NexusHomeProps) {
+export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function NexusHome(
+  {
+    rows,
+    gridGames,
+    hero,
+    heroContinue,
+    continueHero,
+    layout,
+    platformLabel,
+    isFavorite,
+    onOpen,
+    onLaunch,
+    onToggleFavorite,
+  },
+  ref
+) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -124,53 +145,55 @@ export function NexusHome({
     }
   }, [focusedGame, focus.r, focus.c]);
 
-  // Keyboard 2D navigation.
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      const rowsLen = navRows.length;
-      if (rowsLen === 0) return;
-      switch (e.key) {
-        case "ArrowRight":
-          e.preventDefault();
-          setFocus((f) => {
-            const len = navRows[f.r]?.length ?? 1;
-            return { r: f.r, c: Math.min(len - 1, f.c + 1) };
-          });
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          setFocus((f) => ({ r: f.r, c: Math.max(0, f.c - 1) }));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          setFocus((f) => {
-            const r = Math.min(rowsLen - 1, f.r + 1);
-            const len = navRows[r]?.length ?? 1;
-            return { r, c: Math.min(f.c, len - 1) };
-          });
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setFocus((f) => {
-            const r = Math.max(0, f.r - 1);
-            const len = navRows[r]?.length ?? 1;
-            return { r, c: Math.min(f.c, len - 1) };
-          });
-          break;
-        case "Enter":
-          e.preventDefault();
-          if (focusedGame) onOpen(focusedGame);
-          break;
-        default:
-          break;
+  // Latest focus + matrix in refs so the imperative handle (driven by the
+  // shell's unified keyboard/gamepad dispatcher) always reads current values
+  // without being recreated on every move.
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const navRowsRef = useRef(navRows);
+  navRowsRef.current = navRows;
+
+  useImperativeHandle(ref, (): NexusHomeHandle => ({
+    handleAction(dir: NavDir) {
+      const f = focusRef.current;
+      const nr = navRowsRef.current;
+      if (nr.length === 0) {
+        // Nothing focusable — still let the user escape back to the rail.
+        if (dir === "up") return "escape-up";
+        if (dir === "left") return "escape-left";
+        return "ok";
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, navRows, focusedGame, onOpen]);
+      const g = nr[f.r]?.[f.c] ?? null;
+      switch (dir) {
+        case "activate":
+          if (g) onOpen(g);
+          return "ok";
+        case "favorite":
+          if (g) onToggleFavorite(g);
+          return "ok";
+        case "left":
+          if (f.c === 0) return "escape-left";
+          setFocus({ r: f.r, c: f.c - 1 });
+          return "ok";
+        case "right":
+          setFocus({ r: f.r, c: Math.min((nr[f.r]?.length ?? 1) - 1, f.c + 1) });
+          return "ok";
+        case "up": {
+          if (f.r === 0) return "escape-up";
+          const r = f.r - 1;
+          setFocus({ r, c: Math.min(f.c, (nr[r]?.length ?? 1) - 1) });
+          return "ok";
+        }
+        case "down": {
+          const r = Math.min(nr.length - 1, f.r + 1);
+          setFocus({ r, c: Math.min(f.c, (nr[r]?.length ?? 1) - 1) });
+          return "ok";
+        }
+        default:
+          return "ok";
+      }
+    },
+  }));
 
   const registerRef = useCallback((key: string, el: HTMLDivElement | null) => {
     if (el) cardRefs.current.set(key, el);
@@ -271,7 +294,7 @@ export function NexusHome({
                   <h3 className="nx-row-title">{row.title}</h3>
                   <span className="nx-row-count">{row.games.length}</span>
                 </div>
-                <div className="nx-row-track">
+                <RowTrack>
                   {row.games.map((g, ci) => (
                     <NexusGameCard
                       key={g.key}
@@ -285,7 +308,7 @@ export function NexusHome({
                       onHover={() => setFocus({ r: navR, c: ci })}
                     />
                   ))}
-                </div>
+                </RowTrack>
               </div>
             );
           })}
@@ -293,4 +316,4 @@ export function NexusHome({
       </div>
     </div>
   );
-}
+});

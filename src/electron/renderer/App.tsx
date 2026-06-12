@@ -23,6 +23,7 @@ import { ScanProgressToast } from "./components/ScanProgressToast";
 import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
 import { NexusShell } from "./nexus/NexusShell";
+import { NexusSettings } from "./nexus/settings/NexusSettings";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
@@ -292,16 +293,27 @@ export default function App() {
   const bgOpacity = app.config?.backgroundOpacity ?? 30;
 
   // Settings entry point shared by the NEXUS shell (its status-bar gear).
-  // Mirrors how the rest of the app routes to settings under each flag.
+  //
+  // `currentView` must be set to "settings" too — not just the navigation
+  // path. The Settings "Volver" handler exits via app.setCurrentView("library"),
+  // which only fires the currentView→navigation bridge (and thus actually
+  // leaves /settings) when currentView was previously "settings". Navigating
+  // by path alone left currentView stuck on "library", so that exit became a
+  // no-op and the user got trapped in Settings.
   const openSettings = () => {
+    app.setCurrentView("settings");
     if (NEW_SETTINGS_ENABLED) navigation.navigateTo("/settings");
-    else app.setCurrentView("settings");
   };
 
   // The library view renders either the standard Layout or, when the user
   // picks the "nexus" theme, the full alternate NEXUS shell. Both consume the
   // same AppContext data; only the chrome differs.
   const isNexus = app.config?.theme === "nexus";
+  // Exit Settings → back to the library. Mirrors the standard "Volver"; relies
+  // on the currentView→navigation bridge to actually leave /settings.
+  const exitSettings = () => app.setCurrentView("library");
+  const settingsPage =
+    isNexus && NEW_SETTINGS_ENABLED ? <NexusSettings onExit={exitSettings} /> : <SettingsPage />;
   const libraryPage = isNexus ? (
     <NexusShell onOpenSettings={openSettings} />
   ) : (
@@ -330,7 +342,7 @@ export default function App() {
       page = <GameModeView />;
       viewKey = "game";
     } else if (path.startsWith("/settings")) {
-      page = <SettingsPage />;
+      page = settingsPage;
       viewKey = "settings";
     } else {
       page = libraryPage;
@@ -339,7 +351,7 @@ export default function App() {
   } else {
     switch (currentView) {
       case "settings":
-        page = <SettingsPage />;
+        page = settingsPage;
         viewKey = "settings";
         break;
       case "emulator-config":
