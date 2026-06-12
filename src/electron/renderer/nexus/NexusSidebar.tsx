@@ -1,39 +1,32 @@
 /**
- * NexusSidebar — the 230px platform rail (default PlatformNav variant from the
- * design). "Biblioteca" aggregates everything; each following entry is a real
- * system/group present in the library, tinted with its slider colour. Also
- * hosts the search button and a layout toggle (carruseles ↔ cuadrícula).
+ * NexusSidebar — the lateral platform rail (family → console hierarchy). Ported
+ * from the updated design's grouped SidebarNav: "Biblioteca" (all) on top, then
+ * each manufacturer as a header (dot + name + count) with its consoles below
+ * (colour dot + name + year). Footer keeps the layout toggle + switch-to-rail.
  */
 
-import type { SliderItem } from "../utils/sliderItems";
-import { LibraryIcon, SearchIcon, LayersIcon, GridIcon, ConsoleIcon } from "./NexusIcons";
-import type { NexusLayout } from "./nexusTypes";
+import type { NexusFamily } from "./nexusPlatforms";
+import { ALL_PLATFORM } from "./nexusPlatforms";
+import { LibraryIcon, SearchIcon } from "./NexusIcons";
 
 interface NexusSidebarProps {
-  items: SliderItem[];
-  counts: Record<string, number>;
+  families: NexusFamily[];
   activePlatform: string;
+  navFocused?: boolean;
   onSelect: (platformId: string) => void;
   onOpenSearch: () => void;
-  layout: NexusLayout;
-  onLayoutChange: (layout: NexusLayout) => void;
-  onToggleNav: () => void;
-}
-
-function platformIdOf(item: SliderItem): string {
-  return item.systemId ?? "all";
 }
 
 export function NexusSidebar({
-  items,
-  counts,
+  families,
   activePlatform,
+  navFocused,
   onSelect,
   onOpenSearch,
-  layout,
-  onLayoutChange,
-  onToggleNav,
 }: NexusSidebarProps) {
+  const focusCls = (id: string) => (activePlatform === id && navFocused ? " nav-focused" : "");
+  const allActive = activePlatform === ALL_PLATFORM;
+
   return (
     <nav className="nx-sidebar">
       <div className="nx-brand">
@@ -49,69 +42,54 @@ export function NexusSidebar({
         <kbd>/</kbd>
       </button>
 
-      <div className="nx-sb-label">Plataformas</div>
-      <div className="nx-sb-list">
-        {items.map((item) => {
-          const id = platformIdOf(item);
-          const active = id === activePlatform;
-          const isAll = item.systemId === null;
+      <div className="nx-sb-scroll">
+        <button
+          className={`nx-sb-item all${allActive ? " active" : ""}${focusCls(ALL_PLATFORM)}`}
+          style={{ ["--tint" as string]: "#9aa6c0" }}
+          onClick={() => onSelect(ALL_PLATFORM)}
+        >
+          {allActive && <span className="nx-sb-bar" />}
+          <span className="nx-sb-glyph">
+            <LibraryIcon size={20} />
+          </span>
+          <span className="nx-sb-name">Biblioteca</span>
+        </button>
+
+        {families.map((fam) => {
+          const famActive = activePlatform === fam.id;
           return (
-            <button
-              key={item.key}
-              className={`nx-sb-item${active ? " active" : ""}`}
-              style={{ ["--tint" as string]: item.iconColor }}
-              onClick={() => onSelect(id)}
-            >
-              {active && <span className="nx-sb-bar" />}
-              <span className="nx-sb-glyph">
-                {isAll || !item.icon ? (
-                  <LibraryIcon size={20} />
-                ) : (
-                  <img src={item.icon} alt="" />
-                )}
-              </span>
-              <span className="nx-sb-name">{item.label}</span>
-              <span className="nx-sb-count">{counts[id] ?? 0}</span>
-            </button>
+            <div className="nx-sb-group" key={fam.id}>
+              <button
+                className={`nx-sb-fam${famActive ? " active" : ""}${focusCls(fam.id)}`}
+                style={{ ["--tint" as string]: fam.tint }}
+                onClick={() => onSelect(fam.id)}
+                title={`Ver todo ${fam.name}`}
+              >
+                <span className="nx-sb-fam-dot" style={{ background: fam.tint }} />
+                <span className="nx-sb-fam-name">{fam.name}</span>
+                <span className="nx-sb-fam-count">{fam.systems.length}</span>
+              </button>
+              <div className="nx-sb-systems">
+                {fam.systems.map((sys) => {
+                  const active = activePlatform === sys.id;
+                  return (
+                    <button
+                      key={sys.id}
+                      className={`nx-sb-item${active ? " active" : ""}${focusCls(sys.id)}`}
+                      style={{ ["--tint" as string]: sys.tint }}
+                      onClick={() => onSelect(sys.id)}
+                    >
+                      {active && <span className="nx-sb-bar" />}
+                      <span className="nx-sb-dot" style={{ background: sys.tint }} />
+                      <span className="nx-sb-name">{sys.name}</span>
+                      {sys.year && <span className="nx-sb-year">'{String(sys.year).slice(2)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
-      </div>
-
-      <div className="nx-sb-spacer" />
-
-      <div className="nx-sb-foot">
-        <div className="nx-sb-label">Vista</div>
-        <button
-          className={`nx-sb-item${layout === "hero" ? " active" : ""}`}
-          style={{ ["--tint" as string]: "var(--accent)" }}
-          onClick={() => onLayoutChange("hero")}
-        >
-          <span className="nx-sb-glyph">
-            <LayersIcon size={20} />
-          </span>
-          <span className="nx-sb-name">Destacado</span>
-        </button>
-        <button
-          className={`nx-sb-item${layout === "grid" ? " active" : ""}`}
-          style={{ ["--tint" as string]: "var(--accent)" }}
-          onClick={() => onLayoutChange("grid")}
-        >
-          <span className="nx-sb-glyph">
-            <GridIcon size={20} />
-          </span>
-          <span className="nx-sb-name">Cuadrícula</span>
-        </button>
-        <button
-          className="nx-sb-item"
-          style={{ ["--tint" as string]: "var(--accent)" }}
-          onClick={onToggleNav}
-          title="Cambiar a selector tipo consola"
-        >
-          <span className="nx-sb-glyph">
-            <ConsoleIcon size={20} />
-          </span>
-          <span className="nx-sb-name">Modo consola</span>
-        </button>
       </div>
     </nav>
   );

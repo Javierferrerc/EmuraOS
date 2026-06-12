@@ -79,7 +79,7 @@ const SYSTEM_COLORS_LIGHT: Record<string, SystemColorEntry> = {
   psp:          { color: "#64748b", darkColor: "#334155", iconColor: "#475569" },
 };
 
-const SYSTEM_ICONS: Record<string, string> = {
+export const SYSTEM_ICONS: Record<string, string> = {
   nes: nesIcon,
   snes: snesIcon,
   n64: n64Icon,
@@ -98,7 +98,7 @@ const SYSTEM_ICONS: Record<string, string> = {
   mastersystem: mastersystemIcon,
 };
 
-const SHORT_LABELS: Record<string, string> = {
+export const SHORT_LABELS: Record<string, string> = {
   nes: "NES",
   snes: "SNES",
   n64: "N64",
