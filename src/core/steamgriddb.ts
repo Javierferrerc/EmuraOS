@@ -15,6 +15,10 @@ export type { SgdbCandidate };
 
 const API_BASE = "https://www.steamgriddb.com/api/v2";
 const DEFAULT_FETCH_DELAY_MS = 250;
+// Bump when the hero-lookup strategy improves so previously "none"-cached games
+// are re-checked. v2 added the wide-grid fallback for retro titles w/o heroes;
+// v3 fixed diacritic-insensitive title matching (Pokemon ↔ Pokémon).
+const HERO_STRATEGY_VERSION = 3;
 
 interface SgdbSearchResult {
   id: number;
@@ -275,6 +279,32 @@ export class SteamGridDb {
   }
 
   /**
+   * Return up to `limit` games matching a free-text term, in SteamGridDB's
+   * autocomplete (relevance) order. The profile-banner picker uses this to
+   * aggregate images across EVERY matching game — mirroring SteamGridDB's own
+   * multi-game search, which surfaces far more images than a single resolved
+   * game would (e.g. "zelda" matches dozens of titles).
+   */
+  async searchGames(
+    title: string,
+    limit = 8
+  ): Promise<{ id: number; name: string }[]> {
+    const url = `${API_BASE}/search/autocomplete/${encodeURIComponent(title)}`;
+    const response = await this.apiGet(url);
+    if (!response || !response.ok) return [];
+
+    let data: SgdbSearchResponse;
+    try {
+      data = (await response.json()) as SgdbSearchResponse;
+    } catch {
+      return [];
+    }
+
+    const results = data?.data ?? [];
+    return results.slice(0, limit).map((r) => ({ id: r.id, name: r.name }));
+  }
+
+  /**
    * List up to `limit` grid candidates for a SteamGridDB game id, ranked
    * by the same heuristic the bulk fetcher uses (dimension → style →
    * SGDB score). Used by the per-game picker so the user can preview
@@ -282,11 +312,15 @@ export class SteamGridDb {
    */
   async listGridCandidates(
     gameId: number,
-    limit = 20
+    limit = 20,
+    dimensions: string | null = "600x900,460x215,512x512,1024x1024"
   ): Promise<SgdbCandidate[]> {
+    // `dimensions = null` fetches every grid size (used by the profile-banner
+    // picker, which wants maximum variety rather than just cover-shaped grids).
+    const dimQuery = dimensions ? `dimensions=${dimensions}&` : "";
     const url =
       `${API_BASE}/grids/game/${gameId}` +
-      `?dimensions=600x900,460x215,512x512,1024x1024&types=static&nsfw=false&humor=false`;
+      `?${dimQuery}types=static&nsfw=false&humor=false`;
     const response = await this.apiGet(url);
     if (!response || !response.ok) return [];
 
@@ -320,6 +354,50 @@ export class SteamGridDb {
       if (ds !== 0) return ds;
       const ss = styleScore(b) - styleScore(a);
       if (ss !== 0) return ss;
+      return (b.score ?? 0) - (a.score ?? 0);
+    });
+
+    return sorted.slice(0, limit).map((g) => ({
+      gridId: g.id,
+      fullUrl: g.url,
+      thumbnailUrl: g.thumb ?? g.url,
+      width: g.width,
+      height: g.height,
+      style: g.style,
+      score: g.score,
+    }));
+  }
+
+  /**
+   * List up to `limit` hero (wide banner) candidates for a SteamGridDB game
+   * id, ranked by width (largest first) then SGDB score. Heroes are ~1920×620
+   * wide images, ideal for a profile banner. Mirrors `listGridCandidates`
+   * but hits the `/heroes` endpoint; returns the same `SgdbCandidate` shape.
+   */
+  async listHeroCandidates(
+    gameId: number,
+    limit = 24
+  ): Promise<SgdbCandidate[]> {
+    // No dimensions filter: heroes are inherently wide, and restricting to a
+    // few exact sizes drops most candidates (often leaving just one). We take
+    // everything static/safe and rank by width so the largest show first.
+    const url =
+      `${API_BASE}/heroes/game/${gameId}` +
+      `?types=static&nsfw=false&humor=false`;
+    const response = await this.apiGet(url);
+    if (!response || !response.ok) return [];
+
+    let data: SgdbGridsResponse;
+    try {
+      data = (await response.json()) as SgdbGridsResponse;
+    } catch {
+      return [];
+    }
+
+    const heroes = (data?.data ?? []).filter((g) => !g.nsfw && !g.humor);
+    const sorted = [...heroes].sort((a, b) => {
+      const dw = (b.width ?? 0) - (a.width ?? 0);
+      if (dw !== 0) return dw;
       return (b.score ?? 0) - (a.score ?? 0);
     });
 
@@ -439,6 +517,105 @@ export class SteamGridDb {
         lastScraped: "",
       });
     }
+  }
+
+  /**
+   * Resolve, download and cache a wide hero/banner image for `(systemId,
+   * romFileName)`. Returns the local path, or null when the game has no hero
+   * on SteamGridDB. Negative results are persisted (heroSource = "none") so the
+   * same coverless game isn't re-queried on every home render.
+   */
+  async fetchHero(
+    systemId: string,
+    romFileName: string
+  ): Promise<string | null> {
+    if (this.cache.heroExists(systemId, romFileName)) {
+      return this.cache.getHeroPath(systemId, romFileName);
+    }
+    // Negative cache: a previous lookup (with the CURRENT strategy) found
+    // nothing — don't hit the API again. Older versions are re-checked.
+    const cachedMeta = this.cache.getMetadata(systemId, romFileName);
+    if (
+      cachedMeta?.heroSource === "none" &&
+      cachedMeta.heroCheck === HERO_STRATEGY_VERSION
+    ) {
+      return null;
+    }
+
+    const title = this.extractTitle(romFileName);
+    if (!title) return null;
+
+    const gameId = await this.searchGameId(title);
+    if (gameId === null) {
+      this.saveHeroMetadata(systemId, romFileName, null);
+      return null;
+    }
+
+    // Prefer a true wide hero; fall back to a "Steam Horizontal" grid
+    // (460x215 / 920x430) — abundant for retro titles that have no heroes and
+    // still banner-shaped, unlike the tall 2:3 cover.
+    let candidates = await this.listHeroCandidates(gameId, 1);
+    if (candidates.length === 0) {
+      candidates = await this.listGridCandidates(gameId, 1, "920x430,460x215");
+    }
+    if (candidates.length === 0) {
+      this.saveHeroMetadata(systemId, romFileName, null);
+      return null;
+    }
+
+    let imageResponse: Response;
+    try {
+      imageResponse = await fetch(candidates[0].fullUrl);
+    } catch (err) {
+      console.warn("[steamgriddb] hero download failed:", err);
+      return null;
+    }
+    if (!imageResponse.ok) return null;
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(await imageResponse.arrayBuffer());
+    } catch {
+      return null;
+    }
+
+    this.cache.ensureDirectories(systemId);
+    const heroPath = this.cache.getHeroPath(systemId, romFileName);
+    try {
+      writeFileSync(heroPath, buffer);
+    } catch (err) {
+      console.warn("[steamgriddb] failed to write hero:", err);
+      return null;
+    }
+
+    this.saveHeroMetadata(systemId, romFileName, heroPath);
+    return heroPath;
+  }
+
+  private saveHeroMetadata(
+    systemId: string,
+    romFileName: string,
+    heroPath: string | null
+  ): void {
+    const existing = this.cache.getMetadata(systemId, romFileName);
+    const base = existing ?? {
+      title: "",
+      description: "",
+      year: "",
+      genre: "",
+      publisher: "",
+      developer: "",
+      players: "",
+      rating: "",
+      coverPath: "",
+      screenshotPath: "",
+      screenScraperId: "",
+      lastScraped: "",
+    };
+    base.heroPath = heroPath ?? undefined;
+    base.heroSource = heroPath ? "steamgriddb" : "none";
+    base.heroCheck = HERO_STRATEGY_VERSION;
+    this.cache.setMetadata(systemId, romFileName, base);
   }
 
   async fetchCover(

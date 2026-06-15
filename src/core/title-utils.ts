@@ -2,6 +2,8 @@ const STOP_WORDS = new Set(["the", "a", "an", "of", "and", "or"]);
 
 /**
  * Normalize a title for fuzzy comparison:
+ * - strip diacritics (Pokémon → Pokemon) so ROM names without accents still
+ *   match SteamGridDB/ScreenScraper names that carry them
  * - lowercase
  * - split camelCase (e.g. BreathOfTheWild → breath of the wild)
  * - underscores/hyphens to spaces
@@ -10,6 +12,8 @@ const STOP_WORDS = new Set(["the", "a", "an", "of", "and", "or"]);
  */
 export function normalizeTitle(s: string): string {
   return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/([a-z\d])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()

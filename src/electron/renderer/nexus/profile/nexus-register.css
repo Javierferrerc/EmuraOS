@@ -1,0 +1,158 @@
+/* nexus-register.css — NEXUS registration modal. Ported faithfully from the
+ * design handoff (register.css); tokens are self-contained on .reg-stage so the
+ * colors stay exact regardless of the surrounding NEXUS theme. Scoped under
+ * .nexus-reg (a portal wrapper mounted on document.body) so the overlay escapes
+ * the NEXUS shell's backdrop-filter/transform containing blocks and stays fixed
+ * to the viewport — keeping it within the window like the reference. */
+
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap");
+
+.nexus-reg .reg-stage {
+  --bg: #07080b; --bg-2: #0a0c11;
+  --panel: rgba(255,255,255,0.045); --panel-2: rgba(255,255,255,0.07); --panel-3: rgba(255,255,255,0.10);
+  --line: rgba(255,255,255,0.09); --line-2: rgba(255,255,255,0.16);
+  --text: #eef1f7; --text-dim: rgba(238,241,247,0.64); --text-faint: rgba(238,241,247,0.40);
+  --accent: #3b82f6; --good: #4ade80; --warn: #f5c451; --bad: #f43f5e;
+  --ease: cubic-bezier(.4,.8,.3,1);
+
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; overflow: auto;
+  color: var(--text);
+  font-family: 'Sora', system-ui, -apple-system, sans-serif;
+  background:
+    radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 55%),
+    radial-gradient(90% 70% at 0% 110%, rgba(168,85,247,0.10), transparent 60%),
+    linear-gradient(180deg, var(--bg-2), var(--bg));
+}
+.nexus-reg .reg-stage::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 70%);
+}
+.nexus-reg .reg-stage * { box-sizing: border-box; }
+.nexus-reg .reg-stage button { font-family: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+.nexus-reg .reg-stage input { font-family: inherit; }
+
+/* ── modal ───────────────────────────────────────────────── */
+.nexus-reg .reg-modal {
+  position: relative; width: 100%; max-width: 560px; max-height: calc(100vh - 48px);
+  display: flex; flex-direction: column; border-radius: 22px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(16,19,26,.96), rgba(11,13,18,.97));
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 40px 100px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02) inset;
+  animation: regIn .26s var(--ease);
+}
+/* Animates transform only — never opacity — so a paused animation can't leave
+ * the modal invisible (see handoff README). */
+@keyframes regIn { from { transform: translateY(14px) scale(.985); } }
+
+.nexus-reg .reg-head { display: flex; align-items: center; gap: 14px; padding: 24px 26px 18px; border-bottom: 1px solid var(--line); }
+.nexus-reg .reg-mark { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), color-mix(in oklab, var(--accent) 40%, #a855f7));
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--accent) 35%, transparent); }
+.nexus-reg .reg-mark i { width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+.nexus-reg .reg-head-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.nexus-reg .reg-head-txt h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.nexus-reg .reg-head-txt p { margin: 0; font-size: 12.5px; color: var(--text-faint); }
+.nexus-reg .reg-close { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text-dim); transition: all .15s; }
+.nexus-reg .reg-close:hover { color: var(--text); background: var(--panel-2); }
+
+/* ── body ────────────────────────────────────────────────── */
+.nexus-reg .reg-body { padding: 20px 26px 8px; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 16px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+.nexus-reg .reg-body::-webkit-scrollbar { width: 9px; }
+.nexus-reg .reg-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.13); border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+
+.nexus-reg .reg-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.nexus-reg .reg-field { display: flex; flex-direction: column; gap: 7px; }
+.nexus-reg .reg-label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.nexus-reg .reg-label .req { color: var(--accent); }
+.nexus-reg .reg-label .opt { font-size: 11px; font-weight: 500; color: var(--text-faint); }
+
+.nexus-reg .reg-input-wrap { position: relative; display: flex; align-items: center; }
+.nexus-reg .reg-input {
+  width: 100%; height: 46px; padding: 0 14px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: rgba(0,0,0,.28); color: var(--text);
+  font-size: 14.5px; outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.nexus-reg .reg-input::placeholder { color: var(--text-faint); }
+.nexus-reg .reg-input:focus { border-color: color-mix(in oklab, var(--accent) 65%, transparent); background: rgba(0,0,0,.4);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 16%, transparent); }
+.nexus-reg .reg-input.has-icon { padding-right: 46px; }
+/* Masked passwords: round discs instead of Sora's square mask glyph. */
+.nexus-reg .reg-input[type="password"] { font-family: Verdana, Tahoma, "Segoe UI", system-ui, sans-serif; letter-spacing: 0.12em; }
+.nexus-reg .reg-input.ok { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
+.nexus-reg .reg-input.err { border-color: color-mix(in oklab, var(--bad) 60%, transparent); }
+.nexus-reg .reg-input.err:focus { box-shadow: 0 0 0 4px color-mix(in oklab, var(--bad) 16%, transparent); }
+
+.nexus-reg .reg-in-icon { position: absolute; right: 12px; display: grid; place-items: center; color: var(--text-faint); }
+.nexus-reg .reg-in-icon.good { color: var(--good); } .nexus-reg .reg-in-icon.bad { color: var(--bad); }
+.nexus-reg .reg-eye { position: absolute; right: 10px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--text-faint); transition: color .14s, background .14s; }
+.nexus-reg .reg-eye:hover { color: var(--text); background: var(--panel-2); }
+
+.nexus-reg .reg-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; }
+.nexus-reg .reg-error { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: color-mix(in oklab, var(--bad) 90%, #fff); font-weight: 500; }
+.nexus-reg .reg-msg-good { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--good); font-weight: 500; }
+
+/* ID field with # prefix + counter */
+.nexus-reg .reg-id { display: flex; align-items: center; height: 46px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(0,0,0,.28); overflow: hidden; transition: border-color .15s, box-shadow .15s; }
+.nexus-reg .reg-id.focus { border-color: color-mix(in oklab, var(--accent) 65%, transparent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 16%, transparent); }
+.nexus-reg .reg-id.ok { border-color: color-mix(in oklab, var(--good) 55%, transparent); }
+.nexus-reg .reg-id.err { border-color: color-mix(in oklab, var(--bad) 60%, transparent); }
+.nexus-reg .reg-id-hash { display: grid; place-items: center; width: 40px; align-self: stretch; background: var(--panel-2); color: var(--accent); font-size: 18px; font-weight: 800; border-right: 1px solid var(--line); }
+.nexus-reg .reg-id input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; outline: none; color: var(--text); font-size: 15px; font-weight: 600; letter-spacing: .14em; font-family: ui-monospace, Menlo, monospace; padding: 0 12px; text-transform: uppercase; }
+.nexus-reg .reg-id-count { padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* privacy toggle row */
+.nexus-reg .reg-priv { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); margin-top: 2px; }
+.nexus-reg .reg-priv-txt { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.nexus-reg .reg-priv-txt b { font-size: 13px; font-weight: 600; }
+.nexus-reg .reg-priv-txt span { font-size: 11.5px; color: var(--text-faint); }
+.nexus-reg .reg-sw { position: relative; width: 44px; height: 26px; flex-shrink: 0; border-radius: 999px; background: var(--panel-3); border: 1px solid var(--line-2); transition: all .18s var(--ease); }
+.nexus-reg .reg-sw[data-on="1"] { background: var(--accent); border-color: transparent; box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 45%, transparent); }
+.nexus-reg .reg-sw i { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.35); transition: transform .18s var(--ease); }
+.nexus-reg .reg-sw[data-on="1"] i { transform: translateX(18px); }
+
+/* password strength */
+.nexus-reg .reg-strength { display: flex; flex-direction: column; gap: 6px; }
+.nexus-reg .reg-strength-bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.nexus-reg .reg-strength-bars i { height: 5px; border-radius: 999px; background: var(--panel-3); transition: background .2s; }
+.nexus-reg .reg-strength-label { font-size: 11.5px; font-weight: 600; }
+
+/* divider */
+.nexus-reg .reg-divider { display: flex; align-items: center; gap: 12px; margin: 2px 0; }
+.nexus-reg .reg-divider::before, .nexus-reg .reg-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.nexus-reg .reg-divider span { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); }
+
+/* ── footer ──────────────────────────────────────────────── */
+.nexus-reg .reg-foot { padding: 16px 26px 24px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.nexus-reg .reg-submit { width: 100%; height: 50px; border-radius: 13px; background: var(--accent); color: #fff; font-size: 15.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  box-shadow: 0 10px 30px color-mix(in oklab, var(--accent) 38%, transparent); transition: filter .15s, transform .15s, opacity .15s; }
+.nexus-reg .reg-submit:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.nexus-reg .reg-submit:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.nexus-reg .reg-foot-alt { text-align: center; font-size: 13px; color: var(--text-dim); }
+.nexus-reg .reg-foot-alt a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.nexus-reg .reg-foot-alt a:hover { text-decoration: underline; }
+.nexus-reg .reg-terms { font-size: 11px; color: var(--text-faint); text-align: center; line-height: 1.5; }
+.nexus-reg .reg-terms a { color: var(--text-dim); }
+
+/* ── success ─────────────────────────────────────────────── */
+.nexus-reg .reg-success { padding: 48px 36px 44px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; animation: regIn .3s var(--ease); }
+.nexus-reg .reg-success-badge { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, var(--good), color-mix(in oklab, var(--good) 60%, var(--accent)));
+  box-shadow: 0 12px 36px color-mix(in oklab, var(--good) 40%, transparent); animation: regPop .4s var(--ease); }
+@keyframes regPop { from { transform: scale(.7); } }
+.nexus-reg .reg-success h2 { margin: 4px 0 0; font-size: 23px; font-weight: 800; }
+.nexus-reg .reg-success p { margin: 0; font-size: 14px; color: var(--text-dim); max-width: 360px; line-height: 1.5; }
+.nexus-reg .reg-success .tag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+.nexus-reg .reg-success .tag b { color: var(--accent); font-family: ui-monospace, Menlo, monospace; }
+
+@media (max-width: 540px) {
+  .nexus-reg .reg-grid2 { grid-template-columns: 1fr; }
+  .nexus-reg .reg-modal { max-height: calc(100vh - 24px); }
+  .nexus-reg .reg-stage { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexus-reg .reg-stage * { animation-duration: .01ms !important; transition-duration: .08ms !important; }
+}

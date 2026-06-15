@@ -33,6 +33,8 @@ export function SetIcon({ name, size = 18, stroke = 2, className }: Props) {
       return (<svg style={s} viewBox={v} className={className}><path d="M6 9l6 6 6-6" {...c} /></svg>);
     case "check":
       return (<svg style={s} viewBox={v} className={className}><path d="M5 12.5l4.5 4.5L19 7" {...c} /></svg>);
+    case "sound":
+      return (<svg style={s} viewBox={v} className={className}><path d="M4 9v6h4l5 4V5L8 9H4z" {...c} /><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12" {...c} /></svg>);
     case "download":
       return (<svg style={s} viewBox={v} className={className}><path d="M12 4v10m0 0l4-4m-4 4l-4-4" {...c} /><path d="M5 19h14" {...c} /></svg>);
     case "gear":
@@ -72,6 +74,7 @@ export function SetIcon({ name, size = 18, stroke = 2, className }: Props) {
 export const SECTION_ICON: Record<string, string> = {
   general: "gear",
   apariencia: "palette",
+  sonido: "sound",
   biblioteca: "books",
   portadas: "image",
   rutas: "folder",

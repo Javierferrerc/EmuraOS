@@ -50,6 +50,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       romFileName,
       fullUrl
     ),
+  searchSteamGridDbImages: (query: string, filter?: string) =>
+    ipcRenderer.invoke("search-steamgriddb-images", query, filter),
+  ensureGameHero: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("ensure-game-hero", systemId, romFileName),
+  imageFileToAvatar: (sourcePath: string) =>
+    ipcRenderer.invoke("image-file-to-avatar", sourcePath),
   readBackgroundDataUrl: (imagePath: string) =>
     ipcRenderer.invoke("read-background-data-url", imagePath),
   fetchCovers: () => ipcRenderer.invoke("fetch-covers"),

@@ -443,9 +443,15 @@ export default function App() {
       )}
       {/* Launch loading overlay — mounted last so DOM order + z-index 9999
           + isolation guarantee it wins stacking over any modal. Conditional
-          on `launchingGame` inside the component itself. */}
-      <PreLaunchCountdown />
-      <GameLoadingOverlay />
+          on `launchingGame` inside the component itself. In the NEXUS theme the
+          "Ignición" launch animation (NexusLaunchSequence) replaces these, so
+          they're suppressed to avoid a double overlay. */}
+      {!isNexus && (
+        <>
+          <PreLaunchCountdown />
+          <GameLoadingOverlay />
+        </>
+      )}
       {showCheatsheet && (
         <ShortcutsCheatsheet onClose={() => setShowCheatsheet(false)} />
       )}

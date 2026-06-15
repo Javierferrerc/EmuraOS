@@ -85,6 +85,7 @@ import type {
   DiscoveredRom,
   DriveEmulatorMapping,
   EmulatorDefinition,
+  SgdbCandidate,
 } from "../../core/types.js";
 import { logSecurityEvent } from "../../core/security-logger.js";
 import {
@@ -1086,6 +1087,144 @@ export function registerIpcHandlers(
     }
   );
 
+  // Free-text image search for the profile-banner picker. Unlike the per-game
+  // cover handler this isn't tied to a ROM: it resolves an arbitrary title,
+  // aggregates images across every matching game, and honours an optional
+  // dimension/type filter ("all" | "hero" | a specific grid size).
+  const ALLOWED_GRID_DIMS = new Set([
+    "460x215",
+    "920x430",
+    "600x900",
+    "342x482",
+    "512x512",
+    "1024x1024",
+    "660x930",
+  ]);
+  ipcMain.handle(
+    "search-steamgriddb-images",
+    async (_event: IpcMainInvokeEvent, query: unknown, filter: unknown) => {
+      try {
+        if (typeof query !== "string" || !query.trim()) {
+          return { success: false, error: "Búsqueda vacía.", candidates: [] };
+        }
+        const title = query.trim().slice(0, 120);
+        const sel = typeof filter === "string" ? filter : "all";
+
+        const configManager = new ConfigManager(getProjectRoot());
+        const appConfig = configManager.get();
+        const sgdbKey =
+          process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey;
+        if (!sgdbKey) {
+          return {
+            success: false,
+            error:
+              "Falta la API key de SteamGridDB. Configúrala en Ajustes → Portadas → Credenciales.",
+            candidates: [],
+          };
+        }
+
+        const cache = new MetadataCache(getProjectRoot());
+        const sgdb = new SteamGridDb(cache, { apiKey: sgdbKey });
+
+        // Aggregate across EVERY matching game (like the SteamGridDB website's
+        // multi-game search), not just the single best resolved game — that's
+        // why the site shows far more images for a broad term like "zelda".
+        const games = await sgdb.searchGames(title, 8);
+        if (games.length === 0) {
+          return {
+            success: true,
+            candidates: [],
+            error: `SteamGridDB no encontró ningún juego para "${title}".`,
+          };
+        }
+
+        const MAX_TOTAL = 150;
+        const seen = new Set<number>();
+        const candidates: SgdbCandidate[] = [];
+
+        const wantHeroes = sel === "all" || sel === "hero";
+        const wantGrids = sel !== "hero";
+        // Only an allowlisted dimension is ever interpolated into the API URL;
+        // anything else falls back to "all sizes" (null) — no query injection.
+        const gridDims =
+          sel === "all" ? null : ALLOWED_GRID_DIMS.has(sel) ? sel : null;
+
+        if (wantHeroes) {
+          // Hero-only filter pulls heroes from every matching game; "all" just
+          // needs the best match's heroes up front.
+          const heroGames = sel === "hero" ? games : games.slice(0, 1);
+          for (const game of heroGames) {
+            if (candidates.length >= MAX_TOTAL) break;
+            for (const h of await sgdb.listHeroCandidates(game.id, 20)) {
+              if (candidates.length >= MAX_TOTAL) break;
+              if (!seen.has(h.gridId)) {
+                seen.add(h.gridId);
+                candidates.push(h);
+              }
+            }
+          }
+        }
+
+        if (wantGrids) {
+          for (const game of games) {
+            if (candidates.length >= MAX_TOTAL) break;
+            const grids = await sgdb.listGridCandidates(game.id, 40, gridDims);
+            for (const g of grids) {
+              if (candidates.length >= MAX_TOTAL) break;
+              if (!seen.has(g.gridId)) {
+                seen.add(g.gridId);
+                candidates.push(g);
+              }
+            }
+          }
+        }
+
+        return { success: true, candidates };
+      } catch (err) {
+        return { success: false, error: String(err), candidates: [] };
+      }
+    }
+  );
+
+  // Lazily resolve + cache a wide hero/banner for one game (used by the NEXUS
+  // "Continuar" hero). Returns the cached path instantly on subsequent calls;
+  // returns heroPath:null when the game has no hero on SteamGridDB.
+  ipcMain.handle(
+    "ensure-game-hero",
+    async (
+      _event: IpcMainInvokeEvent,
+      systemId: unknown,
+      romFileName: unknown
+    ) => {
+      try {
+        const validatedSystem = SystemIdSchema.parse(systemId);
+        const validatedFile = FileNameSchema.parse(romFileName);
+
+        const cache = new MetadataCache(getProjectRoot());
+        if (cache.heroExists(validatedSystem, validatedFile)) {
+          return {
+            success: true,
+            heroPath: cache.getHeroPath(validatedSystem, validatedFile),
+          };
+        }
+
+        const configManager = new ConfigManager(getProjectRoot());
+        const appConfig = configManager.get();
+        const sgdbKey =
+          process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey;
+        if (!sgdbKey) {
+          return { success: false, error: "no-api-key", heroPath: null };
+        }
+
+        const sgdb = new SteamGridDb(cache, { apiKey: sgdbKey });
+        const heroPath = await sgdb.fetchHero(validatedSystem, validatedFile);
+        return { success: true, heroPath: heroPath ?? null };
+      } catch (err) {
+        return { success: false, error: String(err), heroPath: null };
+      }
+    }
+  );
+
   ipcMain.handle(
     "apply-steamgriddb-candidate",
     async (
@@ -1884,6 +2023,40 @@ export function registerIpcHandlers(
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });
+
+  // Resize a user-picked image into a small square avatar data URL. Returns a
+  // ~256px JPEG data URL (tiny — safe to persist in localStorage and render via
+  // <img> under the 'self'/data: CSP, unlike a raw file:// path).
+  ipcMain.handle(
+    "image-file-to-avatar",
+    async (_event: IpcMainInvokeEvent, sourcePath: unknown) => {
+      try {
+        if (typeof sourcePath !== "string" || !sourcePath) {
+          return { success: false, error: "Ruta no válida." };
+        }
+        const resolved = path.resolve(sourcePath);
+        if (!existsSync(resolved)) {
+          return { success: false, error: "El archivo no existe." };
+        }
+        const ext = path.extname(resolved).toLowerCase();
+        const allowed = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"];
+        if (!allowed.includes(ext)) {
+          return { success: false, error: "Formato de imagen no soportado." };
+        }
+        const sharp = (await import("sharp")).default;
+        const buf = await sharp(resolved)
+          .resize(256, 256, { fit: "cover" })
+          .jpeg({ quality: 82, mozjpeg: true })
+          .toBuffer();
+        return {
+          success: true,
+          dataUrl: `data:image/jpeg;base64,${buf.toString("base64")}`,
+        };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
 
   ipcMain.handle(
     "dialog:pick-file",

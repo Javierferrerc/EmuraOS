@@ -61,6 +61,7 @@ export interface ElectronAPI {
     skipped: number;
     failed: number;
   }>;
+  getPathForFile(file: File): string;
   setCustomCover(
     systemId: string,
     romFileName: string,
@@ -87,6 +88,22 @@ export interface ElectronAPI {
     romFileName: string,
     fullUrl: string
   ): Promise<{ success: boolean; coverPath?: string; error?: string }>;
+  searchSteamGridDbImages(
+    query: string,
+    filter?: string
+  ): Promise<{
+    success: boolean;
+    candidates: SgdbCandidate[];
+    kind?: "hero" | "grid";
+    error?: string;
+  }>;
+  ensureGameHero(
+    systemId: string,
+    romFileName: string
+  ): Promise<{ success: boolean; heroPath?: string | null; error?: string }>;
+  imageFileToAvatar(
+    sourcePath: string
+  ): Promise<{ success: boolean; dataUrl?: string; error?: string }>;
   readBackgroundDataUrl(imagePath: string): Promise<string | null>;
   onScrapeProgress(callback: (progress: ScrapeProgress) => void): void;
   removeScrapeProgressListener(): void;

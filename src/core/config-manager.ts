@@ -23,6 +23,8 @@ const DEFAULT_CONFIG: AppConfig = {
   systemSliderMagnificationEnabled: true,
   devMode: false,
   citraGamepadAutoConfigured: false,
+  launchSoundProfile: "minimal",
+  launchSoundEnabled: true,
 };
 
 export class ConfigManager {

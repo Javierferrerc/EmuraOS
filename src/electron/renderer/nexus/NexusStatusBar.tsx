@@ -8,6 +8,28 @@
 import { useEffect, useState } from "react";
 import { TrophyIcon, SettingsIcon, SearchIcon, LayersIcon, GridIcon, RailIcon, SidebarIcon } from "./NexusIcons";
 import type { NexusLayout } from "./nexusTypes";
+import { useSocial } from "../social/SocialContext";
+import {
+  loadProfileEdit,
+  initialsOf,
+  PROFILE_UPDATED_EVENT,
+} from "./profile/nexusProfileData";
+
+/** Live view of the locally-persisted profile edit (name + avatar). Re-reads on
+ * every save so the status-bar chip stays in sync with the profile modal. */
+function useLocalProfile() {
+  const [profile, setProfile] = useState(() => loadProfileEdit("Jugador"));
+  useEffect(() => {
+    const reload = () => setProfile(loadProfileEdit("Jugador"));
+    window.addEventListener(PROFILE_UPDATED_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(PROFILE_UPDATED_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, []);
+  return profile;
+}
 
 interface NexusStatusBarProps {
   totalGames: number;
@@ -18,6 +40,7 @@ interface NexusStatusBarProps {
   onNavChange: (nav: "rail" | "sidebar") => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onOpenProfile: () => void;
 }
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -32,8 +55,20 @@ export function NexusStatusBar({
   onNavChange,
   onOpenSettings,
   onOpenSearch,
+  onOpenProfile,
 }: NexusStatusBarProps) {
   const [now, setNow] = useState(() => new Date());
+  const social = useSocial();
+  const localProfile = useLocalProfile();
+
+  const signedIn = social.configured && !!social.user;
+  const profileName =
+    (signedIn
+      ? social.profile?.display_name?.trim() || social.profile?.username
+      : null) ||
+    localProfile.name?.trim() ||
+    "Jugador";
+  const avatarUrl = localProfile.avatarUrl ?? null;
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -46,10 +81,12 @@ export function NexusStatusBar({
 
   return (
     <div className="nx-statusbar">
-      <button className="nx-sb-profile" onClick={onOpenSettings} title="Ajustes">
-        <span className="nx-sb-avatar">NX</span>
+      <button className="nx-sb-profile" onClick={onOpenProfile} title="Tu perfil">
+        <span className="nx-sb-avatar">
+          {avatarUrl ? <img src={avatarUrl} alt="" /> : initialsOf(profileName)}
+        </span>
         <span className="nx-sb-profile-txt">
-          <span className="nx-sb-name">Biblioteca</span>
+          <span className="nx-sb-name">{profileName}</span>
           <span className="nx-sb-sub">
             {totalGames} {totalGames === 1 ? "juego" : "juegos"} · {systemsCount}{" "}
             {systemsCount === 1 ? "sistema" : "sistemas"}
