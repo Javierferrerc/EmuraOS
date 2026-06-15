@@ -30,9 +30,13 @@ import { NexusStatusBar } from "./NexusStatusBar";
 import { NexusSidebar } from "./NexusSidebar";
 import { NexusRailNav } from "./NexusRailNav";
 import { NexusHome } from "./NexusHome";
+import { NexusProfile } from "./profile/NexusProfile";
+import { SocialProvider } from "../social/SocialContext";
+import { NexusErrorBoundary } from "./NexusErrorBoundary";
 import { NexusDetailPanel } from "./NexusDetailPanel";
 import { NexusSearchOverlay } from "./NexusSearchOverlay";
 import { NexusHintBar } from "./NexusHintBar";
+import { NexusLaunchSequence } from "./launch/NexusLaunchSequence";
 import "./nexus.css";
 
 interface NexusShellProps {
@@ -74,6 +78,10 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   );
   const [detailGame, setDetailGame] = useState<NexusGame | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Launch animation overlay (fresh id per launch so it always remounts).
+  const [launchAnim, setLaunchAnim] = useState<{ game: NexusGame; id: number } | null>(null);
+  const launchAnimIdRef = useRef(0);
 
   const customColors = config?.customSystemColors;
   // When a custom background image is set (App renders it as a fixed layer
@@ -153,12 +161,14 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
     localStorage.setItem(LS_NAV, value);
   }, []);
 
-  const handleLaunch = useCallback(
-    (game: NexusGame) => {
-      void launchGame(game.rom);
-    },
-    [launchGame]
-  );
+  const handleLaunch = useCallback((game: NexusGame) => {
+    // Show the "Ignición" animation FIRST; the emulator is only launched when
+    // the animation finishes (or is skipped). This guarantees the sequence
+    // always plays in full — the game window can't pop up over it mid-way, even
+    // if the game would load faster than the ~4.5s animation.
+    launchAnimIdRef.current += 1;
+    setLaunchAnim({ game, id: launchAnimIdRef.current });
+  }, []);
 
   const handleToggleFavorite = useCallback(
     (game: NexusGame) => {
@@ -179,7 +189,7 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   // this there'd be no gamepad navigation at all.
   const homeRef = useRef<NexusHomeHandle>(null);
   const [zone, setZone] = useState<"systems" | "content">("content");
-  const homeActive = !searchOpen && !detailGame;
+  const homeActive = !searchOpen && !detailGame && !profileOpen;
 
   const switchPlatform = useCallback(
     (delta: number) => {
@@ -201,6 +211,10 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
       }
       if (searchOpen) {
         if (action.type === "BACK") setSearchOpen(false);
+        return;
+      }
+      if (profileOpen) {
+        if (action.type === "BACK") setProfileOpen(false);
         return;
       }
       if (action.type === "OPEN_SETTINGS") return onOpenSettings();
@@ -241,7 +255,7 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
       if (res === "escape-up" && nav === "rail") setZone("systems");
       else if (res === "escape-left" && nav === "sidebar") setZone("systems");
     },
-    [zone, nav, detailGame, searchOpen, switchPlatform, onOpenSettings, handleLaunch]
+    [zone, nav, detailGame, searchOpen, profileOpen, switchPlatform, onOpenSettings, handleLaunch]
   );
 
   useGamepad({ onAction: dispatch });
@@ -283,6 +297,8 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   );
 
   return (
+    <NexusErrorBoundary>
+    <SocialProvider>
     <div className={`nexus-root${hasBg ? " has-bg" : ""}`}>
       <div className="nx-app">
         <div className="nx-ambient" />
@@ -295,46 +311,58 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
           onNavChange={changeNav}
           onOpenSettings={onOpenSettings}
           onOpenSearch={() => setSearchOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
         />
 
-        <div className="nx-main">
-          {nav === "sidebar" && (
-            <NexusSidebar
-              families={families}
-              activePlatform={platform}
-              navFocused={zone === "systems"}
-              onSelect={selectPlatform}
-              onOpenSearch={() => setSearchOpen(true)}
-            />
-          )}
-          <div className="nx-content">
-            {nav === "rail" && (
-              <NexusRailNav
+        {profileOpen ? (
+          <NexusProfile
+            onBack={() => setProfileOpen(false)}
+            allGames={allGames}
+            isFavorite={checkFavorite}
+            onOpen={setDetailGame}
+            onLaunch={handleLaunch}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        ) : (
+          <div className="nx-main">
+            {nav === "sidebar" && (
+              <NexusSidebar
                 families={families}
                 activePlatform={platform}
                 navFocused={zone === "systems"}
                 onSelect={selectPlatform}
+                onOpenSearch={() => setSearchOpen(true)}
               />
             )}
-            <NexusHome
-              key={`${platform}:${layout}`}
-              ref={homeRef}
-              rows={rows}
-              gridGames={filtered}
-              hero={hero}
-              heroContinue={heroContinue}
-              continueHero={continueHero}
-              layout={layout}
-              platformLabel={platformLabel}
-              isFavorite={checkFavorite}
-              onOpen={setDetailGame}
-              onLaunch={handleLaunch}
-              onToggleFavorite={handleToggleFavorite}
-            />
+            <div className="nx-content">
+              {nav === "rail" && (
+                <NexusRailNav
+                  families={families}
+                  activePlatform={platform}
+                  navFocused={zone === "systems"}
+                  onSelect={selectPlatform}
+                />
+              )}
+              <NexusHome
+                key={`${platform}:${layout}`}
+                ref={homeRef}
+                rows={rows}
+                gridGames={filtered}
+                hero={hero}
+                heroContinue={heroContinue}
+                continueHero={continueHero}
+                layout={layout}
+                platformLabel={platformLabel}
+                isFavorite={checkFavorite}
+                onOpen={setDetailGame}
+                onLaunch={handleLaunch}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        <NexusHintBar />
+        {!profileOpen && <NexusHintBar />}
 
         <NexusDetailPanel
           game={detailGame}
@@ -354,7 +382,23 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
             onToggleFavorite={handleToggleFavorite}
           />
         )}
+
+        {launchAnim && (
+          <NexusLaunchSequence
+            key={launchAnim.id}
+            game={launchAnim.game}
+            soundProfile={config?.launchSoundProfile ?? "minimal"}
+            soundEnabled={config?.launchSoundEnabled ?? true}
+            onDone={() => {
+              // Animation finished (or skipped) → now actually launch the game.
+              void launchGame(launchAnim.game.rom);
+              setLaunchAnim(null);
+            }}
+          />
+        )}
       </div>
     </div>
+    </SocialProvider>
+    </NexusErrorBoundary>
   );
 }

@@ -110,6 +110,13 @@ export interface AppConfig {
    *  feature is opt-in. Respects prefers-reduced-motion automatically. */
   preLaunchCountdownEnabled?: boolean;
 
+  /** NEXUS "Ignición" launch animation — sound signature profile id (one of
+   *  the LAUNCH_SOUNDS ids: minimal/impact/cinematic/arcade/synthwave/electric).
+   *  Defaults to "minimal". */
+  launchSoundProfile?: string;
+  /** Master toggle for the launch sound signature. Defaults to true. */
+  launchSoundEnabled?: boolean;
+
   // Phase 23 — RetroAchievements
   /** RA account username. */
   retroAchievementsUsername?: string;
@@ -182,6 +189,15 @@ export interface GameMetadata {
   rating: string;
   coverPath: string;
   coverSource?: "libretro" | "screenscraper" | "steamgriddb" | "custom";
+  /** Wide hero/banner image (SteamGridDB), used by the NEXUS "Continuar" hero
+   * where the tall cover stretches badly. */
+  heroPath?: string;
+  /** "steamgriddb" once a hero is stored; "none" negative-caches a lookup that
+   * found no hero so we don't re-query the API every time. */
+  heroSource?: "steamgriddb" | "none";
+  /** Hero-lookup strategy version that produced heroSource. Bumping it in code
+   * invalidates stale negative caches so improved lookups re-run. */
+  heroCheck?: number;
   screenshotPath: string;
   screenScraperId: string;
   lastScraped: string;

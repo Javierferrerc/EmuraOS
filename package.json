@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@fontsource/poppins": "^5.2.7",
+    "@supabase/supabase-js": "^2.108.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "dotenv": "^17.4.1",

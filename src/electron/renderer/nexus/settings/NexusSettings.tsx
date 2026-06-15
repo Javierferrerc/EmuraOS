@@ -30,19 +30,17 @@ import { rutasSection } from "../../components/settings/sections/rutas";
 import { emuladoresSection } from "../../components/settings/sections/emuladores/index";
 import { retroachievementsSection } from "../../components/settings/sections/retroachievements";
 import { avanzadoSection } from "../../components/settings/sections/avanzado";
-import {
-  coverSourcesGroups,
-  coverCredentialsGroups,
-  coverActionsGroups,
-} from "../../components/settings/sections/portadas/cover-settings";
 import { RowView, GroupView, resolveDisabled } from "./NexusSettingsRows";
 import { NexusEmuladores } from "./NexusEmuladores";
+import { NexusCoverGallery } from "../NexusCoverGallery";
+import { NexusSoundSettings } from "./NexusSoundSettings";
 import { SetIcon, SECTION_ICON } from "./SetIcon";
 import "./nexus-settings.css";
 
 const SECTIONS: SettingsSection[] = [
   generalSection,
   aparienciaSection,
+  { id: "sonido", label: "Sonido", groups: [] },
   bibliotecaSection,
   portadasSection,
   rutasSection,
@@ -247,17 +245,21 @@ export function NexusSettings({ onExit }: NexusSettingsProps) {
               </div>
             )}
             <div className="set-scroll" data-setscroll>
-              {section.id === "emuladores" ? (
+              {section.id === "sonido" ? (
+                <NexusSoundSettings ctx={ctx} />
+              ) : section.id === "emuladores" ? (
                 <div className="set-embed">
                   <NexusEmuladores ctx={ctx} />
                 </div>
+              ) : section.id === "portadas" && tabId === "port-galeria" ? (
+                <NexusCoverGallery embedded />
               ) : section.id === "portadas" ? (
                 <div className="set-page">
                   <div className="set-section-head">
                     <h1>Portadas</h1>
                     <p>Fuentes de carátulas y metadatos. Descarga automática y por credenciales.</p>
                   </div>
-                  {[...coverSourcesGroups, ...coverCredentialsGroups, ...coverActionsGroups].map((g, i) => (
+                  {groups.map((g, i) => (
                     <GroupView key={g.id ?? i} group={g} renderRow={renderRow} />
                   ))}
                 </div>

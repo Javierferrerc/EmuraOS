@@ -225,6 +225,7 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
+  overflow: hidden;
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -232,6 +233,12 @@
   color: #fff;
   background: linear-gradient(135deg, #3b82f6, #a855f7);
   box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.16), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.nx-sb-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .nx-sb-profile-txt {
   display: flex;
@@ -689,7 +696,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 26px 8px;
+  /* No bottom padding — the track's bottom padding already reserves room for
+   * the active chip's glow. */
+  padding: 16px 26px 0;
 }
 .nx-rail-wrap {
   position: relative;
@@ -704,7 +713,10 @@
   overflow-y: hidden;
   scroll-behavior: smooth;
   scrollbar-width: none;
-  padding: 4px 2px;
+  /* Generous bottom room: overflow-y:hidden would otherwise clip the active
+   * chip's downward glow (box-shadow 0 6px 22px) abruptly. Top room covers the
+   * hover lift + nav-focused ring. */
+  padding: 8px 2px 28px;
   scroll-snap-type: x proximity;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
@@ -826,7 +838,9 @@
 .nx-rail-arrow {
   position: absolute;
   top: 50%;
-  transform: translateY(-50%);
+  /* Re-centre on the chip row: the track's bottom padding (for the glow) is
+   * larger than the top, which would otherwise drop the arrows ~10px. */
+  transform: translateY(calc(-50% - 10px));
   z-index: 4;
   width: 34px;
   height: 34px;
@@ -1146,6 +1160,16 @@
 }
 .nx-hero-art .nx-cover {
   transform: scale(1.02);
+}
+/* Wide SteamGridDB hero — fills the banner at its native wide aspect (no
+ * stretch like the tall cover). Anchored toward the top so key art/titles
+ * stay visible behind the left-side scrim. */
+.nx-hero-art .nx-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+  display: block;
 }
 .nx-hero-scrim {
   position: absolute;

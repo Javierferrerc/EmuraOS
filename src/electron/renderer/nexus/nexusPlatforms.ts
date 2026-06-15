@@ -62,7 +62,7 @@ const MANUFACTURER_TINT: Record<string, string> = {
   Microsoft: "#107c10",
 };
 
-function systemTint(id: string, customColors?: Record<string, string>): string {
+export function systemTint(id: string, customColors?: Record<string, string>): string {
   return customColors?.[id] ?? SYSTEM_COLORS[id]?.iconColor ?? "#9aa6c0";
 }
 

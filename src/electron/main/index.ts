@@ -102,6 +102,24 @@ function createWindow(): void {
   });
 }
 
+// Single-instance guard: a second launch would fight the first over the shared
+// userData/cache directory on Windows, producing "Unable to move the cache:
+// Access denied (0x5)" / "Gpu Cache Creation failed" disk_cache errors. Instead,
+// quit the duplicate and focus the window that's already open. Calling app.quit()
+// before 'ready' fires means the whenReady() handler below never runs for the
+// losing instance, so it creates no window and touches no cache.
+const gotInstanceLock = app.requestSingleInstanceLock();
+if (!gotInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(() => {
   // Initialize security logging directory
   setSecurityLogDir(app.getPath("logs"));
@@ -117,18 +135,18 @@ app.whenReady().then(() => {
   const csp = isDev
     ? "default-src 'self'; " +
       "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
-      "connect-src 'self' ws:; " +
-      "font-src 'self'; " +
+      "connect-src 'self' ws: https://*.supabase.co wss://*.supabase.co; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
       "object-src 'none'; " +
       "base-uri 'self'"
     : "default-src 'self'; " +
       "script-src 'self'; " +
-      "style-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
-      "connect-src 'self'; " +
-      "font-src 'self'; " +
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
       "object-src 'none'; " +
       "base-uri 'self'";
 

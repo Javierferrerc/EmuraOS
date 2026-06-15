@@ -29,17 +29,20 @@ export class MetadataCache {
   private metadataDir: string;
   private coversDir: string;
   private thumbnailsDir: string;
+  private heroesDir: string;
 
   constructor(projectRoot?: string) {
     this.projectRoot = projectRoot ?? resolve(__dirname, "..", "..");
     this.metadataDir = resolve(this.projectRoot, "config", "metadata");
     this.coversDir = resolve(this.metadataDir, "covers");
     this.thumbnailsDir = resolve(this.metadataDir, "thumbnails");
+    this.heroesDir = resolve(this.metadataDir, "heroes");
   }
 
   ensureDirectories(systemId: string): void {
     mkdirSync(resolve(this.coversDir, systemId), { recursive: true });
     mkdirSync(resolve(this.thumbnailsDir, systemId), { recursive: true });
+    mkdirSync(resolve(this.heroesDir, systemId), { recursive: true });
   }
 
   private getCacheFilePath(systemId: string): string {
@@ -143,5 +146,14 @@ export class MetadataCache {
    *  reason about where thumbnails live without re-deriving the path. */
   getThumbnailsDir(): string {
     return this.thumbnailsDir;
+  }
+
+  /** Full-res wide hero/banner image (SteamGridDB hero) for a ROM. */
+  getHeroPath(systemId: string, romFileName: string): string {
+    return resolve(this.heroesDir, systemId, `${normalizeKey(romFileName)}.png`);
+  }
+
+  heroExists(systemId: string, romFileName: string): boolean {
+    return existsSync(this.getHeroPath(systemId, romFileName));
   }
 }
