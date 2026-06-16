@@ -7,6 +7,7 @@ export { EmulatorDetector } from "./emulator-detector.js";
 export { SetupWizard } from "./setup-wizard.js";
 export { MetadataCache } from "./metadata-cache.js";
 export { MetadataScraper } from "./metadata-scraper.js";
+export { LibretroMetadataProvider } from "./libretro-metadata.js";
 export { LibretroThumbnails } from "./libretro-thumbnails.js";
 export { SteamGridDb } from "./steamgriddb.js";
 export { normalizeTitle, tokenize } from "./title-utils.js";

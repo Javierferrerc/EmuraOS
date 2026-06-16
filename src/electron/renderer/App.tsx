@@ -24,6 +24,7 @@ import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
 import { NexusShell } from "./nexus/NexusShell";
 import { NexusSettings } from "./nexus/settings/NexusSettings";
+import { NexusSession } from "./nexus/session/NexusSession";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
@@ -339,7 +340,7 @@ export default function App() {
   if (NEW_SETTINGS_ENABLED) {
     const path = navigation.currentPath;
     if (path === "/game") {
-      page = <GameModeView />;
+      page = isNexus ? <NexusSession /> : <GameModeView />;
       viewKey = "game";
     } else if (path.startsWith("/settings")) {
       page = settingsPage;
@@ -359,7 +360,7 @@ export default function App() {
         viewKey = "emulator-config";
         break;
       case "game":
-        page = <GameModeView />;
+        page = isNexus ? <NexusSession /> : <GameModeView />;
         viewKey = "game";
         break;
       default:

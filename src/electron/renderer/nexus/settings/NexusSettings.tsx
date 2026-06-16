@@ -40,7 +40,7 @@ import "./nexus-settings.css";
 const SECTIONS: SettingsSection[] = [
   generalSection,
   aparienciaSection,
-  { id: "sonido", label: "Sonido", groups: [] },
+  { id: "sonido", path: "/settings/sonido", label: "Sonido", groups: [] },
   bibliotecaSection,
   portadasSection,
   rutasSection,

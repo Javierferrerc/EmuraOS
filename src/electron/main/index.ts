@@ -82,7 +82,15 @@ function createWindow(): void {
   // Both paths claim the fire through `claimF10Fire()` to avoid double-toggles.
   const f10Handler = () => {
     if (!claimF10Fire()) return;
-    if (mainWindow) {
+    if (!mainWindow) return;
+    if (isGameActive()) {
+      // During a game session F10 opens/closes the NEXUS pause menu.
+      console.log("[F10] → toggle pause menu");
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+      mainWindow.webContents.send("nexus-toggle-pause");
+    } else {
       const next = !mainWindow.isFullScreen();
       console.log("[F10] toggling fullscreen →", next);
       mainWindow.setFullScreen(next);

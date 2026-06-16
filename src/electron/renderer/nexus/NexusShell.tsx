@@ -33,10 +33,13 @@ import { NexusHome } from "./NexusHome";
 import { NexusProfile } from "./profile/NexusProfile";
 import { SocialProvider } from "../social/SocialContext";
 import { NexusErrorBoundary } from "./NexusErrorBoundary";
-import { NexusDetailPanel } from "./NexusDetailPanel";
+import { NexusGameDetail } from "./detail/NexusGameDetail";
+import type { GameDetailFocusHandle } from "./detail/useGameDetailFocus";
 import { NexusSearchOverlay } from "./NexusSearchOverlay";
 import { NexusHintBar } from "./NexusHintBar";
 import { NexusLaunchSequence } from "./launch/NexusLaunchSequence";
+import { NexusSessionSummary } from "./session/NexusSessionSummary";
+import type { DiscoveredRom } from "../../../core/types";
 import "./nexus.css";
 
 interface NexusShellProps {
@@ -82,6 +85,19 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   // Launch animation overlay (fresh id per launch so it always remounts).
   const [launchAnim, setLaunchAnim] = useState<{ game: NexusGame; id: number } | null>(null);
   const launchAnimIdRef = useRef(0);
+  // Post-session "resumen" overlay, shown when the emulator closes.
+  const [sessionSummary, setSessionSummary] = useState<{ rom: DiscoveredRom; durationSec: number } | null>(null);
+  const prevSessionRef = useRef(app.currentGame);
+  useEffect(() => {
+    const prev = prevSessionRef.current;
+    if (prev && !app.currentGame) {
+      const dur = prev.sessionStartedAt
+        ? Math.floor((Date.now() - prev.sessionStartedAt) / 1000)
+        : 0;
+      if (dur >= 2) setSessionSummary({ rom: prev.rom, durationSec: dur });
+    }
+    prevSessionRef.current = app.currentGame;
+  }, [app.currentGame]);
 
   const customColors = config?.customSystemColors;
   // When a custom background image is set (App renders it as a fixed layer
@@ -188,6 +204,9 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   // play and desktop behave identically. NEXUS replaces <Layout>, so without
   // this there'd be no gamepad navigation at all.
   const homeRef = useRef<NexusHomeHandle>(null);
+  // Imperative handle into the open ficha's spatial focus, so the gamepad layer
+  // can drive it (the ficha itself handles keyboard + mouse).
+  const detailFocusRef = useRef<GameDetailFocusHandle | null>(null);
   const [zone, setZone] = useState<"systems" | "content">("content");
   const homeActive = !searchOpen && !detailGame && !profileOpen;
 
@@ -203,10 +222,15 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
 
   const dispatch = useCallback(
     (action: FocusAction) => {
-      // Overlays take priority and have their own focus model.
+      // The ficha takes priority and owns its own spatial focus; forward
+      // gamepad moves/activate into it, Back closes it.
       if (detailGame) {
-        if (action.type === "ACTIVATE") handleLaunch(detailGame);
-        else if (action.type === "BACK") setDetailGame(null);
+        if (action.type === "BACK") setDetailGame(null);
+        else if (action.type === "ACTIVATE") detailFocusRef.current?.activate();
+        else if (action.type === "MOVE_UP") detailFocusRef.current?.move("up");
+        else if (action.type === "MOVE_DOWN") detailFocusRef.current?.move("down");
+        else if (action.type === "MOVE_LEFT") detailFocusRef.current?.move("left");
+        else if (action.type === "MOVE_RIGHT") detailFocusRef.current?.move("right");
         return;
       }
       if (searchOpen) {
@@ -364,13 +388,18 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
 
         {!profileOpen && <NexusHintBar />}
 
-        <NexusDetailPanel
-          game={detailGame}
-          isFavorite={detailGame ? checkFavorite(detailGame) : false}
-          onClose={() => setDetailGame(null)}
-          onLaunch={handleLaunch}
-          onToggleFavorite={handleToggleFavorite}
-        />
+        {detailGame && (
+          <NexusGameDetail
+            key={detailGame.key}
+            game={detailGame}
+            isFavorite={checkFavorite(detailGame)}
+            onBack={() => setDetailGame(null)}
+            onPlay={() => handleLaunch(detailGame)}
+            onToggleFavorite={() => handleToggleFavorite(detailGame)}
+            onChangeEmulator={onOpenSettings}
+            focusHandleRef={detailFocusRef}
+          />
+        )}
 
         {searchOpen && (
           <NexusSearchOverlay
@@ -394,6 +423,19 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
               void launchGame(launchAnim.game.rom);
               setLaunchAnim(null);
             }}
+          />
+        )}
+
+        {sessionSummary && (
+          <NexusSessionSummary
+            rom={sessionSummary.rom}
+            durationSec={sessionSummary.durationSec}
+            onReplay={() => {
+              const rom = sessionSummary.rom;
+              setSessionSummary(null);
+              void launchGame(rom);
+            }}
+            onClose={() => setSessionSummary(null)}
           />
         )}
       </div>

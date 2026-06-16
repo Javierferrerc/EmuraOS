@@ -148,6 +148,12 @@ export class MetadataCache {
     return this.thumbnailsDir;
   }
 
+  /** Public getter for the metadata root, used by the libretro-database
+   *  provider to stash its downloaded DAT files alongside the JSON caches. */
+  getMetadataDir(): string {
+    return this.metadataDir;
+  }
+
   /** Full-res wide hero/banner image (SteamGridDB hero) for a ROM. */
   getHeroPath(systemId: string, romFileName: string): string {
     return resolve(this.heroesDir, systemId, `${normalizeKey(romFileName)}.png`);

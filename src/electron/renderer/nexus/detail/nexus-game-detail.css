@@ -1,0 +1,908 @@
+/**
+ * nexus-game-detail.css — NEXUS ficha completa del juego (game detail page).
+ *
+ * Pixel-faithful port of the handoff `game-detail.css`, scoped under `.nx-gd`
+ * so its extra tokens (--good/--warn/--bad, --tint/--glow/--deep, density
+ * --gap/--pad/--radius) never leak into the rest of the shell. The base tokens
+ * (--bg, --panel*, --line*, --text*, --accent, --ease) come from `.nexus-root`.
+ *
+ * Only the chosen "cinematic" header is shipped (store/gallery are intentionally
+ * omitted, see README); section order is driven from the component.
+ *
+ * Bug-not-to-reintroduce: --hue is resolved ON `.nx-gd` (where it's injected
+ * inline), never on an ancestor — so the whole ficha tints to the game family.
+ */
+
+.nx-gd {
+  --good: #4ade80;
+  --warn: #f5c451;
+  --bad: #f43f5e;
+  --violet: #a855f7;
+  --hue: 224;
+  --tint: oklch(0.66 0.17 var(--hue));
+  --glow: oklch(0.74 0.18 var(--hue));
+  --deep: oklch(0.16 0.06 var(--hue));
+  /* density (overridden by .cozy / .dense) */
+  --gap: 30px;
+  --pad: 34px;
+  --radius: 18px;
+
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  background:
+    radial-gradient(120% 60% at 80% -10%, color-mix(in oklab, var(--tint) 12%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--bg-2), var(--bg));
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.nx-gd.cozy {
+  --gap: 38px;
+  --pad: 42px;
+  --radius: 22px;
+}
+.nx-gd.dense {
+  --gap: 20px;
+  --pad: 24px;
+  --radius: 14px;
+  font-size: 14px;
+}
+.nx-gd::-webkit-scrollbar {
+  width: 11px;
+}
+.nx-gd::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ════════ ENTRANCE ════════
+ * The ficha mounts fresh (keyed) on every open, so these run once per open.
+ * Layered/staggered: backdrop fades, hero art eases in with a slight zoom,
+ * then title + body rise — instead of snapping in all at once. */
+@keyframes nx-gd-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes nx-gd-hero-art-in {
+  from {
+    opacity: 0;
+    transform: scale(1.07);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes nx-gd-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.nx-gd {
+  animation: nx-gd-fade 0.26s ease both;
+}
+.nx-gd .gd-hero-art {
+  animation: nx-gd-hero-art-in 0.62s cubic-bezier(0.16, 0.84, 0.34, 1) both;
+}
+.nx-gd .gd-hero-inner {
+  animation: nx-gd-rise 0.52s cubic-bezier(0.16, 0.84, 0.34, 1) both;
+  animation-delay: 0.08s;
+}
+.nx-gd .gd-body {
+  animation: nx-gd-rise 0.52s cubic-bezier(0.16, 0.84, 0.34, 1) both;
+  animation-delay: 0.16s;
+}
+.nx-gd .gd-back {
+  animation: nx-gd-fade 0.4s ease both;
+  animation-delay: 0.22s;
+}
+
+.nx-gd .gd-back {
+  position: absolute;
+  z-index: 30;
+  top: 20px;
+  left: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  background: rgba(8, 10, 15, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: background 0.15s, transform 0.15s;
+}
+.nx-gd .gd-back:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateX(-2px);
+}
+
+/* focus ring (gamepad) */
+.nx-gd .foc-ring {
+  position: relative;
+}
+.nx-gd [data-foc].focused {
+  outline: none;
+}
+/* The focus ring is a keyboard/gamepad affordance — only shown when focus came
+ * from the keyboard/pad (.kbd-focus), never on plain mouse hover (which keeps
+ * just the design's :hover state). */
+.nx-gd.kbd-focus [data-foc].focused::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 2.5px var(--tint), 0 0 0 6px color-mix(in oklab, var(--tint) 28%, transparent);
+  border-radius: 14px;
+}
+.nx-gd.kbd-focus .gd-actions [data-foc].focused::after {
+  border-radius: 13px;
+}
+
+/* ════════ HERO: CINEMATIC ════════ */
+.nx-gd .gd-hero {
+  position: relative;
+  overflow: hidden;
+}
+.nx-gd .gd-hero.cinematic {
+  height: min(74vh, 680px);
+}
+.nx-gd .gd-hero.cinematic .gd-hero-art {
+  position: absolute;
+  inset: 0;
+}
+.nx-gd .gd-hero.cinematic .gd-hero-art .sh,
+.nx-gd .gd-hero.cinematic .gd-hero-art .gd-real-shot {
+  width: 100%;
+  height: 100%;
+}
+.nx-gd .gd-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, var(--bg) 2%, rgba(7, 8, 11, 0.5) 30%, transparent 62%),
+    linear-gradient(90deg, rgba(7, 8, 11, 0.85) 12%, rgba(7, 8, 11, 0.35) 45%, transparent 70%);
+}
+.nx-gd .gd-hero.cinematic .gd-hero-inner {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: var(--pad);
+  padding-bottom: 30px;
+  max-width: 920px;
+  z-index: 3;
+}
+
+.nx-gd .gd-hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.nx-gd .gd-sys-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: color-mix(in oklab, var(--tint) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tint) 38%, transparent);
+  color: #fff;
+}
+.nx-gd .gd-sys-chip .g {
+  color: var(--tint);
+  display: inline-grid;
+  place-items: center;
+}
+.nx-gd .gd-sys-chip .g img {
+  width: 15px;
+  height: 15px;
+  display: block;
+  object-fit: contain;
+}
+.nx-gd .gd-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.nx-gd .gd-eye-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.nx-gd .gd-title {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.96;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+.nx-gd .gd-hero.cinematic .gd-title {
+  font-size: clamp(40px, 6.4vw, 86px);
+}
+.nx-gd .gd-tagline {
+  margin: 14px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 620px;
+  text-wrap: pretty;
+}
+
+/* rating inline */
+.nx-gd .gd-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.nx-gd .gd-stars {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--warn);
+}
+.nx-gd .gd-stars .s {
+  opacity: 0.25;
+  display: inline-flex;
+}
+.nx-gd .gd-stars .s.on {
+  opacity: 1;
+}
+.nx-gd .gd-rate-num {
+  font-weight: 700;
+}
+
+/* ════════ ACTIONS ════════ */
+.nx-gd .gd-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+.nx-gd .gd-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 26px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--tint);
+  color: #06101e;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 12px 30px color-mix(in oklab, var(--tint) 40%, transparent);
+  transition: transform 0.15s, filter 0.15s;
+}
+.nx-gd .gd-play:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+.nx-gd .gd-play .gd-play-sub {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+  display: block;
+  line-height: 1;
+  margin-top: 2px;
+}
+.nx-gd .gd-play-main {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  gap: 0;
+}
+.nx-gd .gd-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.15s, transform 0.15s;
+}
+.nx-gd .gd-secondary:hover {
+  background: var(--panel-3);
+  transform: translateY(-2px);
+}
+.nx-gd .gd-secondary .sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.nx-gd .gd-iconbtn {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text-dim);
+  transition: all 0.15s;
+}
+.nx-gd .gd-iconbtn:hover {
+  color: var(--text);
+  background: var(--panel-3);
+  transform: translateY(-2px);
+}
+.nx-gd .gd-iconbtn.on {
+  color: var(--tint);
+  border-color: color-mix(in oklab, var(--tint) 45%, transparent);
+  background: color-mix(in oklab, var(--tint) 15%, transparent);
+}
+
+/* small compat seal */
+.nx-gd .gd-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid;
+}
+.nx-gd .gd-seal .d {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.nx-gd .gd-seal.perfecto {
+  color: var(--good);
+  border-color: color-mix(in oklab, var(--good) 40%, transparent);
+  background: color-mix(in oklab, var(--good) 12%, transparent);
+}
+.nx-gd .gd-seal.perfecto .d {
+  background: var(--good);
+  box-shadow: 0 0 7px var(--good);
+}
+.nx-gd .gd-seal.jugable {
+  color: var(--warn);
+  border-color: color-mix(in oklab, var(--warn) 40%, transparent);
+  background: color-mix(in oklab, var(--warn) 12%, transparent);
+}
+.nx-gd .gd-seal.jugable .d {
+  background: var(--warn);
+  box-shadow: 0 0 7px var(--warn);
+}
+.nx-gd .gd-seal.problemas {
+  color: var(--bad);
+  border-color: color-mix(in oklab, var(--bad) 40%, transparent);
+  background: color-mix(in oklab, var(--bad) 12%, transparent);
+}
+.nx-gd .gd-seal.problemas .d {
+  background: var(--bad);
+  box-shadow: 0 0 7px var(--bad);
+}
+
+/* ════════ BODY ════════ */
+.nx-gd .gd-body {
+  padding: var(--gap) var(--pad) 80px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  max-width: 1680px;
+}
+.nx-gd .gd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.nx-gd .gd-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.nx-gd .gd-sec-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.nx-gd .gd-sec-head .gd-sec-ico {
+  color: var(--tint);
+  display: inline-grid;
+  place-items: center;
+}
+.nx-gd .gd-sec-head .gd-sec-extra {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+/* shots gallery — responsive grid: wraps and fills the width instead of a
+ * horizontal carousel that clips the last shot against the body edge. */
+.nx-gd .gd-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.nx-gd .gd-shot {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  transition: transform 0.15s;
+}
+.nx-gd .gd-shot .sh,
+.nx-gd .gd-shot .gd-real-shot {
+  width: 100%;
+  height: 100%;
+}
+.nx-gd .gd-shot:hover {
+  transform: translateY(-3px);
+}
+
+/* metadata grid */
+.nx-gd .gd-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.nx-gd .gd-meta-cell {
+  padding: 15px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nx-gd .gd-meta-cell .l {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.nx-gd .gd-meta-cell .v {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* two-column row for core + activity */
+.nx-gd .gd-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+@media (max-width: 920px) {
+  .nx-gd .gd-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* core / emulator */
+.nx-gd .gd-core {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.nx-gd .gd-core-badge {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--tint) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tint) 38%, transparent);
+  color: var(--tint);
+}
+.nx-gd .gd-core-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nx-gd .gd-core-name {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.nx-gd .gd-core-sub {
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+.nx-gd .gd-core-bios {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 8px;
+}
+.nx-gd .gd-core-bios.ok {
+  color: var(--good);
+  background: color-mix(in oklab, var(--good) 12%, transparent);
+}
+.nx-gd .gd-core-bios.warn {
+  color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 12%, transparent);
+}
+.nx-gd .gd-core-change {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tint);
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklab, var(--tint) 35%, transparent);
+}
+.nx-gd .gd-core-change:hover {
+  background: color-mix(in oklab, var(--tint) 14%, transparent);
+}
+
+/* activity */
+.nx-gd .gd-activity {
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.nx-gd .gd-act-row {
+  display: flex;
+  gap: 26px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.nx-gd .gd-act-stat .n {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.nx-gd .gd-act-stat .l {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.nx-gd .gd-prog {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.nx-gd .gd-prog-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.nx-gd .gd-prog-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tint);
+  box-shadow: 0 0 10px var(--tint);
+}
+.nx-gd .gd-prog-lbl {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* save states */
+.nx-gd .gd-saves {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.nx-gd .gd-save {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: left;
+  transition: background 0.14s, border-color 0.14s, transform 0.12s;
+}
+.nx-gd .gd-save:hover {
+  background: var(--panel-2);
+  border-color: var(--line-2);
+  transform: translateX(3px);
+}
+.nx-gd .gd-save-thumb {
+  width: 92px;
+  aspect-ratio: 16/9;
+  flex-shrink: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+}
+.nx-gd .gd-save-thumb .sh,
+.nx-gd .gd-save-thumb .gd-real-shot {
+  width: 100%;
+  height: 100%;
+}
+.nx-gd .gd-save-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nx-gd .gd-save-slot {
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nx-gd .gd-save-auto {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--tint) 18%, transparent);
+  color: var(--tint);
+}
+.nx-gd .gd-save-when {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.nx-gd .gd-save-load {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tint);
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklab, var(--tint) 32%, transparent);
+}
+.nx-gd .gd-save-load:hover {
+  background: color-mix(in oklab, var(--tint) 14%, transparent);
+}
+
+/* ratings */
+.nx-gd .gd-ratings {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 30px;
+  align-items: center;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.nx-gd .gd-rate-big {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nx-gd .gd-rate-score {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.nx-gd .gd-rate-count {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.nx-gd .gd-rate-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.nx-gd .gd-rate-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 12px;
+}
+.nx-gd .gd-rate-line .lab {
+  width: 16px;
+  color: var(--text-faint);
+  text-align: right;
+}
+.nx-gd .gd-rate-line .bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.nx-gd .gd-rate-line .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--tint), var(--glow));
+}
+.nx-gd .gd-rate-line .pc {
+  width: 34px;
+  color: var(--text-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .nx-gd .gd-ratings {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+/* ── shot-art primitives (procedural fallback) ───────────── */
+.nx-gd .sh {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.nx-gd .gd-real-shot {
+  position: relative;
+  overflow: hidden;
+  background: #05070b;
+}
+.nx-gd .gd-real-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.nx-gd .sh-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+.nx-gd .sh-vig {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(80% 70% at 50% 50%, transparent, rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+}
+.nx-gd .sh-scan {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%);
+  pointer-events: none;
+}
+.nx-gd .sh-hill {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: 32%;
+  height: 22%;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  opacity: 0.9;
+}
+.nx-gd .sh-hill.b {
+  bottom: 36%;
+  height: 16%;
+  left: 20%;
+  right: -20%;
+  opacity: 0.8;
+}
+.nx-gd .sh-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+}
+.nx-gd .sh-ring {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 46%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+.nx-gd .sh-ring.sm {
+  width: 26%;
+  top: 60%;
+  opacity: 0.7;
+}
+.nx-gd .sh-arc {
+  position: absolute;
+  left: 50%;
+  bottom: -34%;
+  width: 120%;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border: 2px solid;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+.nx-gd .sh-dot {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 14px currentColor;
+}
+.nx-gd .sh-node {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 12px currentColor;
+}
+.nx-gd .sh-link {
+  position: absolute;
+  left: 30%;
+  top: 44%;
+  width: 34%;
+  height: 2px;
+  transform-origin: 0 0;
+  transform: rotate(20deg);
+  opacity: 0.7;
+}
+.nx-gd .sh-orb {
+  position: absolute;
+  left: 38%;
+  top: 42%;
+  width: 34%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  filter: blur(2px);
+}
+.nx-gd .sh-label {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-gd * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.08ms !important;
+  }
+}

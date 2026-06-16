@@ -189,6 +189,8 @@ export interface ElectronAPI {
     width: number;
     height: number;
   }): Promise<void>;
+  onNexusTogglePause(callback: () => void): void;
+  removeNexusTogglePauseListener(): void;
   onGameSessionStarted(callback: (event: GameSessionEvent) => void): void;
   removeGameSessionStartedListener(): void;
   onGameSessionEnded(callback: () => void): void;

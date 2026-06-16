@@ -76,6 +76,7 @@ export const AppConfigPartialSchema = z
     coverSourcePriority: z
       .enum(["libretro-first", "sgdb-first", "libretro-only", "sgdb-only"])
       .optional(),
+    metadataSource: z.enum(["libretro", "screenscraper"]).optional(),
     firstRunCompleted: z.boolean().optional(),
     navSoundEnabled: z.boolean().optional(),
     // Percent 0..100 — matches the slider UI range and the `/100` divisor in
@@ -133,6 +134,9 @@ export const AppConfigPartialSchema = z
     preLaunchScript: z.string().max(500).optional(),
     postLaunchScript: z.string().max(500).optional(),
     preLaunchCountdownEnabled: z.boolean().optional(),
+    // NEXUS launch animation sound signature
+    launchSoundProfile: z.string().max(40).optional(),
+    launchSoundEnabled: z.boolean().optional(),
     // Phase 23 — RetroAchievements
     retroAchievementsUsername: z.string().max(100).optional(),
     retroAchievementsPassword: z.string().max(200).optional(),

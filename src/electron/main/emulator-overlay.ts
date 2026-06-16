@@ -557,9 +557,18 @@ export class EmulatorOverlay {
 
       const f10Down = isKeyPressed(VK_F10);
       if (f10Down && !this.prevF10Down && claimF10Fire()) {
-        const next = !this.win.isFullScreen();
-        console.log("[overlay] F10 (polled) toggling fullscreen →", next);
-        this.win.setFullScreen(next);
+        // During a game session F10 opens/closes the NEXUS pause menu instead
+        // of toggling fullscreen. Bring the launcher window to the front so the
+        // menu is visible + interactive, then let the renderer toggle it.
+        console.log("[overlay] F10 (polled) → toggle pause menu");
+        try {
+          this.win.show();
+          this.win.focus();
+          this.win.webContents.focus();
+          this.win.webContents.send("nexus-toggle-pause");
+        } catch {
+          /* window may be gone */
+        }
       }
       this.prevF10Down = f10Down;
 

@@ -26,6 +26,7 @@ import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { EmulatorReadiness } from "../../core/emulator-readiness.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
+import { LibretroMetadataProvider } from "../../core/libretro-metadata.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import { SteamGridDb } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
@@ -701,6 +702,26 @@ export function registerIpcHandlers(
       const configManager = new ConfigManager(getProjectRoot());
       const appConfig = configManager.get();
 
+      const registry = new SystemsRegistry(getSystemsPath());
+      const scanner = new RomScanner(registry);
+      const scanResult = scanner.scan(configManager.getRomsPath());
+      const cache = new MetadataCache(getProjectRoot());
+
+      const onProgress = (progress: unknown) =>
+        event.sender.send("scrape-progress", progress);
+
+      // Default to the credential-free libretro-database. ScreenScraper is
+      // opt-in and only used when explicitly selected (it adds descriptions
+      // and ratings but needs an account).
+      const source = appConfig.metadataSource ?? "libretro";
+
+      if (source === "libretro") {
+        const systemMapPath = path.join(getDataPath(), "libretro-systems.json");
+        const provider = new LibretroMetadataProvider(cache, { systemMapPath });
+        return provider.scrapeAll(scanResult.systems, onProgress);
+      }
+
+      // ── ScreenScraper ────────────────────────────────────────────────
       // Env vars take priority over config file
       const devId =
         process.env.SCREENSCRAPER_DEV_ID || appConfig.screenScraperDevId;
@@ -711,11 +732,6 @@ export function registerIpcHandlers(
         throw new Error("ScreenScraper credentials not configured");
       }
 
-      const registry = new SystemsRegistry(getSystemsPath());
-      const scanner = new RomScanner(registry);
-      const scanResult = scanner.scan(configManager.getRomsPath());
-
-      const cache = new MetadataCache(getProjectRoot());
       const systemMapPath = path.join(
         getDataPath(),
         "screenscraper-systems.json"
@@ -732,9 +748,7 @@ export function registerIpcHandlers(
         { systemMapPath }
       );
 
-      return scraper.scrapeAll(scanResult.systems, (progress) => {
-        event.sender.send("scrape-progress", progress);
-      });
+      return scraper.scrapeAll(scanResult.systems, onProgress);
     }
   );
 

@@ -169,6 +169,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeGameSessionEndedListener: () => {
     ipcRenderer.removeAllListeners("game-session-ended");
   },
+  // F10 while a game runs → toggle the NEXUS pause menu (sent from main).
+  onNexusTogglePause: (callback: () => void) => {
+    ipcRenderer.on("nexus-toggle-pause", () => callback());
+  },
+  removeNexusTogglePauseListener: () => {
+    ipcRenderer.removeAllListeners("nexus-toggle-pause");
+  },
 
   // Emulator config
   getEmulatorConfig: (emulatorId: string, executablePath?: string) =>

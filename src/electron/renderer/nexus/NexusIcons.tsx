@@ -328,6 +328,26 @@ export const EyeIcon = ({ size = 18, className }: IconProps) =>
     className
   );
 
+export const CpuIcon = ({ size = 18, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M10 2.5v3M14 2.5v3M10 18.5v3M14 18.5v3M2.5 10h3M2.5 14h3M18.5 10h3M18.5 14h3" />
+    </>,
+    className
+  );
+
+export const RefreshIcon = ({ size = 16, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <path d="M20 11a8 8 0 0 0-14-4.5L4 8M4 4v4h4" />
+      <path d="M4 13a8 8 0 0 0 14 4.5L20 16M20 20v-4h-4" />
+    </>,
+    className
+  );
+
 export const EyeOffIcon = ({ size = 18, className }: IconProps) =>
   svg(
     size,

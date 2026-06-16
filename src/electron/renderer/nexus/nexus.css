@@ -912,6 +912,30 @@
 .nx-home {
   padding: 0 0 40px;
 }
+/* Entrance — NexusHome remounts (keyed by platform+layout) on every system
+ * switch, so these run once per switch: the featured hero + the grid/rows fade
+ * and rise in (staggered) instead of snapping. */
+@keyframes nx-homeRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.nx-home .nx-hero {
+  animation: nx-homeRise 0.4s var(--ease) both;
+}
+.nx-home .nx-grid-wrap {
+  animation: nx-homeRise 0.42s var(--ease) both;
+  animation-delay: 0.06s;
+}
+.nx-home .nx-rows {
+  animation: nx-homeRise 0.42s var(--ease) both;
+  animation-delay: 0.04s;
+}
 .nx-rows {
   display: flex;
   flex-direction: column;
