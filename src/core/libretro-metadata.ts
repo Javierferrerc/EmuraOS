@@ -45,7 +45,7 @@ export interface LibretroGameFields {
   users?: string;
 }
 
-interface SystemIndex {
+export interface SystemIndex {
   /** normalized stripped comment -> fields (for exact/normalized lookup) */
   byNorm: Map<string, LibretroGameFields>;
   /** entries enriched for the fuzzy match cascade */
@@ -230,6 +230,12 @@ export class LibretroMetadataProvider {
     }
 
     return parseCategoryDat(text, field, quoted);
+  }
+
+  /** Public accessor for the merged per-system index — used by the metadata
+   * cascade so it can reuse libretro's matcher without re-downloading DATs. */
+  async loadIndex(systemId: string): Promise<SystemIndex | null> {
+    return this.loadSystemIndex(systemId);
   }
 
   /** Load and cache the merged metadata index for a system. */

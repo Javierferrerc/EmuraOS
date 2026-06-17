@@ -28,6 +28,9 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    // Open maximized to the full screen by default (console-like experience).
+    // F10 still toggles fullscreen on/off at runtime.
+    fullscreen: true,
     title: "EmuraOS",
     backgroundColor: "#111827",
     webPreferences: {
@@ -35,6 +38,9 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Let the EMURA boot chime (WebAudio) play on startup without a prior
+      // user gesture — Chromium otherwise blocks audio until first interaction.
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
 

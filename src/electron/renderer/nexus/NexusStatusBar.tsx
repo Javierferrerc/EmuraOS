@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { TrophyIcon, SettingsIcon, SearchIcon, LayersIcon, GridIcon, RailIcon, SidebarIcon } from "./NexusIcons";
+import { TrophyIcon, SettingsIcon, SearchIcon, LayersIcon, GridIcon, RailIcon, SidebarIcon, DownloadIcon } from "./NexusIcons";
 import type { NexusLayout } from "./nexusTypes";
 import { useSocial } from "../social/SocialContext";
 import {
@@ -41,6 +41,7 @@ interface NexusStatusBarProps {
   onOpenSettings: () => void;
   onOpenSearch: () => void;
   onOpenProfile: () => void;
+  onImport: () => void;
 }
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -56,6 +57,7 @@ export function NexusStatusBar({
   onOpenSettings,
   onOpenSearch,
   onOpenProfile,
+  onImport,
 }: NexusStatusBarProps) {
   const [now, setNow] = useState(() => new Date());
   const social = useSocial();
@@ -152,6 +154,10 @@ export function NexusStatusBar({
           <TrophyIcon size={14} />
           {totalGames}
         </span>
+        <button className="nx-sb-import" onClick={onImport} title="Importar juegos">
+          <DownloadIcon size={15} />
+          <span>Importar</span>
+        </button>
         <button className="nx-sb-ico" onClick={onOpenSettings} title="Ajustes">
           <SettingsIcon size={18} />
         </button>

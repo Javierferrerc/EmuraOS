@@ -261,6 +261,16 @@ export interface ElectronAPI {
       systems: Array<{ id: string; name: string }>;
     }>
   >;
+  scanImportPaths(
+    paths: string[]
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      sizeBytes: number;
+      systems: Array<{ id: string; name: string }>;
+    }>
+  >;
   addRoms(
     entries: Array<{ filePath: string; systemId: string }>
   ): Promise<

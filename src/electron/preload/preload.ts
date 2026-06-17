@@ -242,6 +242,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
       systems: Array<{ id: string; name: string }>;
     }>
   > => ipcRenderer.invoke("resolve-rom-systems", filePaths),
+  scanImportPaths: (
+    paths: string[]
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      sizeBytes: number;
+      systems: Array<{ id: string; name: string }>;
+    }>
+  > => ipcRenderer.invoke("scan-import-paths", paths),
   addRoms: (
     entries: Array<{ filePath: string; systemId: string }>
   ): Promise<

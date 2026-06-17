@@ -1,0 +1,302 @@
+/* boot-gamer.css — EMURA arranque "gamer" (encendido de consola).
+ *
+ * Pixel-faithful port of the handoff `boot-gamer.css` (source of truth).
+ * Two integration changes only — visuals/timing are untouched:
+ *   1. The handoff's global resets (`:root` tokens, `html/body`, `#root`,
+ *      bare `button`) are SCOPED to `.bg`/`.bg *`/`.bg button` so they can't
+ *      leak into the rest of the app. Tokens live on `.bg` and inherit down.
+ *   2. Self-contained fonts (Sora body + Space Grotesk title) are imported
+ *      here, and `.bg` gets a high z-index so it overlays the whole app at
+ *      startup. Everything else is verbatim.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+/* tokens — scoped to the boot subtree (was :root in the handoff) */
+.bg {
+  --bg: #04050a; --bg-2: #080a12;
+  --text: #eef3ff; --text-dim: rgba(238,243,255,0.66); --text-faint: rgba(238,243,255,0.40);
+  --brand: #2f7bf6; --brand-2: #5aa0ff; --cyan: #2fe6ff; --mag: #b95cff; --hot: #ff3b6b;
+  --ease: cubic-bezier(.4,.8,.3,1); --pop: cubic-bezier(.2,1.5,.4,1);
+  --dur: 4.6s; --intensity: 1;
+  font-family: 'Sora', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased;
+}
+.bg, .bg * { box-sizing: border-box; }
+.bg button { font-family: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+
+/* ── stage ───────────────────────────────────────────────── */
+.bg { position: fixed; inset: 0; z-index: 100000; overflow: hidden; display: grid; place-items: center;
+  background: radial-gradient(120% 95% at 50% 42%, #0d1838, #060812 62%, #04050a 100%); }
+.bg-screen { position: absolute; inset: 0; display: grid; place-items: center; }            /* shake target + centers logo */
+.bg[data-phase="slam"] .bg-screen { animation: bgShake .42s cubic-bezier(.36,.07,.19,.97); }
+@keyframes bgShake {
+  10%,90% { transform: translate(calc(-2px*var(--intensity)), 0); }
+  20%,80% { transform: translate(calc(3px*var(--intensity)), calc(-1px*var(--intensity))); }
+  30%,50%,70% { transform: translate(calc(-6px*var(--intensity)), calc(2px*var(--intensity))); }
+  40%,60% { transform: translate(calc(6px*var(--intensity)), calc(-2px*var(--intensity))); }
+}
+
+/* deep animated gradient wash */
+.bg-wash { position: absolute; inset: -20%; opacity: 0; transition: opacity .6s;
+  background:
+    radial-gradient(58% 70% at 26% 30%, color-mix(in oklab, var(--brand) 46%, transparent), transparent 72%),
+    radial-gradient(60% 72% at 76% 66%, color-mix(in oklab, var(--mag) 34%, transparent), transparent 74%),
+    radial-gradient(54% 64% at 64% 20%, color-mix(in oklab, var(--cyan) 30%, transparent), transparent 72%),
+    radial-gradient(80% 85% at 50% 96%, color-mix(in oklab, var(--brand) 26%, transparent), transparent 72%);
+  filter: blur(8px); animation: washMove 7s ease-in-out infinite alternate; }
+.bg[data-phase] .bg-wash { opacity: .7; }
+.bg[data-phase="start"] .bg-wash, .bg[data-phase="ready"] .bg-wash { opacity: .92; }
+@keyframes washMove { to { transform: translate(3%, -3%) scale(1.1); } }
+
+/* hex grid that powers up */
+.bg-hex { position: absolute; inset: -4%; opacity: 0; transition: opacity .5s; mix-blend-mode: screen;
+  background-image:
+    repeating-linear-gradient(60deg, color-mix(in oklab, var(--brand) 22%, transparent) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(-60deg, color-mix(in oklab, var(--brand) 22%, transparent) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(0deg, color-mix(in oklab, var(--brand) 16%, transparent) 0 1px, transparent 1px 45px);
+  -webkit-mask: radial-gradient(60% 60% at 50% 50%, #000, transparent 80%); mask: radial-gradient(60% 60% at 50% 50%, #000, transparent 80%); }
+.bg[data-phase="build"] .bg-hex, .bg[data-phase="slam"] .bg-hex { opacity: .5; animation: hexPulse 1.4s ease-in-out infinite; }
+.bg[data-phase="charge"] .bg-hex { opacity: .6; }
+.bg[data-phase="start"] .bg-hex, .bg[data-phase="ready"] .bg-hex { opacity: .32; }
+@keyframes hexPulse { 50% { opacity: .8; } }
+
+/* speed lines streaking inward → then outward */
+.bg-speed { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.bg-line { position: absolute; left: 50%; top: 50%; height: 2px; width: 26vmax; transform-origin: 0 50%;
+  transform: rotate(var(--a)) translateX(10vmax) scaleX(0); opacity: 0; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--lc, var(--brand-2)) 70%, #fff); }
+.bg[data-phase="ignite"] .bg-line, .bg[data-phase="build"] .bg-line { animation: lineIn calc(.7s + var(--d)) var(--ease) infinite; }
+@keyframes lineIn {
+  0% { opacity: 0; transform: rotate(var(--a)) translateX(60vmax) scaleX(2.2); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(7vmax) scaleX(.3); }
+}
+.bg[data-phase="slam"] .bg-line, .bg[data-phase="charge"] .bg-line { animation: lineOut .6s var(--ease) forwards; }
+@keyframes lineOut {
+  0% { opacity: 1; transform: rotate(var(--a)) translateX(8vmax) scaleX(.4); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(72vmax) scaleX(2.6); }
+}
+
+/* scanlines + flicker */
+.bg-scan { position: absolute; inset: 0; z-index: 9; pointer-events: none; opacity: 0; transition: opacity .5s;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; }
+.bg[data-phase] .bg-scan { opacity: .5; }
+.bg-sweep { position: absolute; left: 0; right: 0; height: 30%; z-index: 10; pointer-events: none; opacity: 0;
+  background: linear-gradient(0deg, transparent, color-mix(in oklab, var(--cyan) 22%, transparent), transparent); }
+.bg[data-phase="charge"] .bg-sweep, .bg[data-phase="start"] .bg-sweep { opacity: 1; animation: sweepMove 1.6s linear infinite; }
+@keyframes sweepMove { 0% { top: -30%; } 100% { top: 100%; } }
+
+/* ── core / logo ─────────────────────────────────────────── */
+.bg-core { position: relative; z-index: 6; display: grid; place-items: center; }
+
+/* rotating conic RGB glow behind logo */
+.bg-conic { position: absolute; z-index: 4; width: 240%; aspect-ratio: 1; border-radius: 50%; opacity: 0; filter: blur(20px);
+  background: conic-gradient(from 0deg, var(--brand), var(--cyan), var(--mag), var(--hot), var(--brand)); transition: opacity .5s; }
+.bg[data-phase="build"] .bg-conic { opacity: .3; }
+.bg[data-phase="slam"] .bg-conic, .bg[data-phase="charge"] .bg-conic { opacity: .55; }
+.bg[data-phase="start"] .bg-conic, .bg[data-phase="ready"] .bg-conic { opacity: .38; }
+.bg[data-phase] .bg-conic { animation: conicSpin 3.4s linear infinite; }
+@keyframes conicSpin { to { transform: rotate(360deg); } }
+
+/* charging ring (SVG) */
+.bg-ring { position: absolute; z-index: 5; width: 132%; height: 132%; transform: rotate(-90deg); opacity: 0; transition: opacity .35s; }
+.bg[data-phase="charge"] .bg-ring { opacity: 1; }
+.bg[data-phase="start"] .bg-ring, .bg[data-phase="ready"] .bg-ring { opacity: 0; }
+.bg-ring-trk { fill: none; stroke: rgba(255,255,255,.08); }
+.bg-ring-bar { fill: none; stroke: var(--cyan); stroke-linecap: round; filter: drop-shadow(0 0 8px var(--cyan)); }
+
+.bg-logo-wrap { position: relative; z-index: 7; width: min(30vh, 210px); aspect-ratio: 1; display: grid; place-items: center;
+  filter: drop-shadow(0 14px 40px rgba(20,90,246,.45)); }
+.bg-logo { width: 100%; height: 100%; object-fit: contain; opacity: 0; transform: scale(2.6) rotate(40deg); }
+/* build: logo spins/zooms toward us, slightly transparent */
+.bg[data-phase="build"] .bg-logo { animation: logoBuild calc(var(--dur)*.28) var(--ease) forwards; }
+@keyframes logoBuild { 0% { opacity: 0; transform: scale(2.6) rotate(40deg); filter: blur(10px); } 60% { opacity: .85; } 100% { opacity: .9; transform: scale(1.18) rotate(6deg); filter: blur(1px); } }
+/* slam: snap to place with overshoot */
+.bg[data-phase="slam"] .bg-logo { opacity: 1; animation: logoSlam .5s var(--pop) forwards; }
+@keyframes logoSlam { 0% { transform: scale(1.18) rotate(6deg); } 55% { transform: scale(.92) rotate(-2deg); } 100% { transform: scale(1) rotate(0); } }
+.bg[data-phase="charge"] .bg-logo { opacity: 1; transform: scale(1); animation: logoIdle 1.2s ease-in-out infinite; }
+@keyframes logoIdle { 50% { transform: scale(1.03) translateY(-4px); } }
+.bg[data-phase="start"] .bg-logo, .bg[data-phase="ready"] .bg-logo { opacity: 1; transform: scale(1.02); animation: logoFloat 3.6s ease-in-out infinite; }
+@keyframes logoFloat { 50% { transform: scale(1.02) translateY(-9px); } }
+
+/* chromatic glitch clones on slam */
+.bg-logo-ghost { position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0; }
+.bg-logo-ghost img { width: 100%; height: 100%; object-fit: contain; }
+.bg-logo-ghost.r { mix-blend-mode: screen; }
+.bg-logo-ghost.b { mix-blend-mode: screen; }
+.bg[data-phase="slam"] .bg-logo-ghost.r { animation: ghostR .42s steps(2) ; }
+.bg[data-phase="slam"] .bg-logo-ghost.b { animation: ghostB .42s steps(2) ; }
+@keyframes ghostR { 0%,100% { opacity: 0; transform: none; } 20% { opacity: .5; transform: translate(7px,-3px); filter: drop-shadow(0 0 0 var(--hot)) hue-rotate(-40deg); } 50% { opacity: .3; transform: translate(-4px,2px); } }
+@keyframes ghostB { 0%,100% { opacity: 0; transform: none; } 20% { opacity: .5; transform: translate(-7px,3px); filter: hue-rotate(60deg); } 50% { opacity: .3; transform: translate(4px,-2px); } }
+
+/* sheen sweep */
+.bg-sheen { position: absolute; inset: 8%; z-index: 8; border-radius: 50%; overflow: hidden; pointer-events: none; opacity: 0; }
+.bg-sheen::before { content: ""; position: absolute; top: -40%; left: -70%; width: 46%; height: 180%; transform: rotate(18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); filter: blur(2px); }
+.bg[data-phase="slam"] .bg-sheen, .bg[data-phase="charge"] .bg-sheen { opacity: 1; }
+.bg[data-phase="slam"] .bg-sheen::before, .bg[data-phase="charge"] .bg-sheen::before { animation: sheenGo 1s var(--ease) .05s; }
+@keyframes sheenGo { from { left: -70%; } to { left: 170%; } }
+
+/* shock rings on slam */
+.bg-shock { position: absolute; z-index: 3; left: 50%; top: 50%; width: 30px; height: 30px; border-radius: 50%; transform: translate(-50%,-50%);
+  border: 3px solid var(--lc, var(--cyan)); opacity: 0; }
+.bg[data-phase="slam"] .bg-shock { animation: shockGo .8s var(--ease) forwards; animation-delay: var(--sd, 0s); }
+@keyframes shockGo { 0% { opacity: .95; width: 30px; height: 30px; border-width: 4px; } 100% { opacity: 0; width: calc(150vmax*var(--intensity)); height: calc(150vmax*var(--intensity)); border-width: 0; } }
+
+/* impact flash */
+.bg-flash { position: absolute; inset: 0; z-index: 11; background: radial-gradient(circle at 50% 46%, #fff, var(--cyan) 45%, transparent 70%); opacity: 0; pointer-events: none; }
+.bg[data-phase="slam"] .bg-flash { animation: flashGo .42s ease-out; }
+@keyframes flashGo { 0% { opacity: 0; } 12% { opacity: .95; } 100% { opacity: 0; } }
+
+/* ── title below logo (distinct font) ────────────────────── */
+.bg-title { position: absolute; top: 100%; left: 50%; margin-top: 26px; transform: translateX(-50%) translateY(12px);
+  font-family: 'Space Grotesk', 'Sora', sans-serif; font-weight: 700; font-size: clamp(28px, 5vw, 56px); letter-spacing: .3em; text-indent: .3em; white-space: nowrap; line-height: 1;
+  background: linear-gradient(180deg, #ffffff, var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 26px color-mix(in oklab, var(--cyan) 32%, transparent); opacity: 0;
+  transition: opacity .5s var(--ease) .1s, transform .5s var(--ease) .1s; }
+.bg[data-phase="start"] .bg-title, .bg[data-phase="ready"] .bg-title { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── wordmark ────────────────────────────────────────────── */
+.bg-word { position: relative; z-index: 7; margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.bg-wordmark { display: flex; gap: .04em; font-size: clamp(36px, 7.4vw, 76px); font-weight: 800; letter-spacing: .16em; line-height: 1; }
+.bg-wordmark span { opacity: 0; transform: translateY(18px) scale(.8); display: inline-block;
+  background: linear-gradient(180deg, #fff, var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 24px color-mix(in oklab, var(--cyan) 40%, transparent);
+  transition: opacity .4s var(--pop), transform .4s var(--pop); transition-delay: calc(var(--li) * .06s); }
+.bg[data-phase="start"] .bg-wordmark span, .bg[data-phase="ready"] .bg-wordmark span { opacity: 1; transform: none; }
+.bg-tagline { font-size: 12.5px; font-weight: 700; letter-spacing: .46em; text-transform: uppercase; color: var(--cyan); opacity: 0; transition: opacity .5s .35s; text-shadow: 0 0 14px color-mix(in oklab, var(--cyan) 60%, transparent); }
+.bg[data-phase="start"] .bg-tagline, .bg[data-phase="ready"] .bg-tagline { opacity: .9; }
+
+/* ── boot ticker (loading text) ──────────────────────────── */
+.bg-ticker { position: absolute; z-index: 8; left: 0; right: 0; bottom: 13%; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.bg-bar { position: relative; width: min(340px, 56vw); height: 6px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; opacity: 0; transition: opacity .4s;
+  border: 1px solid rgba(255,255,255,.1); }
+.bg[data-phase="ignite"] .bg-bar, .bg[data-phase="build"] .bg-bar, .bg[data-phase="slam"] .bg-bar, .bg[data-phase="charge"] .bg-bar { opacity: 1; }
+.bg[data-phase="start"] .bg-bar, .bg[data-phase="ready"] .bg-bar { opacity: 0; }
+.bg-bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--brand), var(--cyan)); box-shadow: 0 0 14px var(--cyan); }
+.bg-bar-glow { position: absolute; top: 0; bottom: 0; width: 40px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent); animation: barGlow 1.1s linear infinite; }
+@keyframes barGlow { 0% { left: -40px; } 100% { left: 100%; } }
+.bg-boot-line { font-size: 12px; font-weight: 600; letter-spacing: .12em; color: var(--text-faint); font-variant-numeric: tabular-nums; height: 16px; opacity: 0; transition: opacity .4s; }
+.bg[data-phase="ignite"] .bg-boot-line, .bg[data-phase="build"] .bg-boot-line, .bg[data-phase="slam"] .bg-boot-line, .bg[data-phase="charge"] .bg-boot-line { opacity: 1; }
+.bg-boot-line b { color: var(--cyan); font-weight: 700; }
+.bg-pct { color: var(--text-dim); font-weight: 700; }
+
+/* ── PRESS START ─────────────────────────────────────────── */
+.bg-start { position: absolute; z-index: 8; left: 0; right: 0; bottom: 14%; display: flex; justify-content: center; opacity: 0; transition: opacity .4s .2s; }
+.bg[data-phase="ready"] .bg-start { opacity: 1; }
+.bg-start-btn { position: relative; display: inline-flex; align-items: center; gap: 14px; padding: 15px 34px; border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--brand) 30%, transparent), color-mix(in oklab, var(--brand) 14%, transparent));
+  border: 1.5px solid color-mix(in oklab, var(--cyan) 55%, transparent); color: #fff; font-size: 16px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--cyan) 40%, transparent), 0 10px 30px rgba(0,0,0,.4); backdrop-filter: blur(8px);
+  animation: startPulse 1.3s ease-in-out infinite, startBlink 1.3s steps(1) infinite; transition: transform .15s; }
+.bg-start-btn:hover { transform: translateY(-2px) scale(1.02); }
+.bg-start-btn kbd { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--cyan); border: 0; color: #042; font-weight: 900; font-size: 13px; }
+@keyframes startPulse { 50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--cyan) 10%, transparent), 0 10px 30px rgba(0,0,0,.4); } }
+@keyframes startBlink { 0%,69% { opacity: 1; } 70%,100% { opacity: .55; } }
+
+/* ── PRESS START button proposals ───────────────────────── */
+.st { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 13px; cursor: pointer;
+  font-family: inherit; transition: transform .15s var(--ease), filter .15s; }
+.st:hover { transform: translateY(-2px); }
+.st kbd { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--cyan); border: 0; color: #042; font-weight: 900; font-size: 13px; }
+
+/* A) NEON — animated traveling gradient border */
+.st-neon { padding: 0; border-radius: 999px; background: transparent; animation: stPulse 1.3s ease-in-out infinite; }
+.st-neon-border { position: absolute; inset: 0; border-radius: 999px; padding: 2px; pointer-events: none;
+  background: conic-gradient(from 0deg, var(--cyan), var(--brand-2), var(--mag), var(--cyan));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: stSpin 3s linear infinite; }
+.st-neon-inner { position: relative; display: inline-flex; align-items: center; gap: 13px; padding: 15px 32px; border-radius: 999px;
+  background: rgba(8,12,22,.7); backdrop-filter: blur(8px); color: #fff; font-size: 16px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+@keyframes stSpin { to { transform: rotate(360deg); } }
+@keyframes stPulse { 50% { filter: drop-shadow(0 0 14px color-mix(in oklab, var(--cyan) 50%, transparent)); } }
+
+/* B) ARCADE — bare blinking text + caret */
+.st-arcade { padding: 10px 6px; background: none; color: #fff; font-size: 22px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase;
+  text-shadow: 0 0 18px color-mix(in oklab, var(--cyan) 50%, transparent); animation: stBlink 1.05s steps(1) infinite; }
+.st-arcade-caret { color: var(--cyan); animation: stCaret 1.05s steps(1) infinite; }
+@keyframes stBlink { 0%,64% { opacity: 1; } 65%,100% { opacity: .35; } }
+@keyframes stCaret { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+/* C) SOLID — translucent gradient fill with shine sweep */
+.st-solid { overflow: hidden; padding: 15px 34px; border-radius: 14px; color: #fff; font-size: 16px; font-weight: 800; letter-spacing: .04em;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--cyan) 52%, transparent), color-mix(in oklab, var(--brand) 58%, transparent));
+  border: 1px solid color-mix(in oklab, var(--cyan) 45%, transparent); backdrop-filter: blur(9px);
+  box-shadow: 0 10px 26px color-mix(in oklab, var(--brand) 34%, transparent), inset 0 1px 0 rgba(255,255,255,.32); }
+.st-solid svg { color: #fff; }
+.st-solid-shine { position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); animation: stShine 2.6s var(--ease) infinite; }
+@keyframes stShine { 0%,100% { left: -60%; } 55%,100% { left: 160%; } }
+
+/* D) GAMEPAD — round A button + label */
+.st-pad { gap: 14px; padding: 10px 22px 10px 10px; border-radius: 999px; background: rgba(8,12,22,.55); border: 1px solid var(--line-2, rgba(255,255,255,.16)); color: var(--text); backdrop-filter: blur(8px); }
+.st-pad-btn { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  background: radial-gradient(circle at 38% 32%, #7fe9ff, var(--cyan) 60%, #1aa6c4); color: #042; font-weight: 900; font-size: 19px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4), inset 0 -3px 6px rgba(0,0,0,.25), inset 0 2px 4px rgba(255,255,255,.5); animation: stPad 1.4s ease-in-out infinite; }
+.st-pad-label { font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+@keyframes stPad { 50% { transform: scale(1.08); box-shadow: 0 4px 20px color-mix(in oklab, var(--cyan) 50%, transparent), inset 0 -3px 6px rgba(0,0,0,.25), inset 0 2px 4px rgba(255,255,255,.5); } }
+
+/* E) GLASS — current refined glass pill */
+.st-glass { padding: 15px 34px; border-radius: 999px; color: #fff; font-size: 16px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--brand) 30%, transparent), color-mix(in oklab, var(--brand) 14%, transparent));
+  border: 1.5px solid color-mix(in oklab, var(--cyan) 55%, transparent); backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: stPulse 1.3s ease-in-out infinite; }
+
+/* HUD chrome */
+.bg-corner { position: absolute; z-index: 7; width: 30px; height: 30px; border: 2px solid color-mix(in oklab, var(--cyan) 55%, transparent); opacity: 0; transition: opacity .5s; }
+.bg[data-phase="charge"] .bg-corner, .bg[data-phase="start"] .bg-corner, .bg[data-phase="ready"] .bg-corner { opacity: .55; }
+.bg-corner.tl { top: 24px; left: 24px; border-right: 0; border-bottom: 0; border-radius: 7px 0 0 0; }
+.bg-corner.tr { top: 24px; right: 24px; border-left: 0; border-bottom: 0; border-radius: 0 7px 0 0; }
+.bg-corner.bl { bottom: 24px; left: 24px; border-right: 0; border-top: 0; border-radius: 0 0 0 7px; }
+.bg-corner.br { bottom: 24px; right: 24px; border-left: 0; border-top: 0; border-radius: 0 0 7px 0; }
+.bg-ver { position: absolute; z-index: 7; bottom: 22px; right: 32px; font-size: 11px; letter-spacing: .16em; color: var(--text-faint); opacity: 0; transition: opacity .5s .3s; }
+.bg[data-phase="charge"] .bg-ver, .bg[data-phase="start"] .bg-ver, .bg[data-phase="ready"] .bg-ver { opacity: .7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-line, .bg-shock, .bg-speed, .bg-sweep, .bg-conic, .bg-hex { display: none !important; }
+  .bg-logo, .bg-flash, .bg-wordmark span { animation-duration: .12s !important; }
+}
+
+/* ════════ EXIT / ENTER-THE-APP TRANSITIONS ════════ */
+.bg-iris { position: absolute; z-index: 13; left: 50%; top: 50%; width: 0; height: 0; border-radius: 50%; transform: translate(-50%,-50%);
+  background: radial-gradient(circle, #fff 0 55%, var(--cyan) 70%, var(--brand) 100%); opacity: 0; pointer-events: none; }
+.bg-wipe { position: absolute; z-index: 13; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(115deg, transparent 30%, color-mix(in oklab, var(--cyan) 70%, #fff) 48%, #fff 52%, color-mix(in oklab, var(--brand) 70%, #fff) 56%, transparent 74%);
+  background-size: 300% 100%; background-position: 120% 0; }
+.bg-exit-flash { position: absolute; z-index: 14; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 46%, #fff, var(--cyan) 55%, transparent 78%); }
+
+/* freeze idle loops while exiting */
+.bg.exit .bg-logo, .bg.exit .st, .bg.exit .bg-title { animation: none !important; }
+/* fade out chrome on any exit */
+.bg.exit .bg-start, .bg.exit .bg-title, .bg.exit .bg-corner, .bg.exit .bg-ver, .bg.exit .bg-ticker, .bg.exit .bg-replay { animation: exitFade .3s var(--ease) forwards; }
+@keyframes exitFade { to { opacity: 0; } }
+
+/* A) WARP — everything zooms toward camera + flash */
+.bg.exit-warp .bg-core { animation: warpZoom .8s cubic-bezier(.5,0,.75,0) forwards; }
+@keyframes warpZoom { 0% { transform: scale(1); filter: brightness(1); } 55% { transform: scale(1.25); } 100% { transform: scale(7); filter: brightness(2.4); opacity: 0; } }
+.bg.exit-warp .bg-wash { animation: warpWash .8s ease-in forwards; }
+@keyframes warpWash { to { transform: scale(2.2); opacity: 0; } }
+.bg.exit-warp .bg-line { animation: lineOut .55s var(--ease) forwards !important; }
+.bg.exit-warp .bg-exit-flash { animation: exitFlashIn .8s ease-in forwards; }
+@keyframes exitFlashIn { 0% { opacity: 0; } 72% { opacity: 0; } 100% { opacity: 1; } }
+
+/* B) SWEEP — bright bar wipes across */
+.bg.exit-sweep .bg-wipe { opacity: 1; animation: wipeGo .7s var(--ease) forwards; }
+@keyframes wipeGo { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+.bg.exit-sweep .bg-core { animation: sweepPush .7s var(--ease) forwards; }
+@keyframes sweepPush { to { transform: translateX(-12%) scale(.96); opacity: 0; } }
+
+/* C) IRIS — white circle expands from logo center */
+.bg.exit-iris .bg-iris { opacity: 1; animation: irisGo .72s cubic-bezier(.6,0,.4,1) forwards; }
+@keyframes irisGo { 0% { width: 0; height: 0; } 100% { width: 300vmax; height: 300vmax; } }
+.bg.exit-iris .bg-core { animation: irisCore .5s var(--ease) forwards; }
+@keyframes irisCore { to { transform: scale(.82); opacity: 0; } }
+
+/* D) GLITCH — chromatic shake + flash + cut */
+.bg.exit-glitch .bg-screen { animation: glitchShake .5s steps(2) forwards; }
+@keyframes glitchShake { 0%,100% { transform: none; } 15% { transform: translate(-8px,2px); } 30% { transform: translate(7px,-3px); } 45% { transform: translate(-5px,4px); filter: hue-rotate(40deg); } 60% { transform: translate(6px,-2px); } 75% { transform: translate(-3px,1px); filter: hue-rotate(-30deg); } }
+.bg.exit-glitch .bg-logo-ghost.r { opacity: .6; animation: glitchR .5s steps(3) forwards; }
+.bg.exit-glitch .bg-logo-ghost.b { opacity: .6; animation: glitchB .5s steps(3) forwards; }
+@keyframes glitchR { 0% { transform: none; } 40% { transform: translate(14px,-6px); } 100% { transform: translate(-20px,8px); opacity: 0; } }
+@keyframes glitchB { 0% { transform: none; } 40% { transform: translate(-14px,6px); } 100% { transform: translate(20px,-8px); opacity: 0; } }
+.bg.exit-glitch .bg-core { animation: glitchCore .5s steps(2) forwards; }
+@keyframes glitchCore { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+.bg.exit-glitch .bg-exit-flash { animation: glitchFlash .5s steps(2) forwards; }
+@keyframes glitchFlash { 0%,60% { opacity: 0; } 70% { opacity: .7; } 85% { opacity: .1; } 100% { opacity: 1; } }

@@ -526,6 +526,13 @@
   background: color-mix(in oklab, var(--tint) 18%, transparent);
   border: 1px solid color-mix(in oklab, var(--tint) 38%, transparent);
   color: var(--tint);
+  overflow: hidden;
+}
+.nx-gd .gd-core-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
 }
 .nx-gd .gd-core-txt {
   flex: 1;

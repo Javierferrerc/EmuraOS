@@ -780,29 +780,6 @@ function EditProfileModal({
               </div>
             </div>
 
-            {/* avatar actions — compact, wrap, never overflow */}
-            <div className="ep-photo-row">
-              <div className="ep-srcs">
-                <button type="button" className="ep-src primary" onClick={() => setPicker("avatar")}>
-                  <SearchIcon size={15} /> SteamGridDB
-                </button>
-                <button
-                  type="button"
-                  className="ep-src"
-                  onClick={() => avatarFile.current?.click()}
-                >
-                  <UploadIcon size={15} /> Subir
-                </button>
-                <button
-                  type="button"
-                  className="ep-src danger"
-                  disabled={!avatarUrl}
-                  onClick={() => setAvatarUrl(null)}
-                >
-                  <TrashIcon size={15} /> Quitar
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* ── Nombre ── */}

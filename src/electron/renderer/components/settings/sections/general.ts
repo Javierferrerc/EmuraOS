@@ -14,14 +14,16 @@ export const generalSection: SettingsSection = {
           kind: "dropdown",
           label: "Tema",
           description: "Apariencia visual de la interfaz.",
+          // Only NEXUS is offered for now. The other themes are hidden (not
+          // removed) — re-add the entries below to bring them back.
           options: [
-            { value: "dark", label: "Oscuro" },
-            { value: "light", label: "Claro" },
-            { value: "retro-crt", label: "Retro CRT verde" },
-            { value: "crt-amber", label: "CRT Ámbar" },
-            { value: "gameboy-green", label: "Game Boy verde" },
-            { value: "snes-purple", label: "SNES púrpura" },
-            { value: "synthwave", label: "Neon Synthwave" },
+            // { value: "dark", label: "Oscuro" },
+            // { value: "light", label: "Claro" },
+            // { value: "retro-crt", label: "Retro CRT verde" },
+            // { value: "crt-amber", label: "CRT Ámbar" },
+            // { value: "gameboy-green", label: "Game Boy verde" },
+            // { value: "snes-purple", label: "SNES púrpura" },
+            // { value: "synthwave", label: "Neon Synthwave" },
             { value: "nexus", label: "Nexus" },
           ],
           get: (ctx) => ctx.config?.theme ?? "dark",

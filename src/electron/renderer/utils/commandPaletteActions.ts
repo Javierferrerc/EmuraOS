@@ -72,15 +72,17 @@ export interface BuildActionsArgs {
 // List kept separate so the Settings dropdown and the palette always stay
 // in sync on supported themes. Labels mirror general.ts — any future theme
 // lives in one place.
+// Only NEXUS is offered for now; the other themes are hidden (not removed) —
+// re-add the entries below to restore the command-palette switchers.
 const THEMES: Array<{ value: NonNullable<AppConfig["theme"]>; label: string }> =
   [
-    { value: "dark", label: "Oscuro" },
-    { value: "light", label: "Claro" },
-    { value: "retro-crt", label: "Retro CRT verde" },
-    { value: "crt-amber", label: "CRT Ámbar" },
-    { value: "gameboy-green", label: "Game Boy verde" },
-    { value: "snes-purple", label: "SNES púrpura" },
-    { value: "synthwave", label: "Neon Synthwave" },
+    // { value: "dark", label: "Oscuro" },
+    // { value: "light", label: "Claro" },
+    // { value: "retro-crt", label: "Retro CRT verde" },
+    // { value: "crt-amber", label: "CRT Ámbar" },
+    // { value: "gameboy-green", label: "Game Boy verde" },
+    // { value: "snes-purple", label: "SNES púrpura" },
+    // { value: "synthwave", label: "Neon Synthwave" },
     { value: "nexus", label: "Nexus" },
   ];
 

@@ -1744,6 +1744,10 @@
   display: flex;
   flex-direction: column;
   gap: 11px;
+  /* The avatar is absolutely positioned and overhangs the cover's bottom by
+     ~29px. Reserve clearance so the "Nombre" field below doesn't crowd it now
+     that the old avatar-actions row (which used to provide this gap) is gone. */
+  margin-bottom: 20px;
 }
 .nexus-root .ep-sec-label {
   display: flex;

@@ -33,6 +33,7 @@ import {
   type Compat,
 } from "./gameDetailData";
 import { SYSTEM_ICONS } from "../../utils/sliderItems";
+import { EMULATOR_ICONS } from "../../components/settings/sections/emuladores/EmulatorIcon";
 import {
   PlayIcon,
   ClockIcon,
@@ -101,6 +102,7 @@ function SecHead({ icon, title, extra }: { icon: React.ReactNode; title: string;
 
 // ── resolved emulator/core (real) ───────────────────────────
 interface CoreInfo {
+  id: string;
   name: string;
   sub: string;
   ready: boolean;
@@ -122,7 +124,7 @@ function useResolvedCore(game: NexusGame): CoreInfo | null {
         const overrideId = overrides[key]?.emulatorId;
         const chosen = emus.find((e) => e.emulatorId === overrideId) ?? emus[0];
         if (!chosen) {
-          setCore({ name: "Sin emulador asignado", sub: "Configura un emulador", ready: false });
+          setCore({ id: "", name: "Sin emulador asignado", sub: "Configura un emulador", ready: false });
           return;
         }
         let sub = "Emulador asignado";
@@ -132,7 +134,7 @@ function useResolvedCore(game: NexusGame): CoreInfo | null {
         } catch {
           /* not a RetroArch system — keep the generic sub */
         }
-        if (!cancelled) setCore({ name: chosen.emulatorName, sub, ready: true });
+        if (!cancelled) setCore({ id: chosen.emulatorId, name: chosen.emulatorName, sub, ready: true });
       } catch {
         if (!cancelled) setCore(null);
       }
@@ -259,14 +261,23 @@ function ShotsSection({ game, stills }: { game: NexusGame; stills: string[] }) {
 }
 
 function MetaSection({ game }: { game: NexusGame }) {
-  const cells = [
-    { l: "Desarrolladora", v: game.developer || "—" },
-    { l: "Año", v: game.year || "—" },
-    { l: "Género", v: game.genre || "—" },
-    { l: "Jugadores", v: playersLabel(game) },
-    { l: "Sistema", v: game.systemName || "—" },
-    { l: "Tamaño", v: formatSize(game.rom.sizeBytes) },
-  ];
+  // Show only cells we actually have a real value for, so the panel reads as
+  // intentional and complete for every game instead of a wall of "—". Sistema
+  // and Tamaño are always known; region/languages/revision/disc come straight
+  // from the filename (available even when no scrape ever matched); genre, year,
+  // developer and players come from scraped metadata when present.
+  const players = playersLabel(game);
+  const cells: Array<{ l: string; v: string }> = [];
+  if (game.genre) cells.push({ l: "Género", v: game.genre });
+  if (game.developer) cells.push({ l: "Desarrolladora", v: game.developer });
+  if (game.year) cells.push({ l: "Año", v: game.year });
+  if (players !== "—") cells.push({ l: "Jugadores", v: players });
+  cells.push({ l: "Sistema", v: game.systemName || "—" });
+  if (game.region) cells.push({ l: "Región", v: game.region });
+  if (game.languages?.length) cells.push({ l: "Idiomas", v: game.languages.join(" · ") });
+  if ((game.disc ?? 0) > 0) cells.push({ l: "Disco", v: `Disco ${game.disc}` });
+  if (game.revision) cells.push({ l: "Revisión", v: game.revision });
+  cells.push({ l: "Tamaño", v: formatSize(game.rom.sizeBytes) });
   return (
     <section className="gd-section">
       <SecHead icon={<DotsIcon size={18} />} title="Información" />
@@ -289,7 +300,11 @@ function CoreSection({ game, onChangeEmulator }: { game: NexusGame; onChangeEmul
       <SecHead icon={<CpuIcon size={18} />} title="Emulación" />
       <div className="gd-core">
         <span className="gd-core-badge">
-          <CpuIcon size={22} />
+          {core && core.id && EMULATOR_ICONS[core.id] ? (
+            <img className="gd-core-logo" src={EMULATOR_ICONS[core.id]} alt="" />
+          ) : (
+            <CpuIcon size={22} />
+          )}
         </span>
         <span className="gd-core-txt">
           <span className="gd-core-name">{core ? core.name : "Resolviendo…"}</span>
