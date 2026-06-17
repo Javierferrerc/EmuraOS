@@ -48,6 +48,23 @@ interface NexusHomeProps {
   onOpen: (game: NexusGame) => void;
   onLaunch: (game: NexusGame) => void;
   onToggleFavorite: (game: NexusGame) => void;
+  onImport: () => void;
+}
+
+/** "+" tile that opens the importer — appended at the end of the grid / each
+ * row and used as the empty-state CTA. Not part of the keyboard focus matrix;
+ * keyboard/gamepad users use the top-bar "Importar" button. */
+function AddTile({ variant, onImport }: { variant: "grid" | "row" | "cta"; onImport: () => void }) {
+  return (
+    <button className={`nx-add-tile ${variant}`} onClick={onImport} title="Importar juegos">
+      <span className="nx-add-plus">
+        <svg viewBox="0 0 24 24" width={variant === "cta" ? 22 : 26} height={variant === "cta" ? 22 : 26} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      <span className="nx-add-lbl">{variant === "cta" ? "Importar juegos" : "Añadir juegos"}</span>
+    </button>
+  );
 }
 
 const GRID_MIN = 168;
@@ -66,6 +83,7 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
     onOpen,
     onLaunch,
     onToggleFavorite,
+    onImport,
   },
   ref
 ) {
@@ -74,6 +92,14 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [focus, setFocus] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [cols, setCols] = useState(1);
+  // Tracks what moved the focus: keyboard/gamepad nav auto-scrolls the focused
+  // card into view; plain mouse hover must NOT (it makes the page jump). Default
+  // "key" so the initial/reset focus still behaves.
+  const focusSrc = useRef<"key" | "mouse">("key");
+  const focusByHover = useCallback((r: number, c: number) => {
+    focusSrc.current = "mouse";
+    setFocus({ r, c });
+  }, []);
 
   // In the grid layout the "Continuar" hero (when present) occupies nav row 0.
   const gridHeroOffset = layout === "grid" && continueHero ? 1 : 0;
@@ -122,6 +148,9 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
   // plain game key would be ambiguous).
   useEffect(() => {
     if (!focusedGame) return;
+    // Only keyboard/gamepad navigation auto-scrolls; mouse hover must not move
+    // the page (it caused partially-visible cards to jump fully into view).
+    if (focusSrc.current !== "key") return;
     const el = cardRefs.current.get(`${focus.r}:${focus.c}`);
     const scroller = scrollRef.current;
     if (!el || !scroller) return;
@@ -157,6 +186,7 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
     handleAction(dir: NavDir) {
       const f = focusRef.current;
       const nr = navRowsRef.current;
+      focusSrc.current = "key";
       if (nr.length === 0) {
         // Nothing focusable — still let the user escape back to the rail.
         if (dir === "up") return "escape-up";
@@ -211,6 +241,7 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
         <div className="nx-root-empty">
           <SparkIcon size={28} />
           <div>No hay juegos en {platformLabel.toLowerCase()}.</div>
+          <AddTile variant="cta" onImport={onImport} />
         </div>
       </div>
     );
@@ -229,7 +260,7 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
               continueMode
               onOpen={onOpen}
               onLaunch={onLaunch}
-              onHover={() => setFocus({ r: 0, c: 0 })}
+              onHover={() => focusByHover(0, 0)}
             />
           )}
           <div className="nx-grid-wrap">
@@ -255,10 +286,11 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
                     onOpen={onOpen}
                     onLaunch={onLaunch}
                     onToggleFavorite={onToggleFavorite}
-                    onHover={() => setFocus({ r, c })}
+                    onHover={() => focusByHover(r, c)}
                   />
                 );
               })}
+              <AddTile variant="grid" onImport={onImport} />
             </div>
           </div>
         </div>
@@ -305,9 +337,10 @@ export const NexusHome = forwardRef<NexusHomeHandle, NexusHomeProps>(function Ne
                       onOpen={onOpen}
                       onLaunch={onLaunch}
                       onToggleFavorite={onToggleFavorite}
-                      onHover={() => setFocus({ r: navR, c: ci })}
+                      onHover={() => focusByHover(navR, ci)}
                     />
                   ))}
+                  <AddTile variant="row" onImport={onImport} />
                 </RowTrack>
               </div>
             );

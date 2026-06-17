@@ -33,10 +33,15 @@ import { NexusHome } from "./NexusHome";
 import { NexusProfile } from "./profile/NexusProfile";
 import { SocialProvider } from "../social/SocialContext";
 import { NexusErrorBoundary } from "./NexusErrorBoundary";
-import { NexusDetailPanel } from "./NexusDetailPanel";
+import { NexusGameDetail } from "./detail/NexusGameDetail";
+import type { GameDetailFocusHandle } from "./detail/useGameDetailFocus";
 import { NexusSearchOverlay } from "./NexusSearchOverlay";
 import { NexusHintBar } from "./NexusHintBar";
 import { NexusLaunchSequence } from "./launch/NexusLaunchSequence";
+import { NexusSessionSummary } from "./session/NexusSessionSummary";
+import { NexusImportGames, type ImportItem } from "./import/NexusImportGames";
+import { NexusRomGuide } from "./import/NexusRomGuide";
+import type { DiscoveredRom } from "../../../core/types";
 import "./nexus.css";
 
 interface NexusShellProps {
@@ -46,6 +51,7 @@ interface NexusShellProps {
 const LS_PLATFORM = "nx.platform";
 const LS_LAYOUT = "nx.layout";
 const LS_NAV = "nx.nav";
+const LS_ROM_GUIDE = "nx.romGuideSeen";
 
 type NexusNav = "rail" | "sidebar";
 
@@ -65,9 +71,10 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
     launchGame,
   } = app;
 
-  const [platform, setPlatform] = useState<string>(
-    () => localStorage.getItem(LS_PLATFORM) || "all"
-  );
+  // Always open on the home / "Biblioteca" tab (all systems), never on the
+  // console the user last visited. The layout/nav display preferences below are
+  // still remembered, but the starting view resets to the library every launch.
+  const [platform, setPlatform] = useState<string>(ALL_PLATFORM);
   // Default configuration per the requested build: console-style platform
   // switcher + grid library topped by a "Continuar" hero.
   const [layout, setLayout] = useState<NexusLayout>(
@@ -79,9 +86,41 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   const [detailGame, setDetailGame] = useState<NexusGame | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  // "Importar juegos" modal + the global drag-to-import overlay.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importPaths, setImportPaths] = useState<string[] | undefined>(undefined);
+  const [dragImport, setDragImport] = useState(false);
+  const openImport = useCallback((paths?: string[]) => {
+    setImportPaths(paths);
+    setImportOpen(true);
+  }, []);
+  // "Pon bien el nombre" onboarding guide — shown once between onboarding and
+  // the first import (persisted via localStorage).
+  const [showRomGuide, setShowRomGuide] = useState(false);
+  const dismissRomGuide = useCallback(() => {
+    try {
+      localStorage.setItem(LS_ROM_GUIDE, "1");
+    } catch {
+      /* non-fatal */
+    }
+    setShowRomGuide(false);
+  }, []);
   // Launch animation overlay (fresh id per launch so it always remounts).
   const [launchAnim, setLaunchAnim] = useState<{ game: NexusGame; id: number } | null>(null);
   const launchAnimIdRef = useRef(0);
+  // Post-session "resumen" overlay, shown when the emulator closes.
+  const [sessionSummary, setSessionSummary] = useState<{ rom: DiscoveredRom; durationSec: number } | null>(null);
+  const prevSessionRef = useRef(app.currentGame);
+  useEffect(() => {
+    const prev = prevSessionRef.current;
+    if (prev && !app.currentGame) {
+      const dur = prev.sessionStartedAt
+        ? Math.floor((Date.now() - prev.sessionStartedAt) / 1000)
+        : 0;
+      if (dur >= 2) setSessionSummary({ rom: prev.rom, durationSec: dur });
+    }
+    prevSessionRef.current = app.currentGame;
+  }, [app.currentGame]);
 
   const customColors = config?.customSystemColors;
   // When a custom background image is set (App renders it as a fixed layer
@@ -102,6 +141,101 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
       }),
     [scanResult, getMetadataForRom, romAddedDates, playHistory, isRomHidden, customColors]
   );
+
+  // Keep an open ficha in sync with the (re)built game list — e.g. after a
+  // metadata scrape refreshes género/desarrolladora/año/jugadores, the detail
+  // would otherwise keep showing the stale game object captured when it opened.
+  useEffect(() => {
+    setDetailGame((cur) => (cur ? allGames.find((g) => g.key === cur.key) ?? cur : cur));
+  }, [allGames]);
+
+  // ── Import: dedup keys + watched folders + real add ──────────────
+  const existingKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const sys of scanResult?.systems ?? []) {
+      for (const rom of sys.roms) set.add(`${rom.systemId}::${rom.fileName.toLowerCase()}`);
+    }
+    return set;
+  }, [scanResult]);
+
+  const watchedFolders = useMemo(() => {
+    const romsPath = app.resolvedPaths?.romsPath;
+    return romsPath ? [{ path: romsPath, count: scanResult?.totalRoms ?? 0 }] : [];
+  }, [app.resolvedPaths, scanResult]);
+
+  // Show the ROM-naming guide once: onboarding done (firstRunCompleted), the
+  // library is still empty (we're before the first import) and it hasn't been
+  // dismissed before. Opening the importer afterwards is driven by onContinue.
+  useEffect(() => {
+    if (importOpen) return;
+    if (!config?.firstRunCompleted) return;
+    if ((scanResult?.totalRoms ?? 0) > 0) return;
+    let seen = false;
+    try {
+      seen = localStorage.getItem(LS_ROM_GUIDE) === "1";
+    } catch {
+      /* ignore */
+    }
+    if (!seen) setShowRomGuide(true);
+  }, [config?.firstRunCompleted, scanResult?.totalRoms, importOpen]);
+
+  const handleImportConfirm = useCallback(
+    async (selected: ImportItem[]) => {
+      const entries = selected
+        .filter((it) => it.system)
+        .map((it) => ({ filePath: it.filePath, systemId: it.system as string }));
+      if (entries.length === 0) return;
+      await window.electronAPI.addRoms(entries);
+      await app.refreshScan();
+    },
+    [app]
+  );
+
+  // Global drag-to-import: dropping files/folders anywhere over the shell shows
+  // the "Suelta para importar" overlay and opens the importer with those paths.
+  // (App.tsx's generic drop-to-add handler is suppressed for the NEXUS theme.)
+  useEffect(() => {
+    const hasFiles = (dt: DataTransfer | null) =>
+      !!dt && Array.from(dt.types || []).includes("Files");
+    let depth = 0;
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      depth++;
+      if (!importOpen) setDragImport(true);
+    };
+    const onOver = (e: DragEvent) => {
+      if (hasFiles(e.dataTransfer)) e.preventDefault();
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setDragImport(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragImport(false);
+      if (importOpen) return;
+      const paths: string[] = [];
+      for (const f of Array.from(e.dataTransfer?.files ?? [])) {
+        const p = window.electronAPI.getPathForFile(f);
+        if (p) paths.push(p);
+      }
+      openImport(paths.length ? paths : undefined);
+    };
+    window.addEventListener("dragenter", onEnter);
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onEnter);
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [importOpen, openImport]);
 
   // Systems present in the library, grouped by manufacturer into families.
   const families = useMemo(() => {
@@ -188,6 +322,9 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
   // play and desktop behave identically. NEXUS replaces <Layout>, so without
   // this there'd be no gamepad navigation at all.
   const homeRef = useRef<NexusHomeHandle>(null);
+  // Imperative handle into the open ficha's spatial focus, so the gamepad layer
+  // can drive it (the ficha itself handles keyboard + mouse).
+  const detailFocusRef = useRef<GameDetailFocusHandle | null>(null);
   const [zone, setZone] = useState<"systems" | "content">("content");
   const homeActive = !searchOpen && !detailGame && !profileOpen;
 
@@ -203,10 +340,15 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
 
   const dispatch = useCallback(
     (action: FocusAction) => {
-      // Overlays take priority and have their own focus model.
+      // The ficha takes priority and owns its own spatial focus; forward
+      // gamepad moves/activate into it, Back closes it.
       if (detailGame) {
-        if (action.type === "ACTIVATE") handleLaunch(detailGame);
-        else if (action.type === "BACK") setDetailGame(null);
+        if (action.type === "BACK") setDetailGame(null);
+        else if (action.type === "ACTIVATE") detailFocusRef.current?.activate();
+        else if (action.type === "MOVE_UP") detailFocusRef.current?.move("up");
+        else if (action.type === "MOVE_DOWN") detailFocusRef.current?.move("down");
+        else if (action.type === "MOVE_LEFT") detailFocusRef.current?.move("left");
+        else if (action.type === "MOVE_RIGHT") detailFocusRef.current?.move("right");
         return;
       }
       if (searchOpen) {
@@ -312,6 +454,7 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
           onOpenSettings={onOpenSettings}
           onOpenSearch={() => setSearchOpen(true)}
           onOpenProfile={() => setProfileOpen(true)}
+          onImport={() => openImport()}
         />
 
         {profileOpen ? (
@@ -357,6 +500,7 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
                 onOpen={setDetailGame}
                 onLaunch={handleLaunch}
                 onToggleFavorite={handleToggleFavorite}
+                onImport={() => openImport()}
               />
             </div>
           </div>
@@ -364,13 +508,18 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
 
         {!profileOpen && <NexusHintBar />}
 
-        <NexusDetailPanel
-          game={detailGame}
-          isFavorite={detailGame ? checkFavorite(detailGame) : false}
-          onClose={() => setDetailGame(null)}
-          onLaunch={handleLaunch}
-          onToggleFavorite={handleToggleFavorite}
-        />
+        {detailGame && (
+          <NexusGameDetail
+            key={detailGame.key}
+            game={detailGame}
+            isFavorite={checkFavorite(detailGame)}
+            onBack={() => setDetailGame(null)}
+            onPlay={() => handleLaunch(detailGame)}
+            onToggleFavorite={() => handleToggleFavorite(detailGame)}
+            onChangeEmulator={onOpenSettings}
+            focusHandleRef={detailFocusRef}
+          />
+        )}
 
         {searchOpen && (
           <NexusSearchOverlay
@@ -393,6 +542,59 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
               // Animation finished (or skipped) → now actually launch the game.
               void launchGame(launchAnim.game.rom);
               setLaunchAnim(null);
+            }}
+          />
+        )}
+
+        {sessionSummary && (
+          <NexusSessionSummary
+            rom={sessionSummary.rom}
+            durationSec={sessionSummary.durationSec}
+            onReplay={() => {
+              const rom = sessionSummary.rom;
+              setSessionSummary(null);
+              void launchGame(rom);
+            }}
+            onClose={() => setSessionSummary(null)}
+          />
+        )}
+
+        {dragImport && !importOpen && (
+          <div className="ig-drop-global">
+            <div className="ig-drop-card">
+              <span className="ico">
+                <svg viewBox="0 0 24 24" width={40} height={40} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 16V5m0 0l-4 4m4-4l4 4" />
+                  <path d="M5 19h14" />
+                </svg>
+              </span>
+              <h2>Suelta para importar</h2>
+              <p>Detectaremos el sistema de cada juego automáticamente.</p>
+            </div>
+          </div>
+        )}
+
+        {showRomGuide && !importOpen && (
+          <NexusRomGuide
+            onClose={dismissRomGuide}
+            onContinue={() => {
+              dismissRomGuide();
+              openImport();
+            }}
+          />
+        )}
+
+        {importOpen && (
+          <NexusImportGames
+            systems={systems}
+            existing={existingKeys}
+            watched={watchedFolders}
+            initialPaths={importPaths}
+            soundEnabled={config?.navSoundEnabled ?? true}
+            onConfirm={handleImportConfirm}
+            onClose={() => {
+              setImportOpen(false);
+              setImportPaths(undefined);
             }}
           />
         )}

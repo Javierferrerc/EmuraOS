@@ -34,13 +34,14 @@ import { RowView, GroupView, resolveDisabled } from "./NexusSettingsRows";
 import { NexusEmuladores } from "./NexusEmuladores";
 import { NexusCoverGallery } from "../NexusCoverGallery";
 import { NexusSoundSettings } from "./NexusSoundSettings";
+import { NexusMetadataScrape } from "./NexusMetadataScrape";
 import { SetIcon, SECTION_ICON } from "./SetIcon";
 import "./nexus-settings.css";
 
 const SECTIONS: SettingsSection[] = [
   generalSection,
   aparienciaSection,
-  { id: "sonido", label: "Sonido", groups: [] },
+  { id: "sonido", path: "/settings/sonido", label: "Sonido", groups: [] },
   bibliotecaSection,
   portadasSection,
   rutasSection,
@@ -259,6 +260,7 @@ export function NexusSettings({ onExit }: NexusSettingsProps) {
                     <h1>Portadas</h1>
                     <p>Fuentes de carátulas y metadatos. Descarga automática y por credenciales.</p>
                   </div>
+                  <NexusMetadataScrape ctx={ctx} />
                   {groups.map((g, i) => (
                     <GroupView key={g.id ?? i} group={g} renderRow={renderRow} />
                   ))}

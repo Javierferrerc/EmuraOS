@@ -16,6 +16,7 @@ import {
   readdirSync,
   statSync,
 } from "node:fs";
+import type { Dirent } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { ConfigManager } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
@@ -26,6 +27,7 @@ import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { EmulatorReadiness } from "../../core/emulator-readiness.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
+import { runMetadataCascade } from "../../core/metadata-cascade.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import { SteamGridDb } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
@@ -701,6 +703,32 @@ export function registerIpcHandlers(
       const configManager = new ConfigManager(getProjectRoot());
       const appConfig = configManager.get();
 
+      const registry = new SystemsRegistry(getSystemsPath());
+      const scanner = new RomScanner(registry);
+      const scanResult = scanner.scan(configManager.getRomsPath());
+      const cache = new MetadataCache(getProjectRoot());
+
+      const onProgress = (progress: unknown) =>
+        event.sender.send("scrape-progress", progress);
+
+      // Default to the credential-free multi-source cascade (libretro →
+      // OpenVGDB → Wikidata), which covers cartridge AND disc/portable systems
+      // without any account. ScreenScraper is opt-in and only used when
+      // explicitly selected (it adds descriptions and ratings but needs an
+      // account).
+      const source = appConfig.metadataSource ?? "libretro";
+
+      if (source !== "screenscraper") {
+        const systemMapPath = path.join(getDataPath(), "libretro-systems.json");
+        return runMetadataCascade(
+          scanResult.systems,
+          cache,
+          { systemMapPath },
+          onProgress
+        );
+      }
+
+      // ── ScreenScraper ────────────────────────────────────────────────
       // Env vars take priority over config file
       const devId =
         process.env.SCREENSCRAPER_DEV_ID || appConfig.screenScraperDevId;
@@ -711,11 +739,6 @@ export function registerIpcHandlers(
         throw new Error("ScreenScraper credentials not configured");
       }
 
-      const registry = new SystemsRegistry(getSystemsPath());
-      const scanner = new RomScanner(registry);
-      const scanResult = scanner.scan(configManager.getRomsPath());
-
-      const cache = new MetadataCache(getProjectRoot());
       const systemMapPath = path.join(
         getDataPath(),
         "screenscraper-systems.json"
@@ -732,9 +755,7 @@ export function registerIpcHandlers(
         { systemMapPath }
       );
 
-      return scraper.scrapeAll(scanResult.systems, (progress) => {
-        event.sender.send("scrape-progress", progress);
-      });
+      return scraper.scrapeAll(scanResult.systems, onProgress);
     }
   );
 
@@ -2134,6 +2155,74 @@ export function registerIpcHandlers(
           systems: systems.map((s) => ({ id: s.id, name: s.name })),
         };
       });
+    }
+  );
+
+  // Scan a mix of file and directory paths (from the native picker or a
+  // drag-drop) for importable ROMs. Directories are walked recursively (bounded
+  // depth) and only files whose extension matches a known system are kept, so
+  // junk files in a folder don't flood the import review. Explicitly-passed
+  // FILES are always returned (even unrecognized) so the user can reassign them.
+  ipcMain.handle(
+    "scan-import-paths",
+    (_event: IpcMainInvokeEvent, inputPaths: unknown) => {
+      const validated = FilePathsSchema.parse(inputPaths);
+      const registry = new SystemsRegistry(getSystemsPath());
+      const MAX_DEPTH = 6;
+      const MAX_FILES = 5000;
+      const seen = new Set<string>();
+      const out: Array<{
+        filePath: string;
+        fileName: string;
+        sizeBytes: number;
+        systems: { id: string; name: string }[];
+      }> = [];
+
+      const addFile = (fp: string, fromDir: boolean) => {
+        if (out.length >= MAX_FILES || seen.has(fp)) return;
+        const ext = path.extname(fp).toLowerCase();
+        const systems = registry.getByExtension(ext);
+        if (fromDir && systems.length === 0) return; // skip folder junk
+        let sizeBytes = 0;
+        try {
+          sizeBytes = statSync(fp).size;
+        } catch {
+          return;
+        }
+        seen.add(fp);
+        out.push({
+          filePath: fp,
+          fileName: path.basename(fp),
+          sizeBytes,
+          systems: systems.map((s) => ({ id: s.id, name: s.name })),
+        });
+      };
+
+      const walk = (dir: string, depth: number) => {
+        if (depth > MAX_DEPTH || out.length >= MAX_FILES) return;
+        let entries: Dirent[];
+        try {
+          entries = readdirSync(dir, { withFileTypes: true }) as Dirent[];
+        } catch {
+          return;
+        }
+        for (const e of entries) {
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) walk(full, depth + 1);
+          else if (e.isFile()) addFile(full, true);
+        }
+      };
+
+      for (const p of validated) {
+        try {
+          const st = statSync(p);
+          if (st.isDirectory()) walk(p, 0);
+          else if (st.isFile()) addFile(p, false);
+        } catch {
+          /* unreadable path — skip */
+        }
+      }
+      return out;
     }
   );
 

@@ -13,6 +13,7 @@ import type {
   PlayRecord,
   ScanResult,
 } from "../../../core/types";
+import { parseRomAttributes } from "../../../core/rom-attributes";
 import { SYSTEM_COLORS } from "../utils/sliderItems";
 import { resolveSystemMembers } from "../utils/systemGroups";
 
@@ -33,6 +34,15 @@ export interface NexusGame {
   hue: number; // 0..360 for the procedural fallback cover
   addedTs: number; // ms epoch, 0 if unknown
   play: PlayRecord | null;
+  // ── Filename-derived attributes (always available, no scrape needed) ──
+  /** Localized region label ("EE.UU.", "Europa"…) parsed from the filename. */
+  region: string;
+  /** Uppercased language codes parsed from the filename ("EN", "FR"…). */
+  languages: string[];
+  /** Normalized revision/version descriptor ("Rev 1", "v1.1"). */
+  revision: string;
+  /** Disc number for multi-disc releases, 0 when not applicable. */
+  disc: number;
 }
 
 const SYSTEM_DISPLAY: Record<string, string> = {
@@ -112,10 +122,11 @@ export function buildNexusGames(opts: BuildOpts): NexusGame[] {
       const meta = getMetadataForRom(rom.systemId, rom.fileName);
       const addedRaw = romAddedDates[key];
       const addedTs = addedRaw ? Date.parse(addedRaw) || 0 : 0;
+      const attrs = parseRomAttributes(rom.fileName);
       games.push({
         rom,
         key,
-        title: meta?.title || rom.fileName.replace(/\.[^.]+$/, ""),
+        title: meta?.title || attrs.cleanTitle,
         genre: meta?.genre || "",
         year: meta?.year || "",
         rating: ratingToNumber(meta?.rating),
@@ -129,6 +140,10 @@ export function buildNexusGames(opts: BuildOpts): NexusGame[] {
         hue: hueFromKey(key),
         addedTs,
         play: playHistory[key] ?? null,
+        region: attrs.region ?? "",
+        languages: attrs.languages ?? [],
+        revision: attrs.revision ?? "",
+        disc: attrs.disc ?? 0,
       });
     }
   }

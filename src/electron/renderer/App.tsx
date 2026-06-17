@@ -24,9 +24,13 @@ import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { StatusBar } from "./components/StatusBar";
 import { NexusShell } from "./nexus/NexusShell";
 import { NexusSettings } from "./nexus/settings/NexusSettings";
+import { NexusSession } from "./nexus/session/NexusSession";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
+import { BootGamer } from "./boot/BootGamer";
+import { NexusProfileSelect } from "./nexus/profileselect/NexusProfileSelect";
+import type { NexusProfileEntry } from "./nexus/profileselect/nexusProfileSelectData";
 import type { SettingsContext as ISettingsContext } from "./schemas/settings-schema-types";
 
 export default function App() {
@@ -35,6 +39,14 @@ export default function App() {
   const [showWizard, setShowWizard] = useState(false);
   const [showAddRomWizard, setShowAddRomWizard] = useState(false);
   const [showCheatsheet, setShowCheatsheet] = useState(false);
+  // EMURA boot screen — shown once per app launch (App mounts once; navigation
+  // swaps views inside it, so this never reappears on navigation). Dismissed
+  // when the user presses Empezar and the warp transition completes.
+  const [booting, setBooting] = useState(true);
+  // EMURA profile selector — shown once per launch, right after the boot screen
+  // and before the library. Choosing a profile (passwordless, with a welcome
+  // animation) reveals the library underneath. `null` = not chosen yet.
+  const [activeProfile, setActiveProfile] = useState<NexusProfileEntry | null>(null);
   const addRomWizardShownRef = useRef(false);
 
   // Phase 20 slice 5: `?` opens the shortcuts cheatsheet unless focus is
@@ -130,6 +142,9 @@ export default function App() {
     if (
       !showWizard &&
       app.config?.firstRunCompleted &&
+      // The NEXUS theme runs its own onboarding (ROM-naming guide → importer),
+      // so the generic AddRomWizard is suppressed there.
+      app.config?.theme !== "nexus" &&
       app.scanResult &&
       app.scanResult.totalRoms === 0 &&
       !addRomWizardShownRef.current
@@ -137,7 +152,7 @@ export default function App() {
       addRomWizardShownRef.current = true;
       setShowAddRomWizard(true);
     }
-  }, [showWizard, app.config?.firstRunCompleted, app.scanResult]);
+  }, [showWizard, app.config?.firstRunCompleted, app.config?.theme, app.scanResult]);
 
   // Auto-close AddRomWizard when ROMs appear
   useEffect(() => {
@@ -227,23 +242,30 @@ export default function App() {
   useEffect(() => {
     // onDragEnter/Leave fire for every child too; count depth so the
     // overlay only hides when the pointer genuinely leaves the window.
+    // The NEXUS theme runs its own drag-to-import flow (opens the importer with
+    // a review step), so the generic drop-to-add handler is disabled there.
+    const isNexusDrag = () => app.config?.theme === "nexus";
     const onEnter = (e: DragEvent) => {
+      if (isNexusDrag()) return;
       if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
       e.preventDefault();
       dragCounterRef.current += 1;
       setDropHighlight(true);
     };
     const onOver = (e: DragEvent) => {
+      if (isNexusDrag()) return;
       if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     };
     const onLeave = (e: DragEvent) => {
+      if (isNexusDrag()) return;
       if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
       dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
       if (dragCounterRef.current === 0) setDropHighlight(false);
     };
     const onDrop = (e: DragEvent) => {
+      if (isNexusDrag()) return;
       if (!e.dataTransfer || !hasFiles(e.dataTransfer)) return;
       e.preventDefault();
       dragCounterRef.current = 0;
@@ -271,7 +293,7 @@ export default function App() {
       window.removeEventListener("dragleave", onLeave);
       window.removeEventListener("drop", onDrop);
     };
-  }, [app.addRomsFromPaths]);
+  }, [app.addRomsFromPaths, app.config?.theme]);
 
   // ── Background image layer ─────────────────────────────────────────
   const [backgroundDataUrl, setBackgroundDataUrl] = useState<string | null>(null);
@@ -339,7 +361,7 @@ export default function App() {
   if (NEW_SETTINGS_ENABLED) {
     const path = navigation.currentPath;
     if (path === "/game") {
-      page = <GameModeView />;
+      page = isNexus ? <NexusSession /> : <GameModeView />;
       viewKey = "game";
     } else if (path.startsWith("/settings")) {
       page = settingsPage;
@@ -359,7 +381,7 @@ export default function App() {
         viewKey = "emulator-config";
         break;
       case "game":
-        page = <GameModeView />;
+        page = isNexus ? <NexusSession /> : <GameModeView />;
         viewKey = "game";
         break;
       default:
@@ -367,10 +389,16 @@ export default function App() {
         viewKey = "library";
     }
   }
-  page = (
+  // Defer mounting the library shell until the user has picked a profile.
+  // While booting / selecting, the shell would otherwise be live underneath the
+  // overlay and its window-level keyboard + gamepad handlers would double-react
+  // to the selector's arrow/Enter navigation (and could launch a game beneath).
+  page = activeProfile ? (
     <div key={viewKey} className="view-fade-enter flex h-full flex-col">
       {page}
     </div>
+  ) : (
+    <div className="h-full" />
   );
 
   return (
@@ -454,6 +482,20 @@ export default function App() {
       )}
       {showCheatsheet && (
         <ShortcutsCheatsheet onClose={() => setShowCheatsheet(false)} />
+      )}
+      {booting && (
+        <BootGamer
+          startStyle="solid"
+          enterStyle="warp"
+          sound={app.config?.navSoundEnabled ?? true}
+          onEnter={() => setBooting(false)}
+        />
+      )}
+      {!booting && !activeProfile && (
+        <NexusProfileSelect
+          soundEnabled={app.config?.navSoundEnabled ?? true}
+          onEnter={(profile) => setActiveProfile(profile)}
+        />
       )}
       {dropHighlight && (
         <div

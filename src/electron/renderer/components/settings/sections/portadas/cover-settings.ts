@@ -162,16 +162,42 @@ export const coverActionsGroups: SettingsGroup[] = [
         },
       },
       {
+        id: "meta.source",
+        kind: "dropdown",
+        variant: "selector",
+        glass: true,
+        label: "Fuente de metadatos",
+        description:
+          "Libretro (sin credenciales): género, desarrolladora, editor, año y nº de jugadores. ScreenScraper añade descripción y nota, pero requiere cuenta.",
+        options: [
+          { value: "libretro", label: "Libretro (sin credenciales)" },
+          { value: "screenscraper", label: "ScreenScraper" },
+        ],
+        get: (ctx) => ctx.config?.metadataSource ?? "libretro",
+        set: async (value, ctx) => {
+          await ctx.updateConfig({
+            metadataSource: value as "libretro" | "screenscraper",
+          });
+        },
+      },
+      {
         id: "cov.scrape-metadata",
         kind: "button",
         label: "Scrape metadatos completos",
         description:
-          "Descargar descripciones y datos extra desde ScreenScraper.",
+          "Descargar género, desarrolladora, editor, año y nº de jugadores de todas las ROMs.",
         variant: "primary",
-        disabled: (ctx) =>
-          ctx.isScraping ||
-          !ctx.config?.screenScraperDevId ||
-          !ctx.config?.screenScraperDevPassword,
+        disabled: (ctx) => {
+          if (ctx.isScraping) return true;
+          const source = ctx.config?.metadataSource ?? "libretro";
+          if (source === "screenscraper") {
+            return (
+              !ctx.config?.screenScraperDevId ||
+              !ctx.config?.screenScraperDevPassword
+            );
+          }
+          return false;
+        },
         run: async (ctx) => {
           await ctx.startScraping();
         },

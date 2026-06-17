@@ -5,7 +5,7 @@
  * own title). All interactions route through AppContext via the parent.
  */
 
-import { forwardRef, useCallback } from "react";
+import { forwardRef, useCallback, useEffect, useRef } from "react";
 import type { NexusGame } from "./nexusModel";
 import { NexusCover } from "./NexusCover";
 import { HeartIcon } from "./NexusIcons";
@@ -34,13 +34,43 @@ export const NexusGameCard = forwardRef<HTMLDivElement, NexusGameCardProps>(
       [game, onToggleFavorite]
     );
 
+    // Single click opens the detail; double click launches. A short timer
+    // disambiguates them so the first click of a double-click doesn't open the
+    // detail (which would cover the card and swallow the second click).
+    const clickTimer = useRef<number | null>(null);
+    useEffect(
+      () => () => {
+        if (clickTimer.current) window.clearTimeout(clickTimer.current);
+      },
+      []
+    );
+    const handleClick = useCallback(() => {
+      if (clickTimer.current) {
+        // Second click within the window — let onDoubleClick handle it.
+        window.clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+        return;
+      }
+      clickTimer.current = window.setTimeout(() => {
+        clickTimer.current = null;
+        onOpen(game);
+      }, 230);
+    }, [game, onOpen]);
+    const handleDouble = useCallback(() => {
+      if (clickTimer.current) {
+        window.clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+      }
+      onLaunch(game);
+    }, [game, onLaunch]);
+
     return (
       <div
         ref={ref}
         className={`nx-card${focused ? " focused" : ""}`}
         onMouseEnter={onHover}
-        onClick={() => onOpen(game)}
-        onDoubleClick={() => onLaunch(game)}
+        onClick={handleClick}
+        onDoubleClick={handleDouble}
         title={`${game.title}\n${game.systemName}`}
       >
         <div className="nx-card-art">

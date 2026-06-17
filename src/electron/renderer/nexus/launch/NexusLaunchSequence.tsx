@@ -29,7 +29,7 @@ function field<T>(n: number, fn: (i: number, n: number) => T): T[] {
 
 /** Hue (0..360) from a #rrggbb color — used so the animation matches the
  *  console's existing tint color. */
-function hexToHue(hex: string): number {
+export function hexToHue(hex: string): number {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return 224;
   const int = parseInt(m[1], 16);
@@ -60,6 +60,12 @@ const GLYPH_BY_SYSTEM: Record<string, GlyphShape> = {
   xbox: "square", xbox360: "square",
   atari2600: "square", atari7800: "square", lynx: "square", jaguar: "square",
 };
+
+/** Glyph shape for a system (Nintendo circle, Sony hex, Sega tri, MS/Atari
+ *  square), defaulting to circle. Shared with the session/pause screen. */
+export function glyphForSystem(systemId: string): GlyphShape {
+  return GLYPH_BY_SYSTEM[systemId] ?? "circle";
+}
 
 interface Family {
   hue: number;

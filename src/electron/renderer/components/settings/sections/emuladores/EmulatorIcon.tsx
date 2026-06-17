@@ -18,7 +18,7 @@ import ryujinx from "../../../../assets/emulators/ryujinx.svg";
 import cemu from "../../../../assets/emulators/cemu.svg";
 import rpcs3 from "../../../../assets/emulators/rpcs3.svg";
 
-const EMULATOR_ICONS: Record<string, string> = {
+export const EMULATOR_ICONS: Record<string, string> = {
   retroarch,
   snes9x,
   project64,

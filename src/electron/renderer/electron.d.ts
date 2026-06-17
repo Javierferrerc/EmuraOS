@@ -189,6 +189,8 @@ export interface ElectronAPI {
     width: number;
     height: number;
   }): Promise<void>;
+  onNexusTogglePause(callback: () => void): void;
+  removeNexusTogglePauseListener(): void;
   onGameSessionStarted(callback: (event: GameSessionEvent) => void): void;
   removeGameSessionStartedListener(): void;
   onGameSessionEnded(callback: () => void): void;
@@ -256,6 +258,16 @@ export interface ElectronAPI {
     Array<{
       filePath: string;
       fileName: string;
+      systems: Array<{ id: string; name: string }>;
+    }>
+  >;
+  scanImportPaths(
+    paths: string[]
+  ): Promise<
+    Array<{
+      filePath: string;
+      fileName: string;
+      sizeBytes: number;
       systems: Array<{ id: string; name: string }>;
     }>
   >;

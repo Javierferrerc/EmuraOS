@@ -1,0 +1,553 @@
+/* nexus-session.css — NEXUS in-game session + "guide" pause menu. Ported from
+ * the handoff (session.css, proposal "pausa"). Self-contained tokens on
+ * .nx-session; per-session --tint/--hue are set inline. The embedded emulator
+ * (native window) sits over .seP-live (playing) or .seP-frame-live (paused), so
+ * the foot bar is a non-overlapping row to stay visible above it. */
+
+.nx-session {
+  --bg: #07080b;
+  --bg-2: #0a0c11;
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-2: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --text: #eef1f7;
+  --text-dim: rgba(238, 241, 247, 0.66);
+  --text-faint: rgba(238, 241, 247, 0.4);
+  --accent: #3b82f6;
+  --good: #4ade80;
+  --warn: #f5c451;
+  --bad: #f43f5e;
+  --ease: cubic-bezier(0.4, 0.8, 0.3, 1);
+
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: #000;
+  color: var(--text);
+  font-family: "Sora", system-ui, -apple-system, sans-serif;
+}
+.nx-session * {
+  box-sizing: border-box;
+}
+
+/* live "running" dot + timer */
+.nx-session .se-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--tint);
+}
+.nx-session .se-live .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tint);
+  box-shadow: 0 0 10px var(--tint);
+  animation: seBlink 1.6s ease-in-out infinite;
+}
+@keyframes seBlink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.nx-session .se-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+.nx-session .se-timer .u {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+/* full-bleed running game (emulator covers this while playing) */
+.nx-session .seP-live {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: #000;
+  transition: filter 0.3s var(--ease), transform 0.3s var(--ease);
+}
+.nx-session .seP-live-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: brightness(0.55) saturate(1.1);
+  transform: scale(1.08);
+  animation: seDrift 14s ease-in-out infinite alternate;
+}
+@keyframes seDrift {
+  to {
+    transform: scale(1.16) translateX(-2%);
+  }
+}
+.nx-session.paused .seP-live {
+  filter: blur(15px) brightness(0.5) saturate(1.1);
+  transform: scale(1.06);
+}
+
+.nx-session .seP-hint {
+  position: absolute;
+  z-index: 8;
+  top: 22px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.nx-session .seP-hud {
+  position: absolute;
+  z-index: 8;
+  bottom: 22px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(8, 10, 15, 0.55);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+}
+.nx-session .seP-hud .se-timer {
+  font-size: 20px;
+}
+.nx-session .seP-menubtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  border-radius: 12px;
+  background: rgba(8, 10, 15, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.15s;
+}
+.nx-session .seP-menubtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+.nx-session .seP-menubtn kbd,
+.nx-session .seP-hint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--line-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* ── paused overlay ─────────────────────────────────────────── */
+.nx-session .seP-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 30px 36px;
+  background: radial-gradient(80% 70% at 50% 40%, rgba(5, 6, 10, 0.5), rgba(4, 5, 8, 0.82));
+}
+.nx-session .seP-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  animation: sePrise 0.3s var(--ease);
+}
+@keyframes sePrise {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: none;
+  }
+}
+.nx-session .seP-bar-glyph {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--tint) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tint) 40%, transparent);
+  color: var(--tint);
+}
+.nx-session .seP-bar-glyph svg {
+  width: 22px;
+  height: 22px;
+}
+.nx-session .seP-bar-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nx-session .seP-bar-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.nx-session .seP-bar-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.nx-session .seP-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 26px;
+  align-items: center;
+  animation: sePrise 0.3s var(--ease);
+}
+
+/* LIVE box — emulator covers .seP-frame-live; the foot bar is a non-overlapping
+ * row below it so the meta + timer stay visible above the native window. */
+.nx-session .seP-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 60px -14px var(--tint);
+  aspect-ratio: 16 / 9;
+  background: #05060a;
+}
+.nx-session .seP-frame-live {
+  flex: 1;
+  min-height: 0;
+}
+.nx-session .seP-frame-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tint) 40%, transparent);
+}
+.nx-session .seP-live-tag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgba(8, 10, 15, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.nx-session .seP-live-tag .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
+  animation: seBlink 1.4s ease-in-out infinite;
+}
+.nx-session .seP-frame-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(0deg, rgba(5, 6, 10, 0.92), rgba(5, 6, 10, 0.5));
+}
+.nx-session .seP-frame-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nx-session .seP-frame-game {
+  font-size: 15px;
+  font-weight: 700;
+}
+.nx-session .seP-frame-sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--tint);
+  font-weight: 600;
+}
+.nx-session .seP-frame-timer {
+  text-align: right;
+}
+.nx-session .seP-frame-timer .se-timer {
+  font-size: 26px;
+  white-space: nowrap;
+}
+.nx-session .seP-frame-sub {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.nx-session .nx-mini-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.nx-session .nx-mini-glyph svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* menu list */
+.nx-session .seP-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.nx-session .seP-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(14, 17, 24, 0.66);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.14s, border-color 0.14s, transform 0.12s;
+}
+.nx-session .seP-item:hover,
+.nx-session .seP-item:focus-visible {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--line-2);
+  transform: translateX(3px);
+  outline: none;
+}
+.nx-session .seP-item.primary {
+  background: color-mix(in oklab, var(--tint) 18%, transparent);
+  border-color: color-mix(in oklab, var(--tint) 45%, transparent);
+}
+.nx-session .seP-item.primary:hover {
+  background: color-mix(in oklab, var(--tint) 26%, transparent);
+}
+.nx-session .seP-item.danger {
+  color: #ffd2da;
+  border-color: color-mix(in oklab, var(--bad) 30%, transparent);
+}
+.nx-session .seP-item.danger:hover {
+  background: color-mix(in oklab, var(--bad) 18%, transparent);
+}
+.nx-session .seP-item-ico {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.nx-session .seP-item.primary .seP-item-ico {
+  background: var(--tint);
+  color: #06101e;
+}
+.nx-session .seP-item.danger .seP-item-ico {
+  background: color-mix(in oklab, var(--bad) 22%, transparent);
+  color: #ffd2da;
+}
+.nx-session .seP-item-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.nx-session .seP-item-txt b {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.nx-session .seP-item-txt span {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nx-session .seP-item-key {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 3px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+.nx-session .seP-footer {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 20px;
+}
+.nx-session .seP-foot-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.nx-session .seP-foot-hint kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* toast */
+.nx-session .seP-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 20px;
+  border-radius: 13px;
+  background: rgba(14, 17, 24, 0.95);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  font-size: 13.5px;
+  font-weight: 600;
+  animation: sePtoast 2.2s var(--ease) forwards;
+}
+@keyframes sePtoast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.nx-session .seP-toast-ico {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--good) 22%, transparent);
+  color: var(--good);
+}
+
+@media (max-width: 880px) {
+  .nx-session .seP-main {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .nx-session .seP-overlay {
+    padding: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-session * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.08ms !important;
+  }
+}
+
+/* ════════ Session summary (post-session) ════════ */
+.nx-session-summary {
+  --bg: #07080b; --panel: rgba(255,255,255,0.05); --line: rgba(255,255,255,0.1); --line-2: rgba(255,255,255,0.18);
+  --text: #eef1f7; --text-dim: rgba(238,241,247,0.66); --text-faint: rgba(238,241,247,0.4);
+  --good: #4ade80; --warn: #f5c451; --bad: #f43f5e; --ease: cubic-bezier(0.4,0.8,0.3,1);
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 32px; overflow-y: auto;
+  background: rgba(4, 5, 8, 0.6); backdrop-filter: blur(8px);
+  color: var(--text); font-family: "Sora", system-ui, -apple-system, sans-serif;
+  animation: seSfade 0.2s var(--ease);
+}
+@keyframes seSfade { from { opacity: 0; } }
+.nx-session-summary * { box-sizing: border-box; }
+.nx-session-summary .se-btn {
+  height: 48px; padding: 0 22px; border-radius: 14px; font-size: 14px; font-weight: 700; flex: 1; justify-content: center;
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-family: inherit;
+  transition: filter 0.15s, transform 0.15s, background 0.15s;
+}
+.nx-session-summary .se-btn.primary { background: var(--tint); color: #06101e; border: 0; box-shadow: 0 10px 28px color-mix(in oklab, var(--tint) 40%, transparent); }
+.nx-session-summary .se-btn.primary:hover { filter: brightness(1.08); transform: translateY(-2px); }
+.nx-session-summary .se-btn.ghost { border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.nx-session-summary .se-btn.ghost:hover { background: rgba(255, 255, 255, 0.12); transform: translateY(-2px); }
+.nx-session-summary .seS-card {
+  width: min(520px, 94vw); border-radius: 24px; overflow: hidden; border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(15, 18, 25, 0.98), rgba(11, 13, 18, 0.99));
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.62); animation: seUp 0.3s var(--ease);
+}
+@keyframes seUp { from { transform: translateY(16px); } to { transform: translateY(0); } }
+.nx-session-summary .seS-top { position: relative; padding: 28px 26px 22px; text-align: center; overflow: hidden; }
+.nx-session-summary .seS-top-glow { position: absolute; inset: 0; background: radial-gradient(70% 100% at 50% 0%, color-mix(in oklab, var(--tint) 26%, transparent), transparent 65%); }
+.nx-session-summary .seS-badge {
+  position: relative; width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center;
+  color: #06101e; background: var(--tint); box-shadow: 0 10px 30px color-mix(in oklab, var(--tint) 45%, transparent); animation: seBadge 0.5s var(--ease);
+}
+@keyframes seBadge { from { transform: scale(0.5); } to { transform: scale(1); } }
+.nx-session-summary .seS-kicker { position: relative; font-size: 12px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-faint); }
+.nx-session-summary .seS-title { position: relative; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
+.nx-session-summary .seS-dur { position: relative; margin-top: 10px; font-size: 15px; color: var(--text-dim); }
+.nx-session-summary .seS-dur b { color: var(--text); font-size: 17px; }
+.nx-session-summary .seS-body { padding: 20px 26px 26px; display: flex; flex-direction: column; gap: 18px; }
+.nx-session-summary .seS-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.nx-session-summary .seS-stat { padding: 14px 12px; border-radius: 13px; background: var(--panel); border: 1px solid var(--line); text-align: center; }
+.nx-session-summary .seS-stat b { font-size: 20px; font-weight: 800; display: block; }
+.nx-session-summary .seS-stat span { font-size: 11px; color: var(--text-faint); }
+.nx-session-summary .seS-stat .up { color: var(--good); }
+.nx-session-summary .seS-sec { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
+.nx-session-summary .seS-ach { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: 13px; background: color-mix(in oklab, var(--warn) 10%, transparent); border: 1px solid color-mix(in oklab, var(--warn) 28%, transparent); }
+.nx-session-summary .seS-ach-ico { width: 38px; height: 38px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: color-mix(in oklab, var(--warn) 22%, transparent); color: var(--warn); }
+.nx-session-summary .seS-ach-txt b { font-size: 14px; font-weight: 700; display: block; }
+.nx-session-summary .seS-ach-txt span { font-size: 12px; color: var(--text-faint); }
+.nx-session-summary .seS-shot { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); aspect-ratio: 16/9; background: #0c0e14; }
+.nx-session-summary .seS-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nx-session-summary .seS-shot-tag { position: absolute; bottom: 10px; left: 10px; display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 9px; background: rgba(8, 10, 15, 0.7); backdrop-filter: blur(6px); font-size: 11.5px; font-weight: 600; max-width: calc(100% - 20px); overflow: hidden; }
+.nx-session-summary .seS-actions { display: flex; gap: 10px; }

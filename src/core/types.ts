@@ -42,6 +42,11 @@ export interface AppConfig {
   savesPath?: string;
   libretroCoversEnabled?: boolean;
   coverSourcePriority?: "libretro-first" | "sgdb-first" | "libretro-only" | "sgdb-only";
+  // Source used by "Scrape metadatos completos". "libretro" pulls genre,
+  // developer, publisher, year and player count from the libretro-database
+  // with no credentials; "screenscraper" additionally fetches descriptions and
+  // ratings but requires a ScreenScraper account. Defaults to "libretro".
+  metadataSource?: "libretro" | "screenscraper";
   firstRunCompleted?: boolean;
   navSoundEnabled?: boolean;
   navSoundVolume?: number;

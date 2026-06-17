@@ -1096,3 +1096,33 @@
     transition-duration: 0.08ms !important;
   }
 }
+
+/* ── Metadatos completos (libretro scrape) action card ──────────────── */
+.nx-meta-scrape {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius, 14px);
+  background: var(--panel);
+}
+.nx-ms-head { display: flex; align-items: flex-start; gap: 14px; }
+.nx-ms-ico {
+  flex-shrink: 0; width: 38px; height: 38px; display: grid; place-items: center;
+  border-radius: 11px; color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 36%, transparent);
+}
+.nx-ms-txt { flex: 1; min-width: 0; }
+.nx-ms-txt h3 { margin: 1px 0 4px; font-size: 14.5px; font-weight: 700; color: var(--text); }
+.nx-ms-txt p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); }
+.nx-ms-txt p b { color: var(--text); font-weight: 600; }
+.nx-ms-btn { flex-shrink: 0; align-self: center; white-space: nowrap; }
+.nx-ms-prog { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.nx-ms-bar { height: 6px; border-radius: 999px; background: var(--panel-3); overflow: hidden; }
+.nx-ms-bar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .2s var(--ease); }
+.nx-ms-prog-txt { font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-ms-result {
+  margin-top: 12px; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 600; color: var(--text-dim);
+}
+.nx-ms-result svg { color: var(--good); }
