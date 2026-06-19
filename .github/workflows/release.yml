@@ -13,6 +13,11 @@ jobs:
     env:
       GDRIVE_API_KEY: ${{ secrets.GDRIVE_API_KEY }}
       GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_ROOT_FOLDER_ID }}
+      # Baked into the renderer bundle by Vite at `npm run make` time. Public by
+      # design (security is enforced by RLS). Without these the packaged app
+      # reports "social not configured" → users can't sign in / sign up.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
