@@ -443,6 +443,18 @@ export class EmulatorOverlay {
     };
   }
 
+  /** The ROM currently embedded (for tagging in-game screenshots). */
+  getCurrentRom(): DiscoveredRom | null {
+    return this.currentRom;
+  }
+
+  /** Screen rectangle (physical px) the emulator occupies, or null when no game
+   * is embedded — used to crop an in-game screenshot to just the game area. */
+  getCaptureBounds(): { x: number; y: number; width: number; height: number } | null {
+    if (!this.emuHwnd || !this.isActive()) return null;
+    return this.getScreenBounds();
+  }
+
   private repositionEmulator(): void {
     if (!this.emuHwnd) return;
     const b = this.getScreenBounds();

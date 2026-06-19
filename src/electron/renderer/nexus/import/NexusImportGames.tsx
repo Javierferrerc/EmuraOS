@@ -97,6 +97,14 @@ function shortOf(name: string): string {
 }
 
 type Status = "ok" | "dupe" | "unknown";
+export interface PreviewMeta {
+  genre: string;
+  developer: string;
+  publisher: string;
+  year: string;
+  players: string;
+  description: string;
+}
 export interface ImportItem {
   id: string;
   filePath: string;
@@ -108,6 +116,23 @@ export interface ImportItem {
   systems: { id: string; name: string }[];
   status: Status;
   include: boolean;
+  /** Live-fetched (in-memory) preview — applied on confirm, discarded on cancel. */
+  coverUrl?: string; // thumbnail for display
+  coverFull?: string; // full-res URL downloaded on confirm
+  meta?: PreviewMeta;
+  enriching?: boolean;
+}
+
+/** Run an async task over items with bounded concurrency. */
+async function runPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 type Scanned = { filePath: string; fileName: string; sizeBytes: number; systems: { id: string; name: string }[] };
@@ -195,7 +220,7 @@ export function NexusImportGames({
   watched = [],
   initialPaths,
   density = "normal",
-  reviewView = "list",
+  reviewView = "grid",
   matchCovers = true,
   cleanNames = true,
   soundEnabled = true,
@@ -331,6 +356,73 @@ export function NexusImportGames({
     if (paths.length) void startScan(paths);
   };
 
+  // ── live enrichment: cover + metadata fetched in review (in memory),
+  //    applied on confirm, discarded on cancel ──────────────────
+  const patchItem = useCallback((id: string, patch: Partial<ImportItem>) => {
+    setItems((list) => list.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  }, []);
+
+  const enrichItems = useCallback(
+    async (subset: ImportItem[]) => {
+      const targets = subset.filter((it) => it.system && it.status !== "dupe");
+      if (!targets.length) return;
+      setItems((list) =>
+        list.map((it) => (targets.some((t) => t.id === it.id) ? { ...it, enriching: true } : it))
+      );
+
+      // Metadata — one batched dry-run lookup (no disk writes).
+      void (async () => {
+        try {
+          const fields = await window.electronAPI.previewImportMetadata(
+            targets.map((t) => ({ fileName: t.file, systemId: t.system as string }))
+          );
+          setItems((list) =>
+            list.map((it) => {
+              const i = targets.findIndex((t) => t.id === it.id);
+              return i >= 0 ? { ...it, meta: fields[i] } : it;
+            })
+          );
+        } catch {
+          /* leave meta empty */
+        }
+      })();
+
+      // Covers — SteamGridDB search per title, bounded concurrency.
+      if (matchCovers) {
+        await runPool(targets, 4, async (t) => {
+          try {
+            const res = await window.electronAPI.searchSteamGridDbImages(t.title, "600x900");
+            if (res.success && res.candidates.length > 0) {
+              const c = res.candidates[0];
+              patchItem(t.id, { coverUrl: c.thumbnailUrl, coverFull: c.fullUrl });
+            }
+          } catch {
+            /* no cover */
+          }
+        });
+      }
+
+      setItems((list) =>
+        list.map((it) => (targets.some((t) => t.id === it.id) ? { ...it, enriching: false } : it))
+      );
+    },
+    [matchCovers, patchItem]
+  );
+
+  // Enrich once when entering review; reset so a re-scan re-enriches.
+  const enrichedRef = useRef(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  useEffect(() => {
+    if (phase !== "review") {
+      enrichedRef.current = false;
+      return;
+    }
+    if (enrichedRef.current) return;
+    enrichedRef.current = true;
+    void enrichItems(itemsRef.current);
+  }, [phase, enrichItems]);
+
   // ── review derived counts ───────────────────────────────────
   const counts = useMemo(() => {
     const sel = items.filter((it) => it.include);
@@ -349,8 +441,17 @@ export function NexusImportGames({
     beep("toggle");
     setItems((list) => list.map((it) => (it.id === id ? { ...it, include: !it.include } : it)));
   };
-  const changeSys = (id: string, system: string | null) =>
+  const changeSys = (id: string, system: string | null) => {
     setItem(id, { system, status: system ? "ok" : "unknown", include: !!system });
+    // Newly recognized (unknown → system) and not yet enriched → fetch its
+    // cover + metadata now too.
+    if (system) {
+      const it = itemsRef.current.find((x) => x.id === id);
+      if (it && !it.coverUrl && !it.meta) {
+        void enrichItems([{ ...it, system, status: "ok" }]);
+      }
+    }
+  };
   const removeItem = (id: string) => setItems((list) => list.filter((it) => it.id !== id));
   const allOn = items.length > 0 && items.every((it) => it.include);
   const toggleAll = () => {
@@ -513,16 +614,25 @@ export function NexusImportGames({
                       <button className={"ig-check" + (it.include ? " on" : "")} onClick={() => toggle(it.id)} disabled={it.status === "dupe"}>
                         <Icon name="check" size={14} />
                       </button>
-                      <span className={"ig-item-cover" + (it.system && matchCovers ? "" : " placeholder")}>
-                        {it.system && matchCovers ? <CoverFallback system={it.system} title={it.title} /> : <Icon name="image" size={16} />}
+                      <span className={"ig-item-cover" + (it.coverUrl || (it.system && matchCovers && it.enriching) ? "" : it.system && matchCovers ? "" : " placeholder")}>
+                        {it.coverUrl ? (
+                          <img src={it.coverUrl} alt="" loading="lazy" />
+                        ) : it.system && matchCovers ? (
+                          it.enriching ? <span className="ig-cover-spin" /> : <CoverFallback system={it.system} title={it.title} />
+                        ) : (
+                          <Icon name="image" size={16} />
+                        )}
                       </span>
                       <div className="ig-item-main">
                         <div className="ig-item-title">{it.title}</div>
                         <div className="ig-item-sub">
                           <span className="ig-item-file">{it.file}</span>
                           <span>· {fmtSize(it.size)}</span>
+                          {(it.meta?.genre || it.meta?.year) && (
+                            <span>· {[it.meta?.genre, it.meta?.year].filter(Boolean).join(" · ")}</span>
+                          )}
                           {it.status === "dupe" && <span className="ig-badge dupe"><Icon name="check" size={11} /> En biblioteca</span>}
-                          {it.status === "ok" && matchCovers && <span className="ig-badge cover"><Icon name="image" size={11} /> Carátula</span>}
+                          {it.status === "ok" && matchCovers && it.coverUrl && <span className="ig-badge cover"><Icon name="image" size={11} /> Carátula</span>}
                           {it.status === "unknown" && (
                             <span className="ig-badge" style={{ background: "color-mix(in oklab, var(--warn) 16%, transparent)", color: "var(--warn)" }}>
                               <Icon name="alert" size={11} /> Revisar
@@ -537,19 +647,29 @@ export function NexusImportGames({
                 </div>
               ) : (
                 <div className="ig-grid">
-                  {items.map((it) => (
-                    <div key={it.id} className={"ig-gcard" + (it.status === "unknown" ? " warn" : "") + (it.status === "dupe" ? " dupe" : "") + (!it.include ? " off" : "")}>
-                      <div className={"ig-gcard-cover" + (!(it.system && matchCovers) ? " placeholder" : "")}>
-                        {it.system && matchCovers ? <CoverFallback system={it.system} title={it.title} /> : <Icon name="image" size={22} />}
-                        <button className={"ig-gcard-check" + (it.include ? " on" : "")} onClick={() => toggle(it.id)}><Icon name="check" size={14} /></button>
-                        {it.status === "unknown" && <span className="ig-gcard-flag"><Icon name="alert" size={14} /></span>}
+                  {items.map((it) => {
+                    const metaBits = [it.meta?.genre, it.meta?.year].filter(Boolean).join(" · ");
+                    return (
+                      <div key={it.id} className={"ig-gcard" + (it.status === "unknown" ? " warn" : "") + (it.status === "dupe" ? " dupe" : "") + (!it.include ? " off" : "")}>
+                        <div className={"ig-gcard-cover" + (!(it.system && matchCovers && (it.coverUrl || it.enriching)) ? " placeholder" : "")}>
+                          {it.coverUrl ? (
+                            <img src={it.coverUrl} alt="" loading="lazy" />
+                          ) : it.system && matchCovers ? (
+                            it.enriching ? <span className="ig-cover-spin" /> : <CoverFallback system={it.system} title={it.title} />
+                          ) : (
+                            <Icon name="image" size={22} />
+                          )}
+                          <button className={"ig-gcard-check" + (it.include ? " on" : "")} onClick={() => toggle(it.id)}><Icon name="check" size={14} /></button>
+                          {it.status === "unknown" && <span className="ig-gcard-flag"><Icon name="alert" size={14} /></span>}
+                        </div>
+                        <div className="ig-gcard-body">
+                          <div className="ig-gcard-title">{it.title}</div>
+                          <div className="ig-gcard-sys">{it.system ? sysName(it.system) : "Sin reconocer"}</div>
+                          {metaBits && <div className="ig-gcard-meta">{metaBits}</div>}
+                        </div>
                       </div>
-                      <div className="ig-gcard-body">
-                        <div className="ig-gcard-title">{it.title}</div>
-                        <div className="ig-gcard-sys">{it.system ? sysName(it.system) : "Sin reconocer"}</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>

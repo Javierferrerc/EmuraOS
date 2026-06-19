@@ -466,6 +466,73 @@
 .nx-gd .gd-shot:hover {
   transform: translateY(-3px);
 }
+.nx-gd .gd-shot .gd-real-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.nx-gd .gd-shot.filler {
+  opacity: 0.5;
+}
+/* delete button on a user screenshot (hover) */
+.nx-gd .gd-shot-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 0;
+  background: rgba(8, 10, 15, 0.72);
+  backdrop-filter: blur(6px);
+  color: #ffd2da;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.nx-gd .gd-shot.has-img:hover .gd-shot-del {
+  opacity: 1;
+}
+.nx-gd .gd-shot-del:hover {
+  background: color-mix(in oklab, var(--bad, #f43f5e) 50%, rgba(8, 10, 15, 0.72));
+}
+/* "Añadir captura" tile */
+.nx-gd .gd-shot-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--line-2);
+  background: rgba(255, 255, 255, 0.015);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.nx-gd .gd-shot-add:hover {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line-2));
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.nx-gd .gd-shot-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.nx-gd .gd-shots-hint {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.nx-gd .gd-shots-hint kbd {
+  font-size: 11px;
+}
 
 /* metadata grid */
 .nx-gd .gd-meta-grid {

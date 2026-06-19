@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { GameMetadata, MetadataCacheFile } from "./types.js";
@@ -30,6 +30,7 @@ export class MetadataCache {
   private coversDir: string;
   private thumbnailsDir: string;
   private heroesDir: string;
+  private screenshotsDir: string;
 
   constructor(projectRoot?: string) {
     this.projectRoot = projectRoot ?? resolve(__dirname, "..", "..");
@@ -37,6 +38,42 @@ export class MetadataCache {
     this.coversDir = resolve(this.metadataDir, "covers");
     this.thumbnailsDir = resolve(this.metadataDir, "thumbnails");
     this.heroesDir = resolve(this.metadataDir, "heroes");
+    this.screenshotsDir = resolve(this.metadataDir, "screenshots");
+  }
+
+  // ── User screenshots (uploaded or captured in-game) ──────────────
+  /** Per-game screenshots directory, created on demand. */
+  getScreenshotDir(systemId: string, romFileName: string): string {
+    const dir = resolve(this.screenshotsDir, systemId, normalizeKey(romFileName));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  /** Absolute paths of a game's screenshots, oldest first. */
+  listScreenshots(systemId: string, romFileName: string): string[] {
+    const dir = resolve(this.screenshotsDir, systemId, normalizeKey(romFileName));
+    if (!existsSync(dir)) return [];
+    try {
+      return readdirSync(dir)
+        .filter((n) => /\.(png|jpg|jpeg|webp)$/i.test(n))
+        .map((n) => resolve(dir, n))
+        .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
+    } catch {
+      return [];
+    }
+  }
+
+  /** A fresh, unique screenshot path for a game (caller writes the bytes). */
+  newScreenshotPath(systemId: string, romFileName: string, ext: string, stamp: number): string {
+    const dir = this.getScreenshotDir(systemId, romFileName);
+    const clean = ext.replace(/[^a-z0-9]/gi, "").toLowerCase() || "png";
+    return resolve(dir, `shot-${stamp}.${clean}`);
+  }
+
+  /** True if `p` is inside the screenshots store (path-traversal guard). */
+  isScreenshotPath(p: string): boolean {
+    const rel = resolve(p);
+    return rel.startsWith(resolve(this.screenshotsDir));
   }
 
   ensureDirectories(systemId: string): void {

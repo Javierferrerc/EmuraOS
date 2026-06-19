@@ -201,3 +201,12 @@
 @media (prefers-reduced-motion: reduce) {
   .ig-stage *, .ig-drop-global * { animation-duration: .01ms !important; }
 }
+
+/* live-fetched cover (real artwork) fills the preview boxes */
+.ig-item-cover img, .ig-gcard-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* loading shimmer while the cover/metadata are fetched */
+.ig-cover-spin { width: 100%; height: 100%; display: block;
+  background: linear-gradient(110deg, var(--panel-2) 30%, var(--panel-3) 50%, var(--panel-2) 70%);
+  background-size: 220% 100%; animation: igShimmer 1.1s ease-in-out infinite; }
+@keyframes igShimmer { from { background-position: 220% 0; } to { background-position: -20% 0; } }
+.ig-gcard-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
