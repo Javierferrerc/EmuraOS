@@ -8,7 +8,9 @@ import type {
   CoverFetchProgress,
 } from "../../src/core/types.js";
 
-const TEST_PROJECT_ROOT = resolve(import.meta.dirname, "__test_libretro__");
+// Unique per-file test dir — see libretro-metadata.test.ts (avoids a parallel
+// race on a shared directory).
+const TEST_PROJECT_ROOT = resolve(import.meta.dirname, "__test_libretro_thumbnails__");
 const TEST_SYSTEM_MAP_PATH = resolve(TEST_PROJECT_ROOT, "libretro-map.json");
 
 const SYSTEM_MAP = {

@@ -44,14 +44,24 @@ describe("buildCommandPaletteActions", () => {
   });
 
   it("omits the current theme from the switcher", () => {
+    // Only the NEXUS theme is offered now (the others are hidden, not removed),
+    // so from any other theme the switcher offers exactly "theme.set.nexus".
     const actions = buildCommandPaletteActions(
-      makeArgs({ config: { theme: "synthwave" } as AppConfig })
+      makeArgs({ config: { theme: "dark" } as AppConfig })
     );
     const themeIds = actions
       .filter((a) => a.group === "Temas")
       .map((a) => a.id);
-    expect(themeIds).not.toContain("theme.set.synthwave");
-    expect(themeIds).toContain("theme.set.dark");
+    expect(themeIds).toContain("theme.set.nexus");
+
+    // When NEXUS is already active it's omitted, leaving nothing to switch to.
+    const onNexus = buildCommandPaletteActions(
+      makeArgs({ config: { theme: "nexus" } as AppConfig })
+    );
+    const nexusThemeIds = onNexus
+      .filter((a) => a.group === "Temas")
+      .map((a) => a.id);
+    expect(nexusThemeIds).not.toContain("theme.set.nexus");
   });
 
   it("omits the current view mode from the view switcher", () => {

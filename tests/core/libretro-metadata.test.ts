@@ -9,7 +9,9 @@ import {
 import { MetadataCache } from "../../src/core/metadata-cache.js";
 import type { DiscoveredRom } from "../../src/core/types.js";
 
-const TEST_PROJECT_ROOT = resolve(import.meta.dirname, "__test_libretro__");
+// Unique per-file test dir — the thumbnails test uses its own so the two don't
+// race on a shared directory when vitest runs them in parallel.
+const TEST_PROJECT_ROOT = resolve(import.meta.dirname, "__test_libretro_metadata__");
 const TEST_SYSTEM_MAP_PATH = resolve(TEST_PROJECT_ROOT, "systems-map.json");
 
 const GENRE_DAT = `clrmamepro (
