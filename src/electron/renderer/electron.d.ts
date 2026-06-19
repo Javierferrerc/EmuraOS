@@ -23,6 +23,7 @@ import type {
   EmulatorDownloadProgress,
   UpdateCheckResult,
   UpdateDownloadProgress,
+  UpdateInfo,
   AddRomsProgress,
   SgdbCandidate,
   GameOverride,
@@ -373,13 +374,15 @@ export interface ElectronAPI {
 
   // Auto-update
   checkForUpdates(): Promise<UpdateCheckResult>;
-  downloadUpdate(url: string): Promise<string>;
+  downloadUpdate(): Promise<void>;
   installUpdate(): Promise<void>;
   getDownloadedInstallerPath(): Promise<string | null>;
   cancelUpdateDownload(): Promise<void>;
   onUpdateDownloadProgress(
     callback: (progress: UpdateDownloadProgress) => void
   ): () => void;
+  onUpdateReady(callback: (info: UpdateInfo) => void): () => void;
+  onUpdateError(callback: (message: string) => void): () => void;
   onStartupUpdateCheck(callback: () => void): () => void;
 }
 

@@ -48,7 +48,11 @@ jobs:
           for f in out/make/zip/win32/x64/*.zip; do
             [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
           done
-          # Upload NSIS installer
-          for f in out/installers/*.exe; do
+          # Upload NSIS installer + electron-updater metadata.
+          # latest.yml and the .blockmap MUST be on the release: electron-updater
+          # reads latest.yml to detect new versions and the .blockmap to download
+          # only the changed bytes (differential update). Without them the
+          # in-app auto-updater can't find or apply updates.
+          for f in out/installers/*.exe out/installers/latest.yml out/installers/*.blockmap; do
             [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
           done

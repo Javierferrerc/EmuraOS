@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import type {
-  UpdateInfo,
-  UpdateDownloadProgress,
-} from "../../../core/types";
+import type { UpdateInfo } from "../../../core/types";
 
-type ModalState = "info" | "downloading" | "downloaded" | "error";
+type ModalState = "ready" | "installing" | "error";
 
 interface Props {
   updateInfo: UpdateInfo;
@@ -17,95 +14,38 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Shown only once the update has finished downloading in the background
+ * (see AppContext `update-ready`). The user picks "restart now" — which
+ * installs silently and relaunches — or "later", in which case the update
+ * is applied automatically the next time the app quits.
+ */
 export function UpdateModal({ updateInfo, onDismiss }: Props) {
-  const [state, setState] = useState<ModalState>("info");
-  const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
+  const [state, setState] = useState<ModalState>("ready");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Esc closes only in dismissible states
+  // Esc dismisses (defer install to next quit) unless mid-install.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (state === "info" || state === "error")) {
-        onDismiss();
-      }
+      if (e.key === "Escape" && state !== "installing") onDismiss();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onDismiss, state]);
 
-  const handleDownload = useCallback(async () => {
-    setState("downloading");
-    setProgress(null);
-
-    const unsubscribe = window.electronAPI.onUpdateDownloadProgress(
-      (p: UpdateDownloadProgress) => {
-        setProgress(p);
-        if (p.status === "complete") {
-          setState("downloaded");
-        } else if (p.status === "cancelled") {
-          onDismiss();
-        } else if (p.status === "error") {
-          setErrorMessage("Error durante la descarga");
-          setState("error");
-        }
-      }
-    );
-
-    try {
-      await window.electronAPI.downloadUpdate(updateInfo.downloadUrl);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") {
-        // User cancelled — already handled by progress callback
-        return;
-      }
-      setErrorMessage(
-        err instanceof Error ? err.message : "Error desconocido"
-      );
-      setState("error");
-    } finally {
-      unsubscribe();
-    }
-  }, [updateInfo.downloadUrl, onDismiss]);
-
-  const handleCancel = useCallback(() => {
-    window.electronAPI.cancelUpdateDownload();
-  }, []);
-
   const handleInstall = useCallback(async () => {
+    setState("installing");
     try {
+      // On success the main process quits and relaunches — no UI follow-up.
       await window.electronAPI.installUpdate();
-      // On success the main process calls app.quit() — no UI follow-up
-      // needed; the app simply exits and the installer takes over.
     } catch (err: unknown) {
-      // The installer launch failed (locked-down group policy, AV
-      // quarantine, missing file, manifest denial). Show the user a
-      // fallback path instead of swallowing the error and leaving them
-      // staring at a stuck dialog.
       console.error("[update] installUpdate failed:", err);
       setErrorMessage(
         err instanceof Error
           ? err.message
-          : "No se pudo iniciar el instalador automáticamente."
+          : "No se pudo aplicar la actualización automáticamente."
       );
       setState("error");
-    }
-  }, []);
-
-  const handleOpenInstallerFolder = useCallback(async () => {
-    try {
-      const installerPath =
-        await window.electronAPI.getDownloadedInstallerPath();
-      if (installerPath) {
-        await window.electronAPI.showInExplorer(installerPath);
-      } else {
-        // Download was cancelled / never ran — open the releases page so
-        // the user can grab the installer manually.
-        await window.electronAPI.openExternal(
-          "https://github.com/Javierferrerc/EmuraOS/releases/latest"
-        );
-      }
-    } catch (e) {
-      console.warn("[update] could not open installer location:", e);
     }
   }, []);
 
@@ -143,7 +83,7 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
             <h2 className="text-xl font-bold text-white">
               {state === "error"
                 ? "Error de actualización"
-                : "Actualización disponible"}
+                : "Actualización lista"}
             </h2>
             <p className="mt-1 text-sm text-gray-400">
               v{updateInfo.version}
@@ -154,15 +94,17 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
 
         {/* Body */}
         <div className="px-6 py-4">
-          {state === "info" && (
+          {state === "ready" && (
             <div className="space-y-3 text-sm text-gray-300">
               <p>
-                Una nueva versión de EmuraOS está disponible.
+                Se descargó una nueva versión de EmuraOS. Reiniciá la app para
+                aplicarla — se instala sola, no hace falta volver a instalar
+                nada.
               </p>
               {updateInfo.releaseNotes && (
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-700 bg-gray-900/50 p-3 text-xs text-gray-400">
                   <p className="mb-1 font-semibold text-gray-300">
-                    Notas de la versión:
+                    Novedades:
                   </p>
                   <pre className="whitespace-pre-wrap font-sans">
                     {updateInfo.releaseNotes}
@@ -172,39 +114,18 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
             </div>
           )}
 
-          {state === "downloading" && (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-300">Descargando actualización...</p>
-              <div className="h-3 overflow-hidden rounded-full bg-gray-700">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all duration-200"
-                  style={{ width: `${progress?.percentComplete ?? 0}%` }}
-                />
-              </div>
-              <p className="text-xs text-gray-400">
-                {progress
-                  ? `${formatBytes(progress.bytesDownloaded)} / ${formatBytes(progress.bytesTotal)} — ${progress.percentComplete}%`
-                  : "Iniciando descarga..."}
-              </p>
-            </div>
-          )}
-
-          {state === "downloaded" && (
-            <div className="space-y-2 text-sm text-gray-300">
-              <p>
-                Descarga completa. La aplicación se cerrará para instalar la
-                actualización y se reiniciará automáticamente.
-              </p>
-            </div>
+          {state === "installing" && (
+            <p className="text-sm text-gray-300">
+              Aplicando actualización y reiniciando...
+            </p>
           )}
 
           {state === "error" && (
             <div className="space-y-3">
               <p className="text-sm text-red-400">{errorMessage}</p>
               <p className="text-xs text-gray-500">
-                Podés instalarla manualmente: abrí la carpeta donde está
-                guardado el instalador y ejecutalo a doble-click, o
-                descargá la última versión desde la página de releases.
+                Podés descargar la última versión manualmente desde la página
+                de releases.
               </p>
             </div>
           )}
@@ -212,7 +133,7 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t border-gray-700 px-6 py-4">
-          {state === "info" && (
+          {state === "ready" && (
             <>
               <button
                 type="button"
@@ -223,32 +144,12 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
               </button>
               <button
                 type="button"
-                onClick={handleDownload}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                onClick={handleInstall}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500"
               >
-                Descargar actualización
+                Reiniciar ahora
               </button>
             </>
-          )}
-
-          {state === "downloading" && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600"
-            >
-              Cancelar
-            </button>
-          )}
-
-          {state === "downloaded" && (
-            <button
-              type="button"
-              onClick={handleInstall}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-500"
-            >
-              Instalar y reiniciar
-            </button>
           )}
 
           {state === "error" && (
@@ -263,16 +164,9 @@ export function UpdateModal({ updateInfo, onDismiss }: Props) {
               <button
                 type="button"
                 onClick={handleOpenReleasesPage}
-                className="rounded-lg bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-600"
-              >
-                Abrir página de releases
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenInstallerFolder}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
               >
-                Abrir carpeta del instalador
+                Abrir página de releases
               </button>
             </>
           )}

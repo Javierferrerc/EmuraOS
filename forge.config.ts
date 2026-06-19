@@ -1,7 +1,7 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { VitePlugin } from "@electron-forge/plugin-vite";
-import { cpSync } from "node:fs";
+import { cpSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const config: ForgeConfig = {
@@ -37,6 +37,28 @@ const config: ForgeConfig = {
       copyDir("node_modules/koffi");
       copyDir("node_modules/sharp");
       copyDir("node_modules/@img");
+    },
+    // electron-updater reads `resources/app-update.yml` at runtime to know
+    // which GitHub repo to poll. electron-builder normally writes it in its
+    // onAfterPack hook — but we build the installer with `--prepackaged`,
+    // which skips packing, so that hook never fires. Write it ourselves into
+    // the packaged resources dir (sibling of app.asar) so the updater is
+    // configured. Must stay in sync with the `publish` block in
+    // electron-builder.yml.
+    postPackage: async (_config, { outputPaths }) => {
+      const appUpdateYml = [
+        "provider: github",
+        "owner: Javierferrerc",
+        "repo: EmuraOS",
+        "updaterCacheDirName: emuraos-updater",
+        "",
+      ].join("\n");
+      for (const outputPath of outputPaths) {
+        writeFileSync(
+          path.join(outputPath, "resources", "app-update.yml"),
+          appUpdateYml
+        );
+      }
     },
   },
   makers: [

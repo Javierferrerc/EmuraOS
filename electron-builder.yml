@@ -8,12 +8,28 @@ copyright: Copyright © 2026 Javier Ferrer
 directories:
   output: out/installers
 
+# Required by electron-updater: makes the build emit `latest.yml` + a
+# `.blockmap` next to the installer, and embeds `app-update.yml` into the
+# packaged resources so the running app knows where to look for updates.
+# `publish: never` in CI means we upload the artifacts ourselves (see
+# .github/workflows/release.yml) rather than letting electron-builder push.
+publish:
+  provider: github
+  owner: Javierferrerc
+  repo: EmuraOS
+
 win:
   icon: assets/icon.ico
   target:
     - target: nsis
       arch:
         - x64
+  # No spaces in the installer name. electron-updater's latest.yml records
+  # the asset URL with spaces collapsed to dashes, but GitHub stores a
+  # gh-uploaded "EmuraOS Setup x.exe" as "EmuraOS.Setup.x.exe" (dots) — the
+  # mismatch would 404 the auto-update download. A dash-only name keeps the
+  # file, its .blockmap, the latest.yml url, and the GitHub asset identical.
+  artifactName: ${productName}-Setup-${version}.${ext}
 
 nsis:
   oneClick: false

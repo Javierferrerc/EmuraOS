@@ -1,281 +1,160 @@
-import { app, shell } from "electron";
-import path from "node:path";
-import { createWriteStream } from "node:fs";
-import { spawn } from "node:child_process";
-import { pipeline } from "node:stream/promises";
-import { Readable } from "node:stream";
+import { app } from "electron";
+import electronUpdater, { type UpdateInfo as EuUpdateInfo } from "electron-updater";
 import type {
   UpdateInfo,
   UpdateCheckResult,
   UpdateDownloadProgress,
 } from "../../core/types.js";
 
-// ── Configuration ──────────────────────────────────────────────────
-const GITHUB_OWNER = "Javierferrerc";
-const GITHUB_REPO = "EmuraOS";
-const RELEASES_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
+// electron-updater ships as CommonJS; under ESM the named `autoUpdater`
+// export is exposed on the default export.
+const { autoUpdater } = electronUpdater;
+
+const RELEASES_PAGE =
+  "https://github.com/Javierferrerc/EmuraOS/releases/latest";
+
+/** Channel payloads the updater pushes to the renderer. */
+export type UpdaterEvent =
+  | { channel: "update-download-progress"; payload: UpdateDownloadProgress }
+  | { channel: "update-ready"; payload: UpdateInfo }
+  | { channel: "update-error"; payload: string };
+
+type SendFn = (event: UpdaterEvent) => void;
 
 /**
- * Compares two semver strings (e.g. "1.2.3" vs "1.3.0").
- * Returns true if `latest` is newer than `current`.
+ * Auto-update on top of electron-updater (electron-builder's updater).
+ *
+ * UX = "automatic with notification":
+ *   - On startup we check + download in the background (autoDownload).
+ *   - When the package is ready we emit `update-ready`; the renderer shows
+ *     "restart now / later". If the user defers, autoInstallOnAppQuit
+ *     applies it silently the next time the app closes.
+ *   - `installUpdate()` runs the NSIS installer SILENTLY (no wizard) and
+ *     relaunches into the new version — the "normal app" experience.
+ *
+ * Differential downloads: electron-updater uses the `.blockmap` published
+ * next to the installer to fetch only the changed bytes, not the whole
+ * ~140 MB .exe.
+ *
+ * Only runs in packaged builds — in dev there's no app-update.yml, so
+ * checkForUpdates() short-circuits to "not available".
  */
-function isNewerVersion(current: string, latest: string): boolean {
-  const parse = (v: string) =>
-    v
-      .replace(/^v/, "")
-      .split(".")
-      .map(Number);
-  const [cMajor, cMinor, cPatch] = parse(current);
-  const [lMajor, lMinor, lPatch] = parse(latest);
-  if (lMajor !== cMajor) return lMajor > cMajor;
-  if (lMinor !== cMinor) return lMinor > cMinor;
-  return lPatch > cPatch;
-}
-
 export class AutoUpdater {
-  private abortController: AbortController | null = null;
-  private downloadedInstallerPath: string | null = null;
+  private downloadedInfo: UpdateInfo | null = null;
+
+  constructor(private readonly send: SendFn) {
+    // We drive the lifecycle ourselves; don't pop the built-in dialog.
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    // Surface the updater's own logs through the normal console.
+    autoUpdater.logger = console;
+
+    autoUpdater.on("download-progress", (p) => {
+      this.send({
+        channel: "update-download-progress",
+        payload: {
+          bytesDownloaded: p.transferred,
+          bytesTotal: p.total,
+          percentComplete: Math.round(p.percent),
+          status: "downloading",
+        },
+      });
+    });
+
+    autoUpdater.on("update-downloaded", (info) => {
+      this.downloadedInfo = this.toUpdateInfo(info);
+      this.send({ channel: "update-ready", payload: this.downloadedInfo });
+    });
+
+    autoUpdater.on("error", (err) => {
+      console.warn("[auto-update] error:", err);
+      this.send({
+        channel: "update-error",
+        payload: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  /** Map electron-updater's UpdateInfo onto our renderer-facing shape. */
+  private toUpdateInfo(info: EuUpdateInfo): UpdateInfo {
+    const notes =
+      typeof info.releaseNotes === "string"
+        ? info.releaseNotes
+        : Array.isArray(info.releaseNotes)
+          ? info.releaseNotes.map((n) => n.note ?? "").join("\n\n")
+          : "";
+    return {
+      version: info.version,
+      releaseNotes: notes,
+      downloadUrl: RELEASES_PAGE,
+      publishedAt: info.releaseDate ?? "",
+      size: info.files?.[0]?.size ?? 0,
+    };
+  }
 
   /**
-   * Query GitHub Releases API for the latest release and compare its
-   * tag against the running app version.
+   * Check GitHub for a newer release. With autoDownload enabled this also
+   * kicks off the background download; the renderer is notified via
+   * `update-ready` when it finishes. No-op (returns "not available") in
+   * dev / unpackaged runs.
    */
   async checkForUpdates(): Promise<UpdateCheckResult> {
     const currentVersion = app.getVersion();
-    console.log("[auto-update] checking for updates... current version:", currentVersion);
 
-    const res = await fetch(RELEASES_URL, {
-      headers: { Accept: "application/vnd.github.v3+json" },
-    });
-
-    if (!res.ok) {
-      throw new Error(`GitHub API returned ${res.status}`);
-    }
-
-    const release = (await res.json()) as {
-      tag_name: string;
-      body: string;
-      published_at: string;
-      assets: { name: string; browser_download_url: string; size: number }[];
-    };
-
-    const latestVersion = release.tag_name.replace(/^v/, "");
-
-    console.log("[auto-update] latest release:", latestVersion, "| assets:", release.assets.map(a => a.name));
-
-    if (!isNewerVersion(currentVersion, latestVersion)) {
-      console.log("[auto-update] no update needed");
+    if (!app.isPackaged) {
+      console.log("[auto-update] skipped — app is not packaged (dev mode)");
       return { available: false, currentVersion };
     }
 
-    // Find the Squirrel Setup .exe asset
-    const setupAsset = release.assets.find(
-      (a) => a.name.toLowerCase().endsWith(".exe") && /setup/i.test(a.name)
+    const result = await autoUpdater.checkForUpdates();
+    const available = Boolean(
+      result?.updateInfo &&
+        result.updateInfo.version !== currentVersion &&
+        result.isUpdateAvailable !== false
     );
 
-    if (!setupAsset) {
-      console.log("[auto-update] update available but no Setup .exe asset found");
+    if (!available || !result) {
       return { available: false, currentVersion };
     }
 
+    const updateInfo = this.toUpdateInfo(result.updateInfo);
     return {
       available: true,
       currentVersion,
-      latestVersion,
-      updateInfo: {
-        version: latestVersion,
-        releaseNotes: release.body ?? "",
-        downloadUrl: setupAsset.browser_download_url,
-        publishedAt: release.published_at,
-        size: setupAsset.size,
-      },
+      latestVersion: updateInfo.version,
+      updateInfo,
     };
   }
 
   /**
-   * Stream-download the installer to the temp directory, reporting
-   * progress via the callback.
+   * Explicitly download the update (used when autoDownload is off, e.g. a
+   * manual "check now"). Safe to call again after an automatic download.
    */
-  async downloadUpdate(
-    url: string,
-    onProgress: (progress: UpdateDownloadProgress) => void
-  ): Promise<string> {
-    this.abortController = new AbortController();
-
-    const res = await fetch(url, { signal: this.abortController.signal });
-    if (!res.ok) {
-      throw new Error(`Download failed with status ${res.status}`);
-    }
-
-    const bytesTotal = Number(res.headers.get("content-length") ?? 0);
-    const fileName = url.split("/").pop() ?? "emuraos-update.exe";
-    const destPath = path.join(app.getPath("temp"), fileName);
-
-    let bytesDownloaded = 0;
-
-    // Create a transform that reports progress as bytes flow through
-    const body = res.body;
-    if (!body) throw new Error("No response body");
-
-    const reader = body.getReader();
-    const progressStream = new ReadableStream({
-      async pull(controller) {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-        bytesDownloaded += value.byteLength;
-        onProgress({
-          bytesDownloaded,
-          bytesTotal,
-          percentComplete: bytesTotal > 0
-            ? Math.round((bytesDownloaded / bytesTotal) * 100)
-            : 0,
-          status: "downloading",
-        });
-        controller.enqueue(value);
-      },
-      cancel() {
-        reader.cancel();
-      },
-    });
-
-    const nodeStream = Readable.fromWeb(progressStream as import("node:stream/web").ReadableStream);
-    const fileStream = createWriteStream(destPath);
-
-    try {
-      await pipeline(nodeStream, fileStream);
-    } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        err.name === "AbortError"
-      ) {
-        onProgress({
-          bytesDownloaded,
-          bytesTotal,
-          percentComplete: Math.round((bytesDownloaded / bytesTotal) * 100),
-          status: "cancelled",
-        });
-        throw err;
-      }
-      throw err;
-    }
-
-    onProgress({
-      bytesDownloaded: bytesTotal,
-      bytesTotal,
-      percentComplete: 100,
-      status: "complete",
-    });
-
-    this.downloadedInstallerPath = destPath;
-    this.abortController = null;
-    return destPath;
+  async downloadUpdate(): Promise<void> {
+    if (!app.isPackaged) return;
+    await autoUpdater.downloadUpdate();
   }
 
   /**
-   * Launch the downloaded NSIS installer and quit the current app.
-   *
-   * Why we don't use child_process.spawn here:
-   *
-   *   The NSIS installer (`EmuraOS.Setup.X.Y.Z.exe` produced by
-   *   electron-builder) requires admin elevation to write into Program
-   *   Files. When `spawn(installerPath, ...)` runs the .exe directly,
-   *   Node calls Windows' CreateProcess WITHOUT going through the shell,
-   *   so UAC is never triggered and Windows refuses with EACCES.
-   *
-   *   Additionally, files freshly written to %TEMP% by an unprivileged
-   *   process can be locked or scanned by Windows Defender at the moment
-   *   spawn fires, which also surfaces as EACCES.
-   *
-   * shell.openPath uses ShellExecuteEx under the hood, which:
-   *   - Triggers the UAC consent prompt for installers that declare
-   *     `requestedExecutionLevel = requireAdministrator` in their
-   *     manifest (NSIS does this).
-   *   - Respects file associations and AV trust prompts.
-   *   - Returns a friendly string error on failure instead of an
-   *     `EACCES` thrown from a child-process callback the renderer
-   *     can't easily surface.
-   *
-   * If shell.openPath fails for any reason we fall back to launching via
-   * `cmd.exe /c start ""` which goes through the same ShellExecute path
-   * but as a separate command-line invocation — this covers edge cases
-   * like locked-down Group Policies that disable shell.openPath but
-   * still allow start.
+   * Quit and install the downloaded update SILENTLY, then relaunch. NSIS
+   * runs with no wizard because the install is per-user (no UAC) and we
+   * pass isSilent=true. isForceRunAfter=true restarts the app.
    */
   async installUpdate(): Promise<void> {
-    const installerPath = this.downloadedInstallerPath;
-    if (!installerPath) {
-      throw new Error("No downloaded installer available");
+    if (!this.downloadedInfo) {
+      throw new Error("No update has been downloaded yet");
     }
-
-    console.log("[auto-update] launching installer:", installerPath);
-
-    const error = await shell.openPath(installerPath);
-    if (error) {
-      console.warn(
-        "[auto-update] shell.openPath failed, falling back to cmd start:",
-        error
-      );
-      // `cmd /c start "" "path\\to\\installer.exe"` — the empty quoted
-      // first argument is the optional title, required when the path
-      // itself is quoted so cmd doesn't treat it as the title. start
-      // wraps ShellExecute, so it triggers UAC and AV trust prompts
-      // the same way explorer does.
-      const fallbackErr = await new Promise<Error | null>((resolve) => {
-        try {
-          const child = spawn("cmd", ["/c", "start", "", installerPath], {
-            detached: true,
-            stdio: "ignore",
-            windowsHide: true,
-          });
-          // Without an `error` listener, a failed spawn would crash the
-          // main process with the same Uncaught Exception dialog that
-          // started this whole bug report. Listen and route to renderer.
-          child.once("error", (err) => resolve(err));
-          // Give the spawn a tick to surface its `error` event before we
-          // assume success. spawn errors fire synchronously on the
-          // event loop on Windows, so a microtask is enough.
-          queueMicrotask(() => {
-            child.unref();
-            resolve(null);
-          });
-        } catch (err) {
-          resolve(err instanceof Error ? err : new Error(String(err)));
-        }
-      });
-
-      if (fallbackErr) {
-        throw new Error(
-          `Failed to launch installer: ${error}; fallback also failed: ${fallbackErr.message}`
-        );
-      }
-    }
-
-    // Give the shell a moment to actually dispatch the installer process
-    // before we quit — quitting too fast can race the ShellExecute call
-    // and leave the user with no installer running.
-    setTimeout(() => app.quit(), 800);
+    // Defer so the IPC reply flushes before the app tears down.
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
   }
 
-  /**
-   * Path to the .exe we downloaded into %TEMP%, or null if no download
-   * has run this session. Exposed so the renderer can fall back to
-   * "show installer in Explorer" when shell.openPath fails for reasons
-   * outside our control (group policies, AV quarantine, etc.).
-   */
+  /** electron-updater manages its own cache; no user-facing path to show. */
   getDownloadedInstallerPath(): string | null {
-    return this.downloadedInstallerPath;
+    return null;
   }
 
-  /**
-   * Abort an in-progress download.
-   */
+  /** electron-updater has no first-class cancel; kept for IPC compatibility. */
   cancelDownload(): void {
-    if (this.abortController) {
-      this.abortController.abort();
-      this.abortController = null;
-    }
+    /* no-op */
   }
 }
