@@ -15,7 +15,7 @@
  * `.focused::after` ring). Every interactive element keeps `data-foc`.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { NexusGame } from "../nexusModel";
 import { NexusGameShot } from "./NexusGameShot";
@@ -47,6 +47,9 @@ import {
   CpuIcon,
   LibraryIcon,
   BackIcon,
+  UploadIcon,
+  TrashIcon,
+  CameraIcon,
 } from "../NexusIcons";
 import "./nexus-game-detail.css";
 
@@ -66,8 +69,6 @@ interface NexusGameDetailProps {
   /** Lets the shell's unified gamepad layer drive the ficha's spatial focus. */
   focusHandleRef: MutableRefObject<GameDetailFocusHandle | null>;
 }
-
-const SHOT_COUNT = 5;
 
 // ── small bits ──────────────────────────────────────────────
 function Stars({ value }: { value: number }) {
@@ -244,17 +245,104 @@ function Actions({
 }
 
 // ── sections ────────────────────────────────────────────────
-function ShotsSection({ game, stills }: { game: NexusGame; stills: string[] }) {
-  const shots = Array.from({ length: SHOT_COUNT }, (_, i) => i);
+interface UserShot {
+  path: string;
+  url: string;
+}
+
+/** Real user screenshots: uploaded from a file or captured in-game with F12.
+ * (The procedural neon tiles only appear as filler when there are none yet —
+ * they're stand-ins, not the cover art that used to show here.) */
+function ShotsSection({ game }: { game: NexusGame }) {
+  const { systemId, fileName } = game.rom;
+  const [shots, setShots] = useState<UserShot[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const paths = await window.electronAPI.listGameScreenshots(systemId, fileName);
+      const out: UserShot[] = [];
+      for (const p of paths) {
+        const url = await window.electronAPI.readBackgroundDataUrl(p);
+        if (url) out.push({ path: p, url });
+      }
+      setShots(out);
+    } catch {
+      setShots([]);
+    }
+  }, [systemId, fileName]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Live-refresh when an in-game F12 capture lands for this game.
+  useEffect(() => {
+    const off = window.electronAPI.onGameScreenshotCaptured((info) => {
+      if (info.systemId === systemId && info.fileName === fileName) void load();
+    });
+    return off;
+  }, [systemId, fileName, load]);
+
+  const addFromFile = useCallback(async () => {
+    setBusy(true);
+    try {
+      const src = await window.electronAPI.pickFile([
+        { name: "Imágenes", extensions: ["png", "jpg", "jpeg", "webp"] },
+      ]);
+      if (src) {
+        const res = await window.electronAPI.addGameScreenshot(systemId, fileName, src);
+        if (res.success) await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [systemId, fileName, load]);
+
+  const remove = useCallback(
+    async (p: string) => {
+      await window.electronAPI.deleteGameScreenshot(p);
+      await load();
+    },
+    [load]
+  );
+
+  const fillers = shots.length === 0 ? [0, 1, 2] : [];
+
   return (
     <section className="gd-section">
-      <SecHead icon={<ImageIcon size={18} />} title="Capturas" extra={`${shots.length} imágenes`} />
+      <SecHead
+        icon={<ImageIcon size={18} />}
+        title="Capturas"
+        extra={shots.length > 0 ? `${shots.length} ${shots.length === 1 ? "captura" : "capturas"}` : "Tuyas"}
+      />
       <div className="gd-shots">
-        {shots.map((i) => (
-          <div key={i} className="gd-shot foc-ring" data-foc tabIndex={-1}>
-            <NexusGameShot game={game} idx={i} imageUrl={stills[i] ?? null} />
+        {shots.map((s) => (
+          <div key={s.path} className="gd-shot has-img" data-foc tabIndex={-1}>
+            <div className="gd-real-shot">
+              <img src={s.url} alt="" draggable={false} />
+            </div>
+            <button
+              className="gd-shot-del"
+              title="Eliminar captura"
+              onClick={() => void remove(s.path)}
+            >
+              <TrashIcon size={15} />
+            </button>
           </div>
         ))}
+        {fillers.map((i) => (
+          <div key={`f${i}`} className="gd-shot filler" tabIndex={-1}>
+            <NexusGameShot game={game} idx={i} imageUrl={null} />
+          </div>
+        ))}
+        <button className="gd-shot gd-shot-add foc-ring" data-foc onClick={() => void addFromFile()} disabled={busy}>
+          <UploadIcon size={20} />
+          <span>{busy ? "Añadiendo…" : "Añadir captura"}</span>
+        </button>
+      </div>
+      <div className="gd-shots-hint">
+        <CameraIcon size={13} /> Sube una imagen o pulsa <kbd>F12</kbd> mientras juegas para capturar.
       </div>
     </section>
   );
@@ -458,7 +546,7 @@ export function NexusGameDetail({
   );
 
   const SECTIONS: Record<string, React.ReactNode> = {
-    shots: <ShotsSection key="shots" game={game} stills={stills} />,
+    shots: <ShotsSection key="shots" game={game} />,
     meta: <MetaSection key="meta" game={game} />,
     emu: (
       <div key="emu" className="gd-cols">

@@ -252,6 +252,54 @@ contextBridge.exposeInMainWorld("electronAPI", {
       systems: Array<{ id: string; name: string }>;
     }>
   > => ipcRenderer.invoke("scan-import-paths", paths),
+  previewImportMetadata: (
+    items: Array<{ fileName: string; systemId: string }>
+  ): Promise<
+    Array<{
+      genre: string;
+      developer: string;
+      publisher: string;
+      year: string;
+      players: string;
+      description: string;
+    }>
+  > => ipcRenderer.invoke("preview-import-metadata", items),
+  applyImportMetadata: (
+    entries: Array<{
+      systemId: string;
+      fileName: string;
+      fields: {
+        genre?: string;
+        developer?: string;
+        publisher?: string;
+        year?: string;
+        players?: string;
+        description?: string;
+      };
+    }>
+  ): Promise<{ ok: boolean }> => ipcRenderer.invoke("apply-import-metadata", entries),
+  listGameScreenshots: (systemId: string, fileName: string): Promise<string[]> =>
+    ipcRenderer.invoke("list-game-screenshots", systemId, fileName),
+  addGameScreenshot: (
+    systemId: string,
+    fileName: string,
+    sourcePath: string
+  ): Promise<{ success: boolean; path?: string; error?: string }> =>
+    ipcRenderer.invoke("add-game-screenshot", systemId, fileName, sourcePath),
+  deleteGameScreenshot: (
+    shotPath: string
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("delete-game-screenshot", shotPath),
+  captureGameScreenshot: (): Promise<{ success: boolean; path?: string; error?: string }> =>
+    ipcRenderer.invoke("capture-game-screenshot"),
+  onGameScreenshotCaptured: (
+    callback: (info: { systemId: string; fileName: string; path: string }) => void
+  ) => {
+    const listener = (_: unknown, info: { systemId: string; fileName: string; path: string }) =>
+      callback(info);
+    ipcRenderer.on("game-screenshot-captured", listener);
+    return () => ipcRenderer.removeListener("game-screenshot-captured", listener);
+  },
   addRoms: (
     entries: Array<{ filePath: string; systemId: string }>
   ): Promise<

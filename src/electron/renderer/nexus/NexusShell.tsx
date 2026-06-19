@@ -181,12 +181,39 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
 
   const handleImportConfirm = useCallback(
     async (selected: ImportItem[]) => {
-      const entries = selected
-        .filter((it) => it.system)
-        .map((it) => ({ filePath: it.filePath, systemId: it.system as string }));
-      if (entries.length === 0) return;
-      await window.electronAPI.addRoms(entries);
+      const chosen = selected.filter((it) => it.system);
+      if (chosen.length === 0) return;
+      // 1. Copy the ROMs into the library.
+      await window.electronAPI.addRoms(
+        chosen.map((it) => ({ filePath: it.filePath, systemId: it.system as string }))
+      );
+
+      // 2. Persist the metadata previewed during review (only fills empties).
+      const metaEntries = chosen
+        .filter((it) => it.meta && (it.meta.genre || it.meta.developer || it.meta.year))
+        .map((it) => ({ systemId: it.system as string, fileName: it.file, fields: it.meta! }));
+      if (metaEntries.length > 0) {
+        try {
+          await window.electronAPI.applyImportMetadata(metaEntries);
+        } catch (err) {
+          console.warn("[import] applyMetadata failed:", err);
+        }
+      }
+
+      // 3. Download the covers chosen during review (+ a hero for the ficha).
+      for (const it of chosen) {
+        if (it.coverFull) {
+          try {
+            await window.electronAPI.applySteamGridDbCandidate(it.system as string, it.file, it.coverFull);
+          } catch (err) {
+            console.warn("[import] applyCover failed:", err);
+          }
+        }
+      }
+
+      // 4. Reload library + metadata so the new games show their art/data.
       await app.refreshScan();
+      await app.loadAllMetadata();
     },
     [app]
   );

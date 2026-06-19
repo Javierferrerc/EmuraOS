@@ -56,6 +56,101 @@ export interface CascadeOptions {
   wikidata?: boolean;
 }
 
+export interface PreviewFields {
+  genre: string;
+  developer: string;
+  publisher: string;
+  year: string;
+  players: string;
+  description: string;
+}
+
+/**
+ * Dry-run of the cascade: resolves metadata fields for items by filename WITHOUT
+ * writing anything to the cache. Used by the importer to show género/año/etc.
+ * for files that aren't in the library yet — discarded if the user cancels,
+ * persisted (via the real cache) only on confirm.
+ */
+export async function previewMetadata(
+  items: { fileName: string; systemId: string }[],
+  cache: MetadataCache,
+  options: { systemMapPath: string; wikidata?: boolean }
+): Promise<PreviewFields[]> {
+  const libretro = new LibretroMetadataProvider(cache, { systemMapPath: options.systemMapPath });
+  const openvgdb = new OpenVgdbMetadataProvider(cache.getMetadataDir());
+  const wikidata = new WikidataMetadataProvider();
+  const useWikidata = options.wikidata !== false;
+
+  // Lazy per-system index caches.
+  const libIdx = new Map<string, Awaited<ReturnType<typeof libretro.loadIndex>>>();
+  const ovgIdx = new Map<string, Awaited<ReturnType<typeof openvgdb.loadIndex>>>();
+
+  const out: PreviewFields[] = [];
+  for (const item of items) {
+    const f: PreviewFields = {
+      genre: "",
+      developer: "",
+      publisher: "",
+      year: "",
+      players: "",
+      description: "",
+    };
+    const fill = (k: keyof PreviewFields, v: string | undefined) => {
+      if (v && !f[k]) f[k] = v;
+    };
+    try {
+      // libretro
+      if (!libIdx.has(item.systemId)) {
+        libIdx.set(item.systemId, await libretro.loadIndex(item.systemId).catch(() => null));
+      }
+      const li = libIdx.get(item.systemId);
+      if (li) {
+        const m = libretro.findMatch(item.fileName, li);
+        if (m) {
+          fill("genre", m.genre);
+          fill("developer", m.developer);
+          fill("publisher", m.publisher);
+          fill("year", m.releaseyear ? m.releaseyear.substring(0, 4) : undefined);
+          fill("players", m.users);
+        }
+      }
+      // OpenVGDB
+      if (openvgdb.supports(item.systemId) && (!f.genre || !f.developer || !f.year || !f.description)) {
+        if (!ovgIdx.has(item.systemId)) {
+          ovgIdx.set(item.systemId, await openvgdb.loadIndex(item.systemId).catch(() => null));
+        }
+        const oi = ovgIdx.get(item.systemId);
+        if (oi) {
+          const o = openvgdb.findMatch(item.fileName, oi);
+          if (o) {
+            fill("genre", o.genre);
+            fill("developer", o.developer);
+            fill("publisher", o.publisher);
+            fill("year", o.year);
+            fill("description", o.description);
+          }
+        }
+      }
+      // Wikidata
+      if (useWikidata && (!f.developer || !f.genre)) {
+        const w = await wikidata.lookup(cleanTitle(item.fileName), item.systemId);
+        if (w) {
+          fill("developer", w.developer);
+          fill("publisher", w.publisher);
+          fill("genre", w.genre);
+          fill("year", w.year);
+        }
+      }
+    } catch (err) {
+      console.warn("[preview-metadata] failed:", err instanceof Error ? err.message : err);
+    }
+    out.push(f);
+  }
+
+  openvgdb.close();
+  return out;
+}
+
 export async function runMetadataCascade(
   systems: { systemId: string; roms: DiscoveredRom[] }[],
   cache: MetadataCache,

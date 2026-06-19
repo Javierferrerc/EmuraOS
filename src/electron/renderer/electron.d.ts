@@ -271,6 +271,43 @@ export interface ElectronAPI {
       systems: Array<{ id: string; name: string }>;
     }>
   >;
+  previewImportMetadata(
+    items: Array<{ fileName: string; systemId: string }>
+  ): Promise<
+    Array<{
+      genre: string;
+      developer: string;
+      publisher: string;
+      year: string;
+      players: string;
+      description: string;
+    }>
+  >;
+  applyImportMetadata(
+    entries: Array<{
+      systemId: string;
+      fileName: string;
+      fields: {
+        genre?: string;
+        developer?: string;
+        publisher?: string;
+        year?: string;
+        players?: string;
+        description?: string;
+      };
+    }>
+  ): Promise<{ ok: boolean }>;
+  listGameScreenshots(systemId: string, fileName: string): Promise<string[]>;
+  addGameScreenshot(
+    systemId: string,
+    fileName: string,
+    sourcePath: string
+  ): Promise<{ success: boolean; path?: string; error?: string }>;
+  deleteGameScreenshot(shotPath: string): Promise<{ success: boolean; error?: string }>;
+  captureGameScreenshot(): Promise<{ success: boolean; path?: string; error?: string }>;
+  onGameScreenshotCaptured(
+    callback: (info: { systemId: string; fileName: string; path: string }) => void
+  ): () => void;
   addRoms(
     entries: Array<{ filePath: string; systemId: string }>
   ): Promise<

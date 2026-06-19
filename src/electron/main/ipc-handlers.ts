@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow, dialog, shell } from "electron";
+import { ipcMain, app, BrowserWindow, dialog, shell, desktopCapturer, screen, globalShortcut } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import path from "node:path";
 import os from "node:os";
@@ -27,7 +27,7 @@ import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { EmulatorReadiness } from "../../core/emulator-readiness.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
-import { runMetadataCascade } from "../../core/metadata-cascade.js";
+import { runMetadataCascade, previewMetadata } from "../../core/metadata-cascade.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import { SteamGridDb } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
@@ -1921,6 +1921,107 @@ export function registerIpcHandlers(
     }
   );
 
+  // --- Game screenshots (user uploads + in-game capture) ---
+
+  ipcMain.handle(
+    "list-game-screenshots",
+    (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown) => {
+      const sys = SystemIdSchema.parse(systemId);
+      const file = FileNameSchema.parse(fileName);
+      const cache = new MetadataCache(getProjectRoot());
+      return cache.listScreenshots(sys, file);
+    }
+  );
+
+  // Copy a user-picked image into the game's screenshot store.
+  ipcMain.handle(
+    "add-game-screenshot",
+    (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown, sourcePath: unknown) => {
+      const sys = SystemIdSchema.parse(systemId);
+      const file = FileNameSchema.parse(fileName);
+      const src = z.string().min(1).max(4000).parse(sourcePath);
+      if (!existsSync(src) || !/\.(png|jpe?g|webp)$/i.test(src)) {
+        return { success: false as const, error: "Imagen no válida." };
+      }
+      try {
+        const cache = new MetadataCache(getProjectRoot());
+        const ext = path.extname(src).slice(1) || "png";
+        const dest = cache.newScreenshotPath(sys, file, ext, Date.now());
+        copyFileSync(src, dest);
+        return { success: true as const, path: dest };
+      } catch (err) {
+        return { success: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+
+  ipcMain.handle("delete-game-screenshot", (_event: IpcMainInvokeEvent, shotPath: unknown) => {
+    const p = z.string().min(1).max(4000).parse(shotPath);
+    const cache = new MetadataCache(getProjectRoot());
+    if (!cache.isScreenshotPath(p)) return { success: false as const, error: "Ruta no permitida." };
+    try {
+      if (existsSync(p)) rmSync(p);
+      return { success: true as const };
+    } catch (err) {
+      return { success: false as const, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // Capture the embedded emulator (screen region of the game area) → saved as a
+  // screenshot of the running game. Triggered by F12 or the pause menu.
+  const captureGameScreenshot = async (): Promise<{ success: boolean; path?: string; error?: string }> => {
+    const rom = overlay?.getCurrentRom();
+    const bounds = overlay?.getCaptureBounds();
+    const win = getMainWindow();
+    if (!rom || !bounds || !win) return { success: false, error: "No hay ningún juego en marcha." };
+    try {
+      const display = screen.getDisplayMatching(win.getContentBounds());
+      const sf = display.scaleFactor;
+      const dispW = Math.round(display.size.width * sf);
+      const dispH = Math.round(display.size.height * sf);
+      const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width: dispW, height: dispH },
+      });
+      const src =
+        sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
+      if (!src) return { success: false, error: "No se pudo capturar la pantalla." };
+
+      let img = src.thumbnail;
+      const ts = img.getSize();
+      // Crop relative to this display's physical origin, clamped to the image.
+      const ox = Math.round(display.bounds.x * sf);
+      const oy = Math.round(display.bounds.y * sf);
+      const cx = Math.max(0, Math.min(bounds.x - ox, ts.width - 1));
+      const cy = Math.max(0, Math.min(bounds.y - oy, ts.height - 1));
+      const cw = Math.max(1, Math.min(bounds.width, ts.width - cx));
+      const ch = Math.max(1, Math.min(bounds.height, ts.height - cy));
+      img = img.crop({ x: cx, y: cy, width: cw, height: ch });
+
+      const cache = new MetadataCache(getProjectRoot());
+      const dest = cache.newScreenshotPath(rom.systemId, rom.fileName, "png", Date.now());
+      writeFileSync(dest, img.toPNG());
+      win.webContents.send("game-screenshot-captured", {
+        systemId: rom.systemId,
+        fileName: rom.fileName,
+        path: dest,
+      });
+      return { success: true, path: dest };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  ipcMain.handle("capture-game-screenshot", () => captureGameScreenshot());
+  // F12 captures the running game (no-op when nothing is playing). Registered
+  // globally so it works while the embedded emulator owns the foreground.
+  try {
+    globalShortcut.register("F12", () => {
+      if (overlay?.isActive()) void captureGameScreenshot();
+    });
+  } catch {
+    /* shortcut unavailable — the in-ficha upload + IPC still work */
+  }
+
   // --- Emulator Config handlers ---
 
   ipcMain.handle(
@@ -2223,6 +2324,78 @@ export function registerIpcHandlers(
         }
       }
       return out;
+    }
+  );
+
+  // Dry-run metadata lookup for files that aren't imported yet — used by the
+  // importer to preview género/año/etc. before the user confirms. Writes nothing.
+  const ImportPreviewSchema = z
+    .array(z.object({ fileName: FileNameSchema, systemId: SystemIdSchema }))
+    .min(1)
+    .max(500);
+  ipcMain.handle(
+    "preview-import-metadata",
+    async (_event: IpcMainInvokeEvent, items: unknown) => {
+      const validated = ImportPreviewSchema.parse(items);
+      const cache = new MetadataCache(getProjectRoot());
+      const systemMapPath = path.join(getDataPath(), "libretro-systems.json");
+      return previewMetadata(validated, cache, { systemMapPath });
+    }
+  );
+
+  // Persist previewed metadata for imported games (called on confirm). Fills
+  // only empty fields so any existing/manual data survives.
+  const ImportApplySchema = z
+    .array(
+      z.object({
+        systemId: SystemIdSchema,
+        fileName: FileNameSchema,
+        fields: z.object({
+          genre: z.string().max(200).optional(),
+          developer: z.string().max(200).optional(),
+          publisher: z.string().max(200).optional(),
+          year: z.string().max(20).optional(),
+          players: z.string().max(20).optional(),
+          description: z.string().max(4000).optional(),
+        }),
+      })
+    )
+    .max(500);
+  ipcMain.handle(
+    "apply-import-metadata",
+    (_event: IpcMainInvokeEvent, entries: unknown) => {
+      const validated = ImportApplySchema.parse(entries);
+      const cache = new MetadataCache(getProjectRoot());
+      for (const e of validated) {
+        const existing = cache.getMetadata(e.systemId, e.fileName);
+        const base = existing ?? {
+          title: "",
+          description: "",
+          year: "",
+          genre: "",
+          publisher: "",
+          developer: "",
+          players: "",
+          rating: "",
+          coverPath: "",
+          screenshotPath: "",
+          screenScraperId: "",
+          lastScraped: "",
+        };
+        const f = e.fields;
+        const merged = {
+          ...base,
+          genre: base.genre || f.genre || "",
+          developer: base.developer || f.developer || "",
+          publisher: base.publisher || f.publisher || "",
+          year: base.year || f.year || "",
+          players: base.players || f.players || "",
+          description: base.description || f.description || "",
+          lastScraped: new Date().toISOString(),
+        };
+        cache.setMetadata(e.systemId, e.fileName, merged);
+      }
+      return { ok: true };
     }
   );
 
