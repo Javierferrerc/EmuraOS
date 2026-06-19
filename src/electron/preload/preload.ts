@@ -354,7 +354,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
-  downloadUpdate: (url: string) => ipcRenderer.invoke("download-update", url),
+  downloadUpdate: () => ipcRenderer.invoke("download-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   getDownloadedInstallerPath: () =>
     ipcRenderer.invoke("get-downloaded-installer-path"),
@@ -364,6 +364,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-download-progress", listener);
     return () => {
       ipcRenderer.removeListener("update-download-progress", listener);
+    };
+  },
+  // Fired once the background download finishes and a restart will apply it.
+  onUpdateReady: (callback: (info: unknown) => void) => {
+    const listener = (_: unknown, info: unknown) => callback(info);
+    ipcRenderer.on("update-ready", listener);
+    return () => {
+      ipcRenderer.removeListener("update-ready", listener);
+    };
+  },
+  onUpdateError: (callback: (message: string) => void) => {
+    const listener = (_: unknown, message: string) => callback(message);
+    ipcRenderer.on("update-error", listener);
+    return () => {
+      ipcRenderer.removeListener("update-error", listener);
     };
   },
   onStartupUpdateCheck: (callback: () => void) => {

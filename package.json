@@ -42,6 +42,7 @@
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "dotenv": "^17.4.1",
+    "electron-updater": "^6.8.9",
     "enquirer": "^2.4.1",
     "glob": "^11.0.1",
     "koffi": "^2.15.2",

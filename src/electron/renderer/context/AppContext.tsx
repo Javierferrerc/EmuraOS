@@ -692,13 +692,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [downloadingEmulatorId]);
 
   // ── Auto-update ──────────────────────────────────────────────────
+  // "Automatic with notification": checking kicks off a background download
+  // (autoDownload in the main process). We don't surface anything yet — the
+  // modal only appears once the package is fully downloaded and ready, via
+  // the `update-ready` event handled below.
   const checkForUpdates = useCallback(async () => {
     try {
-      const result = await window.electronAPI.checkForUpdates();
-      if (result.available && result.updateInfo) {
-        setUpdateInfo(result.updateInfo);
-        setIsUpdateModalOpen(true);
-      }
+      await window.electronAPI.checkForUpdates();
     } catch (err) {
       console.warn("Update check failed:", err);
     }
@@ -921,6 +921,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unsubscribe();
     };
   }, [checkForUpdates]);
+
+  // The background download finished — now prompt the user to restart.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onUpdateReady((info) => {
+      setUpdateInfo(info);
+      setIsUpdateModalOpen(true);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const updatePlayStats = useCallback((rom: DiscoveredRom) => {
     const key = `${rom.systemId}:${rom.fileName}`;

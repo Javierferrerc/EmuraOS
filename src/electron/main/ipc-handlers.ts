@@ -2723,7 +2723,12 @@ export function registerIpcHandlers(
   );
 
   // ── Auto-Update handlers ──────────────────────────────────────────
-  const autoUpdater = new AutoUpdater();
+  // The updater emits events outside the request/response cycle (download
+  // progress, "ready", errors), so it pushes them to the live main window
+  // rather than replying to a specific invoke.
+  const autoUpdater = new AutoUpdater((event) => {
+    getMainWindow()?.webContents.send(event.channel, event.payload);
+  });
 
   ipcMain.handle("check-for-updates", async () => {
     try {
@@ -2734,15 +2739,9 @@ export function registerIpcHandlers(
     }
   });
 
-  ipcMain.handle(
-    "download-update",
-    async (event, url: unknown) => {
-      const validatedUrl = UrlSchema.parse(url);
-      return await autoUpdater.downloadUpdate(validatedUrl, (progress) => {
-        event.sender.send("update-download-progress", progress);
-      });
-    }
-  );
+  ipcMain.handle("download-update", async () => {
+    await autoUpdater.downloadUpdate();
+  });
 
   ipcMain.handle("install-update", async () => {
     await autoUpdater.installUpdate();
