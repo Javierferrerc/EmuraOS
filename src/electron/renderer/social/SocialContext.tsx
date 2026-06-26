@@ -126,12 +126,19 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     api
       .getSession()
       .then((s) => {
-        if (!cancelled) setUser(s?.user ?? null);
+        if (cancelled) return;
+        setUser(s?.user ?? null);
+        // Stash the restored session in the multi-account vault so this account
+        // can be re-entered without a password after switching users.
+        if (s?.user) void api.rememberCurrentSession();
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    const off = api.onAuthChange((u) => setUser(u));
+    const off = api.onAuthChange((u) => {
+      setUser(u);
+      if (u) void api.rememberCurrentSession();
+    });
     return () => {
       cancelled = true;
       off();
@@ -293,6 +300,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Explicit "Cerrar sesión" = a real logout for THIS account: drop its
+    // remembered session so it asks for a password next time (switching users
+    // does NOT call this, so other accounts stay remembered).
+    const uid = userRef.current?.id;
+    if (uid) api.forgetRememberedSession(uid);
     await api.signOut();
     setUser(null);
   }, []);

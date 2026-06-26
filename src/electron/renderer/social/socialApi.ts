@@ -13,6 +13,7 @@
 
 import type { RealtimeChannel, Session, User } from "@supabase/supabase-js";
 import { getSupabase } from "./supabaseClient";
+import * as vault from "./sessionVault";
 import type {
   ActivityItem,
   FriendEdge,
@@ -34,6 +35,23 @@ export type MediaBucket = "avatars" | "banners" | "screenshots";
 /** Public URL for an object in a public Storage bucket. */
 export function publicMediaUrl(bucket: MediaBucket, path: string): string {
   return db().storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+/** Decode a `data:` URL into a Blob WITHOUT `fetch()`. The renderer CSP's
+ *  connect-src doesn't allow `data:`, so `fetch(dataUrl)` throws "Failed to
+ *  fetch" — this manual decode sidesteps that entirely. */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(",");
+  const head = dataUrl.slice(0, comma);
+  const body = dataUrl.slice(comma + 1);
+  const type = /^data:([^;,]+)/.exec(head)?.[1] || "application/octet-stream";
+  if (/;base64/i.test(head)) {
+    const bin = atob(body);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type });
+  }
+  return new Blob([decodeURIComponent(body)], { type });
 }
 
 /** Upload an image into the caller's folder ("<uid>/…") in a public bucket and
@@ -124,6 +142,55 @@ export async function getSession(): Promise<Session | null> {
 export function onAuthChange(cb: (user: User | null) => void): () => void {
   const { data } = db().auth.onAuthStateChange((_event, session) => cb(session?.user ?? null));
   return () => data.subscription.unsubscribe();
+}
+
+// ── Multi-account session vault ────────────────────────────────────────────
+/** Persist the CURRENT session into the multi-account vault (keyed by user id)
+ *  so this account can be re-entered later without a password. Call on sign-in
+ *  and on token refresh. */
+export async function rememberCurrentSession(): Promise<void> {
+  const { data } = await db().auth.getSession();
+  const s = data.session;
+  if (s?.user && s.access_token && s.refresh_token) {
+    vault.rememberSession(s.user.id, {
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+    });
+  }
+}
+
+/** Restore a remembered account's session (no password). Returns its user, or
+ *  null if there is no stored session or its refresh token is no longer valid
+ *  (in which case the stale entry is dropped). */
+export async function restoreSession(userId: string): Promise<User | null> {
+  const stored = vault.getRememberedSession(userId);
+  if (!stored) return null;
+  const { data, error } = await db().auth.setSession(stored);
+  if (error || !data.session?.user) {
+    vault.forgetSession(userId);
+    return null;
+  }
+  // Tokens may have rotated on refresh — persist the fresh pair.
+  vault.rememberSession(data.session.user.id, {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  });
+  return data.session.user;
+}
+
+/** Drop a single account from the vault (explicit "Cerrar sesión"). */
+export function forgetRememberedSession(userId: string): void {
+  vault.forgetSession(userId);
+}
+
+/** Ids of accounts with a remembered session on this machine. */
+export function listRememberedAccounts(): string[] {
+  return vault.listRememberedUserIds();
+}
+
+/** Does this account have a password-less session stored? */
+export function hasRememberedSession(userId: string): boolean {
+  return vault.hasRememberedSession(userId);
 }
 
 export async function signUpEmail(email: string, password: string): Promise<void> {
@@ -463,6 +530,55 @@ export async function searchProfiles(query: string, limit = 20): Promise<Profile
   });
   if (error) throw error;
   return (data ?? []) as Profile[];
+}
+
+// ── Showcase cover sharing ────────────────────────────────────────────────
+// Pinned-game covers are LOCAL thumbnails (data URLs), so other accounts can't
+// see them. We upload each pinned cover once to a stable per-game path in the
+// public 'screenshots' bucket and cache the resulting URL by game key, so the
+// showcase renders real box art for everyone. (Covers live in the screenshots
+// bucket but never appear in the captures gallery — that reads the screenshots
+// TABLE, not the bucket.)
+const COVER_CACHE_KEY = "nx.coverCloud";
+
+function loadCoverCache(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+function saveCoverCache(c: Record<string, string>): void {
+  try {
+    localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(c));
+  } catch {
+    /* non-fatal */
+  }
+}
+function coverHash(key: string): string {
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** Upload a pinned game's cover (a data URL) to Storage and return its public
+ *  URL, caching by game key so repeat syncs don't re-upload. */
+export async function uploadCoverDataUrl(key: string, dataUrl: string): Promise<string | null> {
+  if (!dataUrl.startsWith("data:")) return dataUrl; // already a shareable URL
+  const cache = loadCoverCache();
+  if (cache[key]) return cache[key];
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return null;
+  const blob = dataUrlToBlob(dataUrl);
+  const path = `${u.user.id}/cover-${coverHash(key)}.png`;
+  const { error } = await db()
+    .storage.from("screenshots")
+    .upload(path, blob, { upsert: true, contentType: blob.type || "image/png" });
+  if (error) throw error;
+  const url = publicMediaUrl("screenshots", path);
+  cache[key] = url;
+  saveCoverCache(cache);
+  return url;
 }
 
 /** Best-effort delete of a Storage object from its public URL. No-op for

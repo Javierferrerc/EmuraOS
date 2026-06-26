@@ -175,6 +175,106 @@ export function NexusPublicProfile({
                 )}
                 <div className="pp-cover-scrim" />
               </div>
+
+              {/* Floating actions — top-right of the banner */}
+              {relation !== "self" && (
+                <div className="pp-actions">
+                  <div className="pp-actions-row">
+                    {relation === "none" && (
+                      <button
+                        className="pp-act primary"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void sendRequest()}
+                      >
+                        {busy ? "…" : "Añadir amigo"}
+                      </button>
+                    )}
+                    {relation === "incoming" && (
+                      <button
+                        className="pp-act primary"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void acceptRequest()}
+                      >
+                        {busy ? "…" : "Aceptar"}
+                      </button>
+                    )}
+                    {relation === "outgoing" && (
+                      <button className="pp-act" type="button" disabled>
+                        Solicitud enviada
+                      </button>
+                    )}
+                    {relation === "friends" && (
+                      <button className="pp-act" type="button" disabled>
+                        <CheckIcon size={15} /> Amigos
+                      </button>
+                    )}
+                    {relation === "blocked" && (
+                      <button
+                        className="pp-act"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void unblock()}
+                      >
+                        {busy ? "…" : "Desbloquear"}
+                      </button>
+                    )}
+                    {relation !== "blocked" && (
+                      <button
+                        className="pp-act"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void block()}
+                      >
+                        Bloquear
+                      </button>
+                    )}
+                    <button
+                      className="pp-act danger"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setReportOpen((o) => !o)}
+                    >
+                      Reportar
+                    </button>
+                  </div>
+
+                  {reportOpen && (
+                    <div className="pp-report-pop">
+                      <textarea
+                        className="ct-input"
+                        placeholder="Motivo del reporte (opcional)…"
+                        value={reportReason}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        rows={3}
+                        style={{ width: "100%", resize: "vertical" }}
+                      />
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button
+                          className="pp-act primary"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void submitReport()}
+                        >
+                          {busy ? "…" : "Enviar"}
+                        </button>
+                        <button
+                          className="pp-act"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setReportOpen(false)}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {actionMsg && <span className="pp-action-msg">{actionMsg}</span>}
+                </div>
+              )}
+
               <div className="pp-id">
                 <div className="pp-avatar">
                   {profile?.avatar_url ? (
@@ -188,115 +288,6 @@ export function NexusPublicProfile({
                   <h1 className="pp-name">{name}</h1>
                   {handle && <div className="pp-handle">{handle}</div>}
                   {profile?.status ? <p className="pp-status">{profile.status}</p> : null}
-
-                  {relation !== "self" && (
-                    <div className="pp-actions" style={{ marginTop: 12 }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        {relation === "none" && (
-                          <button
-                            className="pf-act-btn primary"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void sendRequest()}
-                          >
-                            {busy ? "…" : "Añadir amigo"}
-                          </button>
-                        )}
-                        {relation === "incoming" && (
-                          <button
-                            className="pf-act-btn primary"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void acceptRequest()}
-                          >
-                            {busy ? "…" : "Aceptar solicitud"}
-                          </button>
-                        )}
-                        {relation === "outgoing" && (
-                          <button className="pf-act-btn" type="button" disabled>
-                            Solicitud enviada
-                          </button>
-                        )}
-                        {relation === "friends" && (
-                          <button className="pf-act-btn" type="button" disabled>
-                            <CheckIcon size={15} /> Amigos
-                          </button>
-                        )}
-                        {relation === "blocked" && (
-                          <button
-                            className="pf-act-btn"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void unblock()}
-                          >
-                            {busy ? "…" : "Desbloquear"}
-                          </button>
-                        )}
-
-                        {/* Secondary: block / report */}
-                        {relation !== "blocked" && (
-                          <button
-                            className="pf-act-btn"
-                            type="button"
-                            disabled={busy}
-                            style={{ opacity: 0.85 }}
-                            onClick={() => void block()}
-                          >
-                            Bloquear
-                          </button>
-                        )}
-                        <button
-                          className="pf-act-btn"
-                          type="button"
-                          disabled={busy}
-                          style={{ opacity: 0.85 }}
-                          onClick={() => setReportOpen((o) => !o)}
-                        >
-                          Reportar
-                        </button>
-                      </div>
-
-                      {reportOpen && (
-                        <div className="pp-report" style={{ marginTop: 10 }}>
-                          <textarea
-                            className="ct-input"
-                            placeholder="Motivo del reporte (opcional)…"
-                            value={reportReason}
-                            onChange={(e) => setReportReason(e.target.value)}
-                            rows={3}
-                            style={{ width: "100%", resize: "vertical" }}
-                          />
-                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                            <button
-                              className="pf-act-btn primary"
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void submitReport()}
-                            >
-                              {busy ? "…" : "Enviar reporte"}
-                            </button>
-                            <button
-                              className="pf-act-btn"
-                              type="button"
-                              disabled={busy}
-                              onClick={() => setReportOpen(false)}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {actionMsg && (
-                        <span
-                          className="pp-action-msg"
-                          style={{ display: "block", marginTop: 8, fontSize: 13, opacity: 0.8 }}
-                        >
-                          {actionMsg}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

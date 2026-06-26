@@ -17,7 +17,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSocialConfigured } from "../../social/supabaseClient";
-import { signInWithIdentifier, getMyProfile, signOut } from "../../social/socialApi";
+import {
+  signInWithIdentifier,
+  getMyProfile,
+  signOut,
+  restoreSession,
+  forgetRememberedSession,
+} from "../../social/socialApi";
 import { loadProfileEdit } from "../profile/nexusProfileData";
 import { NexusRegisterModal } from "../profile/NexusRegisterModal";
 import { SocialProvider } from "../../social/SocialContext";
@@ -697,20 +703,33 @@ export function NexusProfileSelect({
       // this is a different account), ask the user to log in first. We confirm
       // with the backend in case the session was still resolving on mount.
       if (p.account && isSocialConfigured() && sessionAccountId !== p.id) {
-        void getMyProfile()
-          .then((prof) => {
+        void (async () => {
+          // Is this account already the live Supabase session?
+          try {
+            const prof = await getMyProfile();
             if (prof && prof.id === p.id) {
               setSessionAccountId(p.id);
               enterProfile(p);
-            } else {
-              playSound("open");
-              setLoginTarget(p);
+              return;
             }
-          })
-          .catch(() => {
-            playSound("open");
-            setLoginTarget(p);
-          });
+          } catch {
+            /* fall through to restore / login */
+          }
+          // A remembered session for THIS account → restore it (no password).
+          try {
+            const restored = await restoreSession(p.id);
+            if (restored && restored.id === p.id) {
+              setSessionAccountId(p.id);
+              enterProfile(p);
+              return;
+            }
+          } catch {
+            /* fall through to login */
+          }
+          // No stored session (or it expired) → ask for the password.
+          playSound("open");
+          setLoginTarget(p);
+        })();
         return;
       }
       enterProfile(p);
@@ -942,9 +961,13 @@ export function NexusProfileSelect({
             // Forget it as the "last used" profile so it isn't re-highlighted.
             if (loadActiveId() === target.id) saveActiveId(null);
             // Account profiles are re-derived from the persisted Supabase
-            // session on every selector mount; sign out so the deletion sticks
-            // across remounts ("Cambiar de usuario") and app restarts.
-            if (target.account) void signOut().catch(() => {});
+            // session on every selector mount; drop this account's remembered
+            // session and sign out so the deletion sticks across remounts
+            // ("Cambiar de usuario") and app restarts.
+            if (target.account) {
+              forgetRememberedSession(target.id);
+              void signOut().catch(() => {});
+            }
             setEditTarget(null);
             playSound("back");
           }}
