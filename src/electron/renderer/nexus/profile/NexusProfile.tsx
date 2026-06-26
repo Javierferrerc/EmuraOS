@@ -9,11 +9,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useSocial } from "../../social/SocialContext";
+import { uploadProfileImage, deleteMediaByUrl, type MediaBucket } from "../../social/socialApi";
 import type { NexusGame } from "../nexusModel";
 import type { SgdbCandidate } from "../../../../core/types";
 import { NexusCover } from "../NexusCover";
 import { NexusGameCard } from "../NexusGameCard";
 import { NexusFriends } from "./NexusFriends";
+import { NexusPublicProfile } from "./NexusPublicProfile";
+import { NexusProfileShots } from "./NexusProfileShots";
 import {
   buildProfileStats,
   loadProfileEdit,
@@ -44,8 +47,31 @@ import {
 } from "../NexusIcons";
 import "./nexus-profile.css";
 
+/**
+ * Resolve a profile image value to a shareable cloud URL so other accounts can
+ * see it:
+ *  - data: URL (uploaded / dragged file) → upload to Storage, return public URL
+ *  - http(s) URL (e.g. SteamGridDB) → keep as-is
+ *  - null → null
+ */
+async function resolveCloudImage(
+  bucket: MediaBucket,
+  value: string | null
+): Promise<string | null> {
+  if (!value) return null;
+  if (value.startsWith("data:")) {
+    const blob = await (await fetch(value)).blob();
+    const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+    const { url } = await uploadProfileImage(bucket, blob, ext);
+    return url;
+  }
+  return value;
+}
+
 interface NexusProfileProps {
   onBack: () => void;
+  /** Llamado tras cerrar sesión: vuelve al selector de perfiles. */
+  onSignedOut?: () => void;
   allGames: NexusGame[];
   isFavorite: (game: NexusGame) => boolean;
   onOpen: (game: NexusGame) => void;
@@ -57,6 +83,7 @@ type Tab = "resumen" | "amigos" | "actividad";
 
 export function NexusProfile({
   onBack,
+  onSignedOut,
   allGames,
   isFavorite,
   onOpen,
@@ -85,6 +112,8 @@ export function NexusProfile({
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false); // "Editar perfil" modal (nombre + estado)
+  const [leaving, setLeaving] = useState(false); // animación de salida al cerrar sesión
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null); // ver perfil de otro
 
   // Current (non-editing) identity, account-first.
   const current: NexusProfileEdit = {
@@ -170,11 +199,26 @@ export function NexusProfile({
     // Pinned (and a local cache of name/status) always persist locally.
     setLocal(next);
     saveProfileEdit(next);
-    // When signed in, the name/status belong to the account — sync them.
+    // When signed in, name/status/showcase/stats belong to the account — sync
+    // them so other accounts can see this profile.
     if (signedIn) {
       setSavingProfile(true);
       try {
-        await social.updateProfile({ display_name: next.name, status: next.status });
+        const pinnedPayload = next.pinned
+          .map((k) => gamesByKey.get(k))
+          .filter((g): g is NexusGame => !!g)
+          .map((g) => ({ title: g.title, system: g.systemName ?? null, cover_url: null }));
+        await social.updateProfile({
+          display_name: next.name,
+          status: next.status,
+          pinned: pinnedPayload,
+          stats: {
+            play_seconds: stats.totalSeconds,
+            games: stats.ownedGames,
+            level: stats.level,
+            xp: stats.xpTotal,
+          },
+        });
       } catch (err) {
         console.warn("[profile] updateProfile failed:", err);
       } finally {
@@ -182,7 +226,7 @@ export function NexusProfile({
       }
     }
     setEditing(false);
-  }, [draft, fallbackName, signedIn, social]);
+  }, [draft, fallbackName, signedIn, social, gamesByKey, stats]);
   // Save handler for the "Editar perfil" modal (name + status only; pins are
   // managed separately on the page). Mirrors saveEdit's persistence logic.
   const saveInfo = useCallback(
@@ -194,28 +238,49 @@ export function NexusProfile({
     }) => {
       const name = next.name.trim() || fallbackName;
       const status = next.status.trim();
-      const merged: NexusProfileEdit = {
-        name,
-        status,
-        pinned: local.pinned,
-        bannerUrl: next.bannerUrl,
-        avatarUrl: next.avatarUrl,
-      };
-      setLocal(merged);
-      saveProfileEdit(merged);
+      let bannerUrl = next.bannerUrl;
+      let avatarUrl = next.avatarUrl;
+      // Signed in: push foto/portada to the cloud (uploading any file/data URL
+      // to Storage) so other accounts can see them, and keep the resulting
+      // cloud URLs locally (avoids re-uploading the same image on the next save).
       if (signedIn) {
         setSavingProfile(true);
+        const prevAvatar = local.avatarUrl;
+        const prevBanner = local.bannerUrl;
         try {
-          await social.updateProfile({ display_name: name, status });
+          [avatarUrl, bannerUrl] = await Promise.all([
+            resolveCloudImage("avatars", next.avatarUrl),
+            resolveCloudImage("banners", next.bannerUrl),
+          ]);
+          await social.updateProfile({
+            display_name: name,
+            status,
+            avatar_url: avatarUrl,
+            banner_url: bannerUrl,
+          });
+          // Delete the previous Storage objects we just replaced so old avatars
+          // / banners don't pile up as orphans in the bucket (no-op for non-
+          // Storage URLs like SteamGridDB).
+          if (prevAvatar && prevAvatar !== avatarUrl) void deleteMediaByUrl(prevAvatar);
+          if (prevBanner && prevBanner !== bannerUrl) void deleteMediaByUrl(prevBanner);
         } catch (err) {
           console.warn("[profile] updateProfile failed:", err);
         } finally {
           setSavingProfile(false);
         }
       }
+      const merged: NexusProfileEdit = {
+        name,
+        status,
+        pinned: local.pinned,
+        bannerUrl,
+        avatarUrl,
+      };
+      setLocal(merged);
+      saveProfileEdit(merged);
       setInfoOpen(false);
     },
-    [local.pinned, fallbackName, signedIn, social]
+    [local.pinned, local.avatarUrl, local.bannerUrl, fallbackName, signedIn, social]
   );
 
   const removePin = (key: string) =>
@@ -228,7 +293,7 @@ export function NexusProfile({
     );
 
   return (
-    <div className="profile">
+    <div className={"profile" + (leaving ? " pf-leaving" : "")}>
       <div className="pf-topbar">
         <button className="pf-back" onClick={onBack}>
           <BackIcon size={17} /> Biblioteca
@@ -297,7 +362,26 @@ export function NexusProfile({
                         role="menuitem"
                         onClick={() => {
                           setMenuOpen(false);
-                          void social.signOut();
+                          // Reproduce la animación de salida del perfil y luego
+                          // vuelve al selector. Esperamos a que TERMINEN tanto la
+                          // animación como signOut antes de navegar: así la shell
+                          // no se desmonta a media animación y el selector se
+                          // monta ya sin sesión (la cuenta queda bloqueada hasta
+                          // volver a iniciar sesión). Navegamos aunque signOut
+                          // falle para no quedar atascados en un perfil sin sesión.
+                          setLeaving(true);
+                          void (async () => {
+                            const animDone = new Promise<void>((r) =>
+                              window.setTimeout(r, 430)
+                            );
+                            try {
+                              await social.signOut();
+                            } catch (e) {
+                              console.warn("[profile] signOut failed:", e);
+                            }
+                            await animDone;
+                            onSignedOut?.();
+                          })();
                         }}
                       >
                         Cerrar sesión
@@ -470,12 +554,17 @@ export function NexusProfile({
                   </div>
                 )}
               </div>
+              {signedIn && social.user && (
+                <div className="pf-section">
+                  <NexusProfileShots userId={social.user.id} />
+                </div>
+              )}
             </>
           )}
 
           {tab === "amigos" && (
             <div className="pf-section">
-              <NexusFriends />
+              <NexusFriends onViewProfile={(id) => setViewingUserId(id)} />
             </div>
           )}
 
@@ -518,6 +607,10 @@ export function NexusProfile({
           }}
           onSave={(vals) => void saveInfo(vals)}
         />
+      )}
+
+      {viewingUserId && (
+        <NexusPublicProfile userId={viewingUserId} onBack={() => setViewingUserId(null)} />
       )}
     </div>
   );

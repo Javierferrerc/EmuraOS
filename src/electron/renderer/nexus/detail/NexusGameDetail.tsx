@@ -594,7 +594,6 @@ export function NexusGameDetail({
             {showCompat && <Seal compat={compat} />}
           </div>
           <h1 className="gd-title">{game.title}</h1>
-          {game.blurb && <p className="gd-tagline">{game.blurb}</p>}
           {actions}
         </div>
       </header>

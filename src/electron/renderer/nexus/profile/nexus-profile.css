@@ -46,7 +46,15 @@
   }
 }
 .nexus-root .profile .pf-cover {
-  animation: pfViewCoverIn 0.6s cubic-bezier(0.16, 0.84, 0.34, 1) both;
+  /* `backwards` (not `both`): apply the entrance `from` state before the
+     animation, but DON'T retain the `to` state afterwards. With `both` the
+     resting `transform: scale(1)` lingers, which turns .pf-cover into a
+     stacking context and traps the account popover's z-index:5 inside it —
+     the .pf-id block (z-index:2, pulled up over the cover by margin-top:-76px)
+     would then paint over the bottom of the popover, killing hover/click on
+     "Cerrar sesión". `backwards` leaves transform:none at rest, so the popover
+     stacks above .pf-id while the banner still sits below the avatar. */
+  animation: pfViewCoverIn 0.6s cubic-bezier(0.16, 0.84, 0.34, 1) backwards;
 }
 .nexus-root .profile .pf-id {
   animation: pfViewRise 0.5s cubic-bezier(0.16, 0.84, 0.34, 1) both;
@@ -59,6 +67,19 @@
 .nexus-root .profile .pf-back {
   animation: pfViewFade 0.4s ease both;
   animation-delay: 0.2s;
+}
+/* Exit — played when signing out (.pf-leaving) before the shell unmounts and
+ * the profile selector takes over. Mirrors the entrance: fade + slight
+ * zoom-out + drop. `forwards` holds the hidden end state until we navigate. */
+@keyframes pfViewOut {
+  to {
+    opacity: 0;
+    transform: scale(0.965) translateY(12px);
+  }
+}
+.nexus-root .profile.pf-leaving {
+  animation: pfViewOut 0.42s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  pointer-events: none;
 }
 .nexus-root .pf-scroll {
   flex: 1;
@@ -994,6 +1015,13 @@
   font-weight: 800;
   color: #fff;
   position: relative;
+}
+.nexus-root .fr-ava-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 .nexus-root .fr-pres {
   position: absolute;
@@ -2091,3 +2119,15 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ── Galería de capturas (perfil propio) ── */
+.nexus-root .nps-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.nexus-root .nps-title { font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
+.nexus-root .nps-head .pf-act-btn { margin-left: auto; }
+.nexus-root .nps-empty { font-size: 13px; color: var(--text-faint); }
+.nexus-root .nps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.nexus-root .nps-item { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--panel); }
+.nexus-root .nps-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nexus-root .nps-del { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(8, 10, 15, 0.7); color: #ff97a6; opacity: 0; transition: opacity .14s, background .14s; }
+.nexus-root .nps-item:hover .nps-del { opacity: 1; }
+.nexus-root .nps-del:hover { background: color-mix(in oklab, var(--bad) 30%, rgba(8,10,15,.7)); }

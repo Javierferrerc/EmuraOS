@@ -46,6 +46,8 @@ import "./nexus.css";
 
 interface NexusShellProps {
   onOpenSettings: () => void;
+  /** Volver al selector de perfiles (p. ej. tras cerrar sesión). */
+  onSwitchUser?: () => void;
 }
 
 const LS_PLATFORM = "nx.platform";
@@ -55,7 +57,7 @@ const LS_ROM_GUIDE = "nx.romGuideSeen";
 
 type NexusNav = "rail" | "sidebar";
 
-export function NexusShell({ onOpenSettings }: NexusShellProps) {
+export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
   const app = useApp();
   const {
     scanResult,
@@ -487,6 +489,7 @@ export function NexusShell({ onOpenSettings }: NexusShellProps) {
         {profileOpen ? (
           <NexusProfile
             onBack={() => setProfileOpen(false)}
+            onSignedOut={onSwitchUser}
             allGames={allGames}
             isFavorite={checkFavorite}
             onOpen={setDetailGame}

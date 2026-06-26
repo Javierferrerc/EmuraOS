@@ -19,12 +19,100 @@ import type {
   Friendship,
   PresenceState,
   Profile,
+  ProfileScreenshot,
 } from "./socialTypes";
 
 function db() {
   const c = getSupabase();
   if (!c) throw new Error("Social layer not configured (missing Supabase credentials).");
   return c;
+}
+
+// ── Cloud media (avatars / banners / screenshots) ──────────────────────────
+export type MediaBucket = "avatars" | "banners" | "screenshots";
+
+/** Public URL for an object in a public Storage bucket. */
+export function publicMediaUrl(bucket: MediaBucket, path: string): string {
+  return db().storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+/** Upload an image into the caller's folder ("<uid>/…") in a public bucket and
+ *  return its path + public URL. The path prefix is enforced by Storage RLS. */
+export async function uploadProfileImage(
+  bucket: MediaBucket,
+  file: Blob,
+  ext = "png"
+): Promise<{ path: string; url: string }> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const path = `${u.user.id}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await db().storage.from(bucket).upload(path, file, {
+    upsert: true,
+    contentType: file.type || `image/${ext}`,
+  });
+  if (error) throw error;
+  return { path, url: publicMediaUrl(bucket, path) };
+}
+
+/** Read any user's PUBLIC profile (safe fields only; honors show_name/age). */
+export async function getPublicProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await db().rpc("get_public_profile", { p_user_id: userId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as Profile) ?? null;
+}
+
+/** Read any user's PUBLIC profile by handle (username + #tag). */
+export async function getPublicProfileByHandle(
+  username: string,
+  tag: string
+): Promise<Profile | null> {
+  const { data, error } = await db().rpc("get_public_profile_by_handle", {
+    p_username: username,
+    p_tag: tag,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as Profile) ?? null;
+}
+
+/** List a user's screenshots (public), with resolved public URLs. */
+export async function listScreenshots(userId: string): Promise<ProfileScreenshot[]> {
+  const { data, error } = await db().rpc("list_public_screenshots", { p_user_id: userId });
+  if (error) throw error;
+  const rows = (data ?? []) as ProfileScreenshot[];
+  return rows.map((r) => ({ ...r, url: publicMediaUrl("screenshots", r.storage_path) }));
+}
+
+/** Upload a screenshot to the caller's gallery and return the stored row. */
+export async function addScreenshot(
+  file: Blob,
+  caption?: string,
+  gameRef?: string
+): Promise<ProfileScreenshot> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { path } = await uploadProfileImage("screenshots", file, "png");
+  const { data, error } = await db()
+    .from("screenshots")
+    .insert({
+      user_id: u.user.id,
+      storage_path: path,
+      caption: caption ?? null,
+      game_ref: gameRef ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  const row = data as ProfileScreenshot;
+  return { ...row, url: publicMediaUrl("screenshots", row.storage_path) };
+}
+
+/** Delete one of the caller's screenshots (row + stored file). */
+export async function deleteScreenshot(id: string, storagePath: string): Promise<void> {
+  await db().storage.from("screenshots").remove([storagePath]);
+  const { error } = await db().from("screenshots").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
@@ -59,19 +147,28 @@ export interface SignUpProfile {
   recovery_email: string;
 }
 
+/** Result of a sign-up: the new auth user id (present even when email
+ *  confirmation is pending) and whether Supabase returned a live session
+ *  (true only when email confirmation is disabled / auto-confirm). */
+export interface SignUpResult {
+  userId: string | null;
+  hasSession: boolean;
+}
+
 /** Full sign-up from the registration modal: creates the auth user and lets the
  *  trigger build the profile from the supplied metadata. */
 export async function signUpWithProfile(
   email: string,
   password: string,
   profile: SignUpProfile
-): Promise<void> {
-  const { error } = await db().auth.signUp({
+): Promise<SignUpResult> {
+  const { data, error } = await db().auth.signUp({
     email,
     password,
     options: { data: { ...profile, user_tag: profile.user_tag.toUpperCase() } },
   });
   if (error) throw error;
+  return { userId: data.user?.id ?? null, hasSession: !!data.session };
 }
 
 /** Live availability check for a username (anon-callable). True = free. */
@@ -88,6 +185,24 @@ export async function isUserTagAvailable(tag: string): Promise<boolean> {
   return Boolean(data);
 }
 
+/** Availability of a full handle (username + #ID). Riot-style: the PAIR must be
+ *  free — the username and tag may each repeat on their own. True = free. */
+export async function isHandleAvailable(name: string, tag: string): Promise<boolean> {
+  const { data, error } = await db().rpc("handle_available", { p_name: name, p_tag: tag });
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/** Resolve a handle (username + tag) to its account email (for handle sign-in). */
+export async function emailForHandle(username: string, tag: string): Promise<string | null> {
+  const { data, error } = await db().rpc("email_for_handle", {
+    p_username: username,
+    p_tag: tag,
+  });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
 export async function signInEmail(email: string, password: string): Promise<void> {
   const { error } = await db().auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -100,11 +215,20 @@ export async function emailForUsername(username: string): Promise<string | null>
   return (data as string | null) ?? null;
 }
 
-/** Sign in with either an email or a username + password. */
+/** Sign in with an email, a `usuario#ID` handle, or a bare username + password.
+ *  Bare username is ambiguous now that usernames can repeat, so prefer email or
+ *  the full `usuario#ID`; the bare-username path stays as a best-effort. */
 export async function signInWithIdentifier(identifier: string, password: string): Promise<void> {
   const id = identifier.trim();
   let email = id;
-  if (!id.includes("@")) {
+  if (id.includes("#")) {
+    const hash = id.indexOf("#");
+    const uname = id.slice(0, hash).trim();
+    const tag = id.slice(hash + 1).trim();
+    const resolved = await emailForHandle(uname, tag);
+    if (!resolved) throw new Error("No existe una cuenta con ese usuario#ID.");
+    email = resolved;
+  } else if (!id.includes("@")) {
     const resolved = await emailForUsername(id);
     if (!resolved) throw new Error("No existe una cuenta con ese usuario.");
     email = resolved;
@@ -189,7 +313,12 @@ export async function ensureMyProfile(): Promise<Profile | null> {
 }
 
 export async function updateMyProfile(
-  patch: Partial<Pick<Profile, "display_name" | "username" | "status" | "avatar_url">>
+  patch: Partial<
+    Pick<
+      Profile,
+      "display_name" | "username" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats"
+    >
+  >
 ): Promise<Profile> {
   const { data: u } = await db().auth.getUser();
   if (!u.user) throw new Error("Not signed in.");
@@ -285,9 +414,71 @@ export async function removeFriend(friendshipId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function blockUser(friendshipId: string): Promise<void> {
-  const { error } = await db().from("friendships").update({ status: "blocked" }).eq("id", friendshipId);
+/** Block a user by id: clears any existing relationship in either direction,
+ *  then records a directional block (me → target). Works friend or not. */
+export async function blockUser(targetId: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const me = u.user.id;
+  await db()
+    .from("friendships")
+    .delete()
+    .or(
+      `and(requester_id.eq.${me},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${me})`
+    );
+  const { error } = await db()
+    .from("friendships")
+    .insert({ requester_id: me, addressee_id: targetId, status: "blocked" });
   if (error) throw error;
+}
+
+/** Lift a block I placed on a user. */
+export async function unblockUser(targetId: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { error } = await db()
+    .from("friendships")
+    .delete()
+    .eq("requester_id", u.user.id)
+    .eq("addressee_id", targetId)
+    .eq("status", "blocked");
+  if (error) throw error;
+}
+
+/** File a report against a user, with an optional free-text reason. */
+export async function reportUser(targetId: string, reason: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { error } = await db()
+    .from("reports")
+    .insert({ reporter_id: u.user.id, target_id: targetId, reason: reason.trim() || null });
+  if (error) throw error;
+}
+
+/** Search users by partial name or handle (discovery). Returns safe cards. */
+export async function searchProfiles(query: string, limit = 20): Promise<Profile[]> {
+  const { data, error } = await db().rpc("search_public_profiles", {
+    p_query: query,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+/** Best-effort delete of a Storage object from its public URL. No-op for
+ *  non-Storage URLs (e.g. SteamGridDB) so callers can pass any image value. */
+export async function deleteMediaByUrl(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const m = url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+  if (!m) return;
+  const bucket = m[1];
+  const path = decodeURIComponent(m[2]);
+  if (bucket !== "avatars" && bucket !== "banners" && bucket !== "screenshots") return;
+  try {
+    await db().storage.from(bucket).remove([path]);
+  } catch {
+    /* non-fatal: orphan cleanup is best-effort */
+  }
 }
 
 // ── Activity ─────────────────────────────────────────────────────────────

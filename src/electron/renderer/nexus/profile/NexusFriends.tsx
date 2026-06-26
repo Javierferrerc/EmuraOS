@@ -8,12 +8,17 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSocial } from "../../social/SocialContext";
-import type { FriendEdge } from "../../social/socialTypes";
+import type { FriendEdge, Profile } from "../../social/socialTypes";
 import { initialsOf } from "./nexusProfileData";
 import { CheckIcon, CloseIcon, PlayIcon, EyeIcon, EyeOffIcon } from "../NexusIcons";
 import { NexusRegisterModal } from "./NexusRegisterModal";
 
-export function NexusFriends() {
+export function NexusFriends({
+  onViewProfile,
+}: {
+  /** Open another user's public profile (from a friend row). */
+  onViewProfile?: (userId: string) => void;
+} = {}) {
   const social = useSocial();
 
   if (!social.configured) {
@@ -28,7 +33,7 @@ export function NexusFriends() {
     return <div className="pf-empty"><div className="pf-empty-sub">Cargando…</div></div>;
   }
   if (!social.user) return <SignInPanel />;
-  return <FriendsBody />;
+  return <FriendsBody onViewProfile={onViewProfile} />;
 }
 
 function SignInPanel() {
@@ -242,11 +247,15 @@ function ForgotPasswordPanel({ initialId, onBack }: { initialId: string; onBack:
   );
 }
 
-function FriendsBody() {
+function FriendsBody({ onViewProfile }: { onViewProfile?: (userId: string) => void }) {
   const social = useSocial();
   const [code, setCode] = useState("");
   const [addMsg, setAddMsg] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  // Search results for the "Buscar usuario" box (exact handle/code → one row;
+  // partial name → a list). Any user, friend or not.
+  const [results, setResults] = useState<Profile[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
   // Friend pending removal — non-null shows the confirmation dialog.
   const [pendingRemove, setPendingRemove] = useState<FriendEdge | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -265,16 +274,35 @@ function FriendsBody() {
   const incoming = social.friends.filter((f) => f.status === "pending" && f.direction === "incoming");
   const outgoing = social.friends.filter((f) => f.status === "pending" && f.direction === "outgoing");
   const accepted = social.friends.filter((f) => f.status === "accepted");
+  // Users I've blocked (I'm the requester of the 'blocked' row).
+  const blocked = social.friends.filter((f) => f.status === "blocked" && f.direction === "outgoing");
 
-  const sendCode = async (e: React.FormEvent) => {
+  // Search: exact (usuario#TAG or NX-code) resolves a single profile; anything
+  // else is a partial-name lookup that returns a list.
+  const runSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
-    setAdding(true);
+    const raw = code.trim();
+    if (!raw) return;
+    setSearching(true);
     setAddMsg(null);
-    const res = await social.addFriend(code.trim());
-    setAddMsg(res.message);
-    if (res.ok) setCode("");
-    setAdding(false);
+    setResults([]);
+    try {
+      const isExact = raw.includes("#") || /^nx-/i.test(raw);
+      if (isExact) {
+        const res = await social.findProfile(raw);
+        if (res.ok && res.profile) setResults([res.profile]);
+        else setAddMsg(res.message);
+      } else {
+        const list = await social.searchProfiles(raw);
+        setResults(list);
+        if (list.length === 0) setAddMsg("No se encontró a nadie con ese nombre.");
+      }
+    } catch (err) {
+      setAddMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSearched(true);
+      setSearching(false);
+    }
   };
 
   const online = accepted.filter((f) => social.presence.has(f.profile.id));
@@ -294,7 +322,14 @@ function FriendsBody() {
                 {online.map((f) => {
                   const pres = social.presence.get(f.profile.id);
                   return (
-                    <FriendRow key={f.friendship.id} edge={f} online playing={pres?.playing ?? null}>
+                    <FriendRow
+                      key={f.friendship.id}
+                      edge={f}
+                      online
+                      away={pres?.status === "away"}
+                      playing={pres?.playing ?? null}
+                      onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
+                    >
                       <button
                         className="fr-mini no"
                         title="Eliminar amigo"
@@ -310,7 +345,12 @@ function FriendsBody() {
             {offline.length > 0 && (
               <FriendGroup label="Desconectados" count={offline.length}>
                 {offline.map((f) => (
-                  <FriendRow key={f.friendship.id} edge={f} online={false}>
+                  <FriendRow
+                    key={f.friendship.id}
+                    edge={f}
+                    online={false}
+                    onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
+                  >
                     <button
                       className="fr-mini no"
                       title="Eliminar amigo"
@@ -323,6 +363,35 @@ function FriendsBody() {
               </FriendGroup>
             )}
           </>
+        )}
+
+        {blocked.length > 0 && (
+          <FriendGroup label="Bloqueados" count={blocked.length}>
+            {blocked.map((f) => (
+              <FriendRow
+                key={f.friendship.id}
+                edge={f}
+                onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
+              >
+                <button
+                  type="button"
+                  title="Desbloquear"
+                  style={{
+                    fontSize: 12,
+                    padding: "4px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    background: "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => void social.unblockUser(f.profile.id)}
+                >
+                  Desbloquear
+                </button>
+              </FriendRow>
+            ))}
+          </FriendGroup>
         )}
       </div>
 
@@ -338,7 +407,12 @@ function FriendsBody() {
           ) : (
             <div className="fr-list">
               {incoming.map((f) => (
-                <FriendRow key={f.friendship.id} edge={f} compact>
+                <FriendRow
+                  key={f.friendship.id}
+                  edge={f}
+                  compact
+                  onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
+                >
                   <button
                     className="fr-mini ok"
                     title="Aceptar"
@@ -361,6 +435,7 @@ function FriendsBody() {
                   edge={f}
                   compact
                   subOverride="Solicitud enviada · pendiente"
+                  onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
                 />
               ))}
             </div>
@@ -368,22 +443,45 @@ function FriendsBody() {
         </div>
 
         <div className="fr-panel">
-          <div className="fr-panel-head">Añadir amigo</div>
-          <form className="fr-add" onSubmit={sendCode}>
+          <div className="fr-panel-head">Buscar usuario</div>
+          <form className="fr-add" onSubmit={runSearch}>
             <input
               className="ct-input mono"
-              placeholder="usuario#ID o NX-0000-0000"
+              placeholder="nombre, usuario#ID o NX-0000-0000"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                setCode(e.target.value);
+                if (results.length) setResults([]);
+                if (searched) setSearched(false);
+              }}
             />
-            <button className="pf-act-btn primary" type="submit" disabled={adding}>
-              Enviar
+            <button className="pf-act-btn primary" type="submit" disabled={searching}>
+              {searching ? "…" : "Buscar"}
             </button>
           </form>
           <div className="fr-add-hint">
-            Añade por <b>usuario#ID</b> (p. ej. alex#AX12) o por código de amigo.
+            Busca por <b>nombre</b>, por <b>usuario#ID</b> (p. ej. alex#AX12) o por código de
+            amigo para ver su perfil o añadirlo.
           </div>
           {addMsg && <div className="fr-add-msg">{addMsg}</div>}
+
+          {results.length > 0 && (
+            <div
+              className="fr-results"
+              style={{
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {results.map((p) => (
+                <FriendSearchResult key={p.id} profile={p} onView={onViewProfile} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -396,6 +494,124 @@ function FriendsBody() {
           }}
           onConfirm={() => void confirmRemove()}
         />
+      )}
+    </div>
+  );
+}
+
+// A single search result (handle/code/name). Lets you view the public profile
+// or add the user, with relationship-aware button state.
+function FriendSearchResult({
+  profile,
+  onView,
+}: {
+  profile: Profile;
+  onView?: (userId: string) => void;
+}) {
+  const social = useSocial();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const edge = social.friends.find((f) => f.profile.id === profile.id);
+  const relation: "friends" | "outgoing" | "incoming" | "blocked" | "none" = edge
+    ? edge.status === "accepted"
+      ? "friends"
+      : edge.status === "blocked"
+        ? "blocked"
+        : edge.direction === "outgoing"
+          ? "outgoing"
+          : "incoming"
+    : "none";
+
+  const add = async () => {
+    setBusy(true);
+    setMsg(null);
+    const res = await social.addFriendProfile(profile);
+    setMsg(res.message);
+    setBusy(false);
+  };
+
+  return (
+    <div className="fr-result">
+      <div className="fr-row compact">
+        <span
+          className="fr-ava"
+          onClick={onView ? () => onView(profile.id) : undefined}
+          style={{
+            ...(profile.avatar_url
+              ? {}
+              : { background: "linear-gradient(140deg,#3b82f6,#a855f7)" }),
+            ...(onView ? { cursor: "pointer" } : {}),
+          }}
+        >
+          {profile.avatar_url ? (
+            <img className="fr-ava-img" src={profile.avatar_url} alt="" />
+          ) : (
+            initialsOf(profile.display_name)
+          )}
+        </span>
+        <span
+          className="fr-info"
+          onClick={onView ? () => onView(profile.id) : undefined}
+          style={onView ? { cursor: "pointer" } : undefined}
+        >
+          <span className="fr-name-row">
+            <span className="fr-name">{profile.display_name}</span>
+            {profile.username && (
+              <span className="fr-handle">
+                {profile.username}
+                {profile.user_tag && <span className="fr-tag">#{profile.user_tag}</span>}
+              </span>
+            )}
+          </span>
+          <span className="fr-sub">{profile.status || "Sin estado"}</span>
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          className="pf-act-btn"
+          type="button"
+          style={{ flex: 1 }}
+          onClick={() => onView?.(profile.id)}
+        >
+          Ver perfil
+        </button>
+        {relation === "none" && (
+          <button
+            className="pf-act-btn primary"
+            type="button"
+            style={{ flex: 1 }}
+            disabled={busy}
+            onClick={() => void add()}
+          >
+            {busy ? "…" : "Añadir"}
+          </button>
+        )}
+        {relation === "outgoing" && (
+          <button className="pf-act-btn" type="button" style={{ flex: 1 }} disabled>
+            Enviada
+          </button>
+        )}
+        {relation === "incoming" && (
+          <button className="pf-act-btn" type="button" style={{ flex: 1 }} disabled>
+            Te ha enviado
+          </button>
+        )}
+        {relation === "friends" && (
+          <button className="pf-act-btn" type="button" style={{ flex: 1 }} disabled>
+            Amigos
+          </button>
+        )}
+        {relation === "blocked" && (
+          <button className="pf-act-btn" type="button" style={{ flex: 1 }} disabled>
+            Bloqueado
+          </button>
+        )}
+      </div>
+      {msg && (
+        <div className="fr-add-msg" style={{ marginTop: 6 }}>
+          {msg}
+        </div>
       )}
     </div>
   );
@@ -470,30 +686,50 @@ function FriendGroup({ label, count, children }: { label: string; count: number;
 function FriendRow({
   edge,
   online,
+  away,
   playing,
   compact,
   subOverride,
+  onOpen,
   children,
 }: {
   edge: FriendEdge;
   online?: boolean;
+  /** Present but idle → amber dot + "Ausente". */
+  away?: boolean;
   playing?: string | null;
   /** Tighter row for the requests panel (smaller avatar, no presence dot). */
   compact?: boolean;
   /** Force the subtitle text (used for outgoing requests). */
   subOverride?: string;
+  /** Open this user's public profile (avatar/info become clickable). */
+  onOpen?: () => void;
   children?: React.ReactNode;
 }) {
   const p = edge.profile;
   return (
     <div className={`fr-row${online === false ? " offline" : ""}${compact ? " compact" : ""}`}>
-      <span className="fr-ava" style={{ background: "linear-gradient(140deg,#3b82f6,#a855f7)" }}>
-        {initialsOf(p.display_name)}
+      <span
+        className="fr-ava"
+        onClick={onOpen}
+        style={{
+          ...(p.avatar_url ? {} : { background: "linear-gradient(140deg,#3b82f6,#a855f7)" }),
+          ...(onOpen ? { cursor: "pointer" } : {}),
+        }}
+      >
+        {p.avatar_url ? (
+          <img className="fr-ava-img" src={p.avatar_url} alt="" />
+        ) : (
+          initialsOf(p.display_name)
+        )}
         {online !== undefined && (
-          <span className="fr-pres" style={{ background: online ? "#4ade80" : "#6b7280" }} />
+          <span
+            className="fr-pres"
+            style={{ background: online ? (away ? "#fbbf24" : "#4ade80") : "#6b7280" }}
+          />
         )}
       </span>
-      <span className="fr-info">
+      <span className="fr-info" onClick={onOpen} style={onOpen ? { cursor: "pointer" } : undefined}>
         <span className="fr-name-row">
           <span className="fr-name">{p.display_name}</span>
           {p.username && (
@@ -510,6 +746,8 @@ function FriendRow({
             <>
               <PlayIcon size={11} /> <span className="playing">{playing}</span>
             </>
+          ) : away ? (
+            "Ausente"
           ) : online ? (
             "En línea"
           ) : online === false ? (

@@ -17,8 +17,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSocialConfigured } from "../../social/supabaseClient";
-import { signInWithIdentifier, getMyProfile } from "../../social/socialApi";
+import { signInWithIdentifier, getMyProfile, signOut } from "../../social/socialApi";
 import { loadProfileEdit } from "../profile/nexusProfileData";
+import { NexusRegisterModal } from "../profile/NexusRegisterModal";
+import { SocialProvider } from "../../social/SocialContext";
 import { makePsSound, type PsSoundKind } from "./psSound";
 import {
   loadProfiles,
@@ -166,24 +168,33 @@ function Avatar({ p, children }: { p: NexusProfileEntry; children?: React.ReactN
 // ── add / login / edit modal ───────────────────────────────────
 function AddUserModal({
   edit,
+  loginOnly,
+  initialName,
   onClose,
   onCreate,
+  onCreateAccount,
   onUpdate,
   onDelete,
   canDelete,
   playSound,
 }: {
   edit?: NexusProfileEntry;
+  /** Re-autenticación para entrar en una cuenta tras cerrar sesión: fuerza el
+   *  modo "Cuenta EMURA" y pide solo correo + contraseña (sin avatar/nombre). */
+  loginOnly?: boolean;
+  initialName?: string;
   onClose: () => void;
   onCreate: (p: NexusProfileEntry) => void;
+  /** Abre el registro de cuenta EMURA (modal completo) desde el modo "Cuenta". */
+  onCreateAccount?: () => void;
   onUpdate?: (p: NexusProfileEntry) => void;
   onDelete?: () => void;
   canDelete?: boolean;
   playSound: PlaySound;
 }) {
   const editing = !!edit;
-  const [mode, setMode] = useState<"simple" | "account">("simple"); // simple | account
-  const [name, setName] = useState(edit?.name ?? "");
+  const [mode, setMode] = useState<"simple" | "account">(loginOnly ? "account" : "simple"); // simple | account
+  const [name, setName] = useState(edit?.name ?? initialName ?? "");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [hue, setHue] = useState(edit?.hue ?? 258);
@@ -215,7 +226,7 @@ function AddUserModal({
   const valid =
     mode === "simple"
       ? name.trim().length >= 2
-      : name.trim().length >= 2 &&
+      : (loginOnly || name.trim().length >= 2) &&
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
         pass.length >= 6;
 
@@ -304,11 +315,13 @@ function AddUserModal({
             <Icon name={editing ? "settings" : "user-plus"} size={20} />
           </span>
           <div>
-            <h2>{editing ? "Editar perfil" : "Añadir usuario"}</h2>
+            <h2>{editing ? "Editar perfil" : loginOnly ? "Iniciar sesión" : "Añadir usuario"}</h2>
             <p>
               {editing
                 ? "Cambia el nombre y el avatar de este perfil."
-                : "Crea un perfil nuevo o inicia sesión en tu cuenta EMURA."}
+                : loginOnly
+                  ? `Inicia sesión en tu cuenta EMURA para entrar${initialName ? " en " + initialName : ""}.`
+                  : "Crea un perfil nuevo o inicia sesión en tu cuenta EMURA."}
             </p>
           </div>
           <button className="ps-modal-close" onClick={onClose} aria-label="Cerrar">
@@ -323,7 +336,7 @@ function AddUserModal({
             </div>
           )}
 
-          {!editing && (
+          {!editing && !loginOnly && (
             <div className="ps-seg">
               <button className={mode === "simple" ? "on" : ""} onClick={() => setMode("simple")}>
                 Perfil local
@@ -334,7 +347,7 @@ function AddUserModal({
             </div>
           )}
 
-          <div className="ps-orbpick">
+          <div className="ps-orbpick" style={{ display: loginOnly ? "none" : undefined }}>
             <div className="ps-orbpick-head">
               <span className="ps-orbpick-lbl">Avatar</span>
               <div className="ps-avatabs">
@@ -405,7 +418,7 @@ function AddUserModal({
             />
           </div>
 
-          <div className="ps-field">
+          <div className="ps-field" style={{ display: loginOnly ? "none" : undefined }}>
             <label>Nombre</label>
             <input
               className="ps-input"
@@ -439,6 +452,11 @@ function AddUserModal({
                   onChange={(e) => setPass(e.target.value)}
                 />
               </div>
+              {!loginOnly && onCreateAccount && (
+                <button type="button" className="ps-altlink" onClick={onCreateAccount}>
+                  ¿No tienes cuenta? <b>Crear cuenta</b>
+                </button>
+              )}
             </>
           )}
         </div>
@@ -550,6 +568,18 @@ export function NexusProfileSelect({
   // Profile to highlight on open: last used by default, overridden by the
   // signed-in EMURA account once reconciled.
   const [focusId, setFocusId] = useState<string | null>(() => loadActiveId());
+  // Ids the user deleted this session. The async account-reconcile below can
+  // resolve *after* a delete and would otherwise re-add the just-removed
+  // account profile; this guards against that race.
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+  // Id of the account whose Supabase session is currently live (null = signed
+  // out). Account profiles can only be entered while their session is active.
+  const [sessionAccountId, setSessionAccountId] = useState<string | null>(null);
+  // Account profile the user is trying to enter while signed out → shows the
+  // re-login modal; entering happens once login succeeds.
+  const [loginTarget, setLoginTarget] = useState<NexusProfileEntry | null>(null);
+  // Modal de registro de cuenta EMURA (alta nueva) abierto desde "Añadir usuario".
+  const [registerOpen, setRegisterOpen] = useState(false);
 
   // Persist whenever the list changes.
   useEffect(() => {
@@ -567,8 +597,13 @@ export function NexusProfileSelect({
       try {
         const prof = await getMyProfile();
         if (cancelled || !prof) return;
+        // The user deleted this account profile this session — don't resurrect
+        // it from the still-active session.
+        if (deletedIdsRef.current.has(prof.id)) return;
         const name = prof.display_name?.trim() || prof.username?.trim() || "Jugador";
-        const edit = loadProfileEdit(name);
+        // This account's OWN edit layer (keyed by its id) — not the global/active
+        // one, which would copy one profile's avatar onto every tile.
+        const edit = loadProfileEdit(name, prof.id);
         const accountEntry: NexusProfileEntry = {
           id: prof.id,
           name,
@@ -599,7 +634,10 @@ export function NexusProfileSelect({
           };
           return next;
         });
-        if (!cancelled) setFocusId(prof.id);
+        if (!cancelled) {
+          setSessionAccountId(prof.id);
+          setFocusId(prof.id);
+        }
       } catch (e) {
         console.warn("[profile-select] account reconcile failed:", e);
       }
@@ -634,13 +672,8 @@ export function NexusProfileSelect({
     [profiles.length, playSound]
   );
 
-  const choose = useCallback(
+  const enterProfile = useCallback(
     (p: NexusProfileEntry) => {
-      if (manage) {
-        playSound("open");
-        setEditTarget(p);
-        return;
-      }
       playSound("launch");
       saveActiveId(p.id);
       if (welcome) {
@@ -650,13 +683,45 @@ export function NexusProfileSelect({
         onEnter(p);
       }
     },
-    [manage, welcome, onEnter, playSound]
+    [welcome, onEnter, playSound]
+  );
+
+  const choose = useCallback(
+    (p: NexusProfileEntry) => {
+      if (manage) {
+        playSound("open");
+        setEditTarget(p);
+        return;
+      }
+      // EMURA accounts require a live session to enter. If we signed out (or
+      // this is a different account), ask the user to log in first. We confirm
+      // with the backend in case the session was still resolving on mount.
+      if (p.account && isSocialConfigured() && sessionAccountId !== p.id) {
+        void getMyProfile()
+          .then((prof) => {
+            if (prof && prof.id === p.id) {
+              setSessionAccountId(p.id);
+              enterProfile(p);
+            } else {
+              playSound("open");
+              setLoginTarget(p);
+            }
+          })
+          .catch(() => {
+            playSound("open");
+            setLoginTarget(p);
+          });
+        return;
+      }
+      enterProfile(p);
+    },
+    [manage, sessionAccountId, enterProfile, playSound]
   );
 
   // keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (adding || editTarget || welcomeP) return;
+      if (adding || editTarget || welcomeP || loginTarget || registerOpen) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
         setIdx((i) => Math.min(profiles.length - 1, i + 1));
@@ -670,7 +735,7 @@ export function NexusProfileSelect({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [adding, editTarget, welcomeP, choose, profiles, idx]);
+  }, [adding, editTarget, welcomeP, loginTarget, registerOpen, choose, profiles, idx]);
 
   useEffect(() => {
     if (idx > profiles.length - 1) setIdx(Math.max(0, profiles.length - 1));
@@ -788,11 +853,75 @@ export function NexusProfileSelect({
           playSound={playSound}
           onClose={() => setAdding(false)}
           onCreate={(p) => {
-            setProfiles((list) => [...list, p]);
+            setProfiles((list) => {
+              // Dedup by id: signing into an account that already has a tile must
+              // refresh it in place, never append a duplicate.
+              const i = list.findIndex((x) => x.id === p.id);
+              if (i !== -1) {
+                const next = list.slice();
+                next[i] = { ...next[i], ...p };
+                return next;
+              }
+              // An EMURA account entering as the only profile replaces the lone
+              // default "Jugador" seed instead of sitting next to it.
+              const isDefaultOnly =
+                p.account &&
+                list.length === 1 &&
+                list[0].id === "local" &&
+                !list[0].avatar &&
+                list[0].name === "Jugador";
+              return isDefaultOnly ? [p] : [...list, p];
+            });
             setAdding(false);
-            setIdx(profiles.length);
+            // Highlight the new/updated profile once it's in the list.
+            setFocusId(p.id);
+          }}
+          onCreateAccount={() => {
+            setAdding(false);
+            setRegisterOpen(true);
           }}
         />
+      )}
+
+      {registerOpen && (
+        <SocialProvider>
+          <NexusRegisterModal
+            onClose={() => setRegisterOpen(false)}
+            onSwitchToSignIn={() => {
+              setRegisterOpen(false);
+              setAdding(true);
+            }}
+            onRegistered={(acct) => {
+              // Añade la cuenta recién creada como perfil para no obligar a
+              // iniciar sesión a mano. Si Supabase devolvió sesión activa
+              // (auto-confirm), queda lista para entrar; si requiere verificar
+              // el correo, el tile aparece y pedirá login al entrar.
+              const entry: NexusProfileEntry = {
+                id: acct.userId,
+                name: acct.fullName || acct.username || "Jugador",
+                hue: hueFromString(acct.userId),
+                online: true,
+                level: 1,
+                xp: 0.05,
+                last: "Ahora",
+                kind: "adult",
+                account: true,
+              };
+              setProfiles((list) => {
+                const i = list.findIndex((x) => x.id === entry.id);
+                if (i === -1) return [...list, entry];
+                const next = list.slice();
+                next[i] = { ...next[i], ...entry };
+                return next;
+              });
+              if (acct.hasSession) {
+                setSessionAccountId(acct.userId);
+                saveActiveId(acct.userId);
+              }
+              setFocusId(acct.userId);
+            }}
+          />
+        </SocialProvider>
       )}
 
       {editTarget && (
@@ -807,9 +936,44 @@ export function NexusProfileSelect({
             setEditTarget(null);
           }}
           onDelete={() => {
-            setProfiles((list) => list.filter((x) => x.id !== editTarget.id));
+            const target = editTarget;
+            deletedIdsRef.current.add(target.id);
+            setProfiles((list) => list.filter((x) => x.id !== target.id));
+            // Forget it as the "last used" profile so it isn't re-highlighted.
+            if (loadActiveId() === target.id) saveActiveId(null);
+            // Account profiles are re-derived from the persisted Supabase
+            // session on every selector mount; sign out so the deletion sticks
+            // across remounts ("Cambiar de usuario") and app restarts.
+            if (target.account) void signOut().catch(() => {});
             setEditTarget(null);
             playSound("back");
+          }}
+        />
+      )}
+
+      {loginTarget && (
+        <AddUserModal
+          loginOnly
+          initialName={loginTarget.name}
+          playSound={playSound}
+          onClose={() => setLoginTarget(null)}
+          onCreate={(acct) => {
+            // Sesión iniciada: marca la cuenta como activa, reconcilia la ficha
+            // (conservando avatar/hue/nombre del tile existente) y entra.
+            setSessionAccountId(acct.id);
+            const existing = profiles.find((x) => x.id === acct.id);
+            setProfiles((list) => {
+              const i = list.findIndex((x) => x.id === acct.id);
+              if (i === -1) return [...list, acct];
+              const next = list.slice();
+              next[i] = { ...next[i], account: true };
+              return next;
+            });
+            const entry: NexusProfileEntry = existing
+              ? { ...existing, account: true }
+              : acct;
+            setLoginTarget(null);
+            enterProfile(entry);
           }}
         />
       )}

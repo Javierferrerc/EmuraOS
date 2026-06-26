@@ -123,13 +123,26 @@ interface Values {
   recovery: string;
 }
 
+/** Data emitted once an account is created, so a host (e.g. the profile
+ *  selector) can add it to its list without forcing a manual sign-in. */
+export interface RegisteredAccount {
+  userId: string;
+  /** True only if Supabase returned a live session (email auto-confirm). */
+  hasSession: boolean;
+  username: string;
+  /** Public display name (real name or username, per the privacy toggle). */
+  fullName: string;
+}
+
 export interface NexusRegisterModalProps {
   onClose: () => void;
   /** Switch back to the inline sign-in panel ("¿Ya tienes cuenta?"). */
   onSwitchToSignIn?: () => void;
+  /** Fired right after a successful sign-up with the new account's data. */
+  onRegistered?: (account: RegisteredAccount) => void;
 }
 
-export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterModalProps) {
+export function NexusRegisterModal({ onClose, onSwitchToSignIn, onRegistered }: NexusRegisterModalProps) {
   const social = useSocial();
 
   const [v, setV] = useState<Values>({
@@ -155,8 +168,9 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Live availability, replacing the simulated TAKEN_USERS / TAKEN_IDS lists.
-  const [userAvail, setUserAvail] = useState<Avail>("idle");
-  const [idAvail, setIdAvail] = useState<Avail>("idle");
+  // Riot-style: availability is on the whole handle (username#tag), since the
+  // username and tag may each repeat on their own — only the pair must be free.
+  const [handleAvail, setHandleAvail] = useState<Avail>("idle");
 
   const set = (k: keyof Values, val: string) => setV((p) => ({ ...p, [k]: val }));
   const touch = (k: string) => setTouched((p) => ({ ...p, [k]: true }));
@@ -165,50 +179,31 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
     set("userid", raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 5));
   const setEdad = (raw: string) => set("edad", raw.replace(/[^0-9]/g, "").slice(0, 3));
 
-  // ── Debounced username availability ──────────────────────────────────
+  // ── Debounced handle (usuario#ID) availability ───────────────────────
+  // Only the pair matters: alex#AX12 and alex#9Q2 can coexist. We wait until
+  // both parts have a valid format, then check the combination.
   useEffect(() => {
     const name = v.username.trim();
-    if (name.length < 3) {
-      setUserAvail("idle");
+    const tag = v.userid;
+    if (name.length < 3 || !ID_RE.test(tag)) {
+      setHandleAvail("idle");
       return;
     }
-    setUserAvail("checking");
+    setHandleAvail("checking");
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const free = await social.checkUsername(name);
-        if (!cancelled) setUserAvail(free ? "ok" : "taken");
+        const free = await social.checkHandle(name, tag);
+        if (!cancelled) setHandleAvail(free ? "ok" : "taken");
       } catch {
-        if (!cancelled) setUserAvail("idle");
+        if (!cancelled) setHandleAvail("idle");
       }
     }, 400);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [v.username, social]);
-
-  // ── Debounced user-tag (#ID) availability ────────────────────────────
-  useEffect(() => {
-    if (!ID_RE.test(v.userid)) {
-      setIdAvail("idle");
-      return;
-    }
-    setIdAvail("checking");
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const free = await social.checkUserTag(v.userid);
-        if (!cancelled) setIdAvail(free ? "ok" : "taken");
-      } catch {
-        if (!cancelled) setIdAvail("idle");
-      }
-    }, 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [v.userid, social]);
+  }, [v.username, v.userid, social]);
 
   // ── Validation ───────────────────────────────────────────────────────
   const errs: Partial<Record<keyof Values, string>> = {};
@@ -216,10 +211,11 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
   if (!v.apellido.trim()) errs.apellido = "Introduce tu apellido.";
   if (!v.username.trim()) errs.username = "Elige un nombre de usuario.";
   else if (v.username.trim().length < 3) errs.username = "Mínimo 3 caracteres.";
-  else if (userAvail === "taken") errs.username = "Ese nombre ya está en uso.";
   if (!v.userid) errs.userid = "Introduce tu ID.";
   else if (!ID_RE.test(v.userid)) errs.userid = "Entre 3 y 5 letras o números.";
-  else if (idAvail === "taken") errs.userid = "Ese ID ya está ocupado.";
+  // The conflict is on the whole handle; surface it on the #ID (the part the
+  // user tweaks to make it unique, Riot-style).
+  else if (handleAvail === "taken") errs.userid = "Ese usuario#ID ya está en uso.";
   if (!v.email.trim()) errs.email = "Introduce tu correo.";
   else if (!EMAIL_RE.test(v.email.trim())) errs.email = "Correo no válido.";
   const ageN = parseInt(v.edad, 10);
@@ -241,8 +237,8 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
   const show = (k: keyof Values) => (touched[k] || submitted) && errs[k];
   const valid = Object.keys(errs).length === 0;
 
-  const idOk = idAvail === "ok";
-  const userOk = userAvail === "ok";
+  const handleOk = handleAvail === "ok";
+  const usernameFormatOk = v.username.trim().length >= 3 && !errs.username;
   const st = strengthOf(v.password);
 
   // ── Submit: real sign-up ─────────────────────────────────────────────
@@ -251,13 +247,13 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
     setSubmitted(true);
     setSubmitError(null);
     if (!valid || busy) return;
-    // Block while an availability check is still resolving.
-    if (userAvail === "checking" || idAvail === "checking") return;
+    // Block while the handle availability check is still resolving.
+    if (handleAvail === "checking") return;
 
     const display_name = showName ? `${v.nombre.trim()} ${v.apellido.trim()}`.trim() : v.username.trim();
     setBusy(true);
     try {
-      await social.registerAccount(v.email.trim(), v.password, {
+      const res = await social.registerAccount(v.email.trim(), v.password, {
         username: v.username.trim(),
         user_tag: v.userid,
         first_name: v.nombre.trim(),
@@ -268,6 +264,14 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
         show_age: showAge,
         recovery_email: v.recovery.trim(),
       });
+      if (res.userId) {
+        onRegistered?.({
+          userId: res.userId,
+          hasSession: res.hasSession,
+          username: v.username.trim(),
+          fullName: display_name,
+        });
+      }
       setDone(true);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
@@ -386,48 +390,43 @@ export function NexusRegisterModal({ onClose, onSwitchToSignIn }: NexusRegisterM
               label="Nombre de usuario"
               required
               error={show("username") ? errs.username : null}
-              good={userOk ? "Disponible" : null}
-              hint={userAvail === "checking" ? "Comprobando disponibilidad…" : null}
+              hint="Puede repetirse; tu #ID lo hace único"
             >
               <div className="reg-input-wrap">
                 <input
                   className={
-                    "reg-input has-icon" + (show("username") ? " err" : userOk ? " ok" : "")
+                    "reg-input has-icon" + (show("username") ? " err" : usernameFormatOk ? " ok" : "")
                   }
                   value={v.username}
                   placeholder="alexvega"
                   onChange={(e) => set("username", e.target.value)}
                   onBlur={() => touch("username")}
                 />
-                {v.username.trim().length >= 3 &&
-                  (userAvail === "ok" ? (
-                    <span className="reg-in-icon good">
-                      <CheckIcon size={17} />
-                    </span>
-                  ) : userAvail === "taken" ? (
-                    <span className="reg-in-icon bad">
-                      <CloseIcon size={17} />
-                    </span>
-                  ) : null)}
+                {usernameFormatOk && (
+                  <span className="reg-in-icon good">
+                    <CheckIcon size={17} />
+                  </span>
+                )}
               </div>
             </Field>
             <Field
               label="ID de usuario"
               required
               error={show("userid") ? errs.userid : null}
+              good={handleOk ? "Disponible" : null}
               hint={
-                !show("userid")
-                  ? idAvail === "checking"
-                    ? "Comprobando disponibilidad…"
-                    : "3–5 letras y/o números"
-                  : null
+                handleAvail === "checking"
+                  ? "Comprobando disponibilidad…"
+                  : !show("userid")
+                    ? "3–5 letras y/o números"
+                    : null
               }
             >
               <div
                 className={
                   "reg-id" +
                   (idFocus ? " focus" : "") +
-                  (show("userid") ? " err" : idOk ? " ok" : "")
+                  (show("userid") ? " err" : handleOk ? " ok" : "")
                 }
               >
                 <span className="reg-id-hash">#</span>
