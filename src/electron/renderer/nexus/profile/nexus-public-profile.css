@@ -17,6 +17,7 @@
   }
 }
 .nexus-root .pp-panel {
+  position: relative;
   width: min(820px, 96vw);
   max-height: 92vh;
   display: flex;
@@ -34,22 +35,30 @@
     opacity: 0.4;
   }
 }
+/* Floating back button — pinned to the banner's top-left (mirrors the
+   add/block/report cluster on the top-right). Glassy so it reads over any
+   cover image; stays available during the loading/error states too. */
 .nexus-root .pp-back {
-  align-self: flex-start;
-  margin: 14px 0 0 14px;
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 12, 18, 0.6);
+  backdrop-filter: blur(8px);
+  color: #fff;
   font-weight: 600;
   font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
 }
 .nexus-root .pp-back:hover {
-  background: var(--panel-2);
+  background: rgba(22, 26, 36, 0.82);
 }
 .nexus-root .pp-state {
   padding: 60px;
