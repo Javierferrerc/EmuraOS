@@ -9,6 +9,7 @@ import { isGameActive, claimF10Fire } from "./game-state.js";
 import { setSecurityLogDir } from "../../core/security-logger.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { migrateThumbnailVersion } from "../../core/thumbnail-cache.js";
+import { ConfigManager } from "../../core/config-manager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,19 +19,34 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 let mainWindow: BrowserWindow | null = null;
 
+// Mirrors ipc-handlers' getProjectRoot so the window can read the config before
+// the IPC layer is up.
+function getProjectRoot(): string {
+  if (app.isPackaged) return path.join(os.homedir(), "EmuraOS");
+  return app.getAppPath();
+}
+
 function createWindow(): void {
   // Remove the native application menu bar entirely (View/Edit/etc).
   // Called before BrowserWindow creation to avoid a flash of the menu.
   Menu.setApplicationMenu(null);
+
+  // Honor the "iniciar en pantalla completa" setting. Defaults to false (the
+  // config default), so the launcher starts in a maximized window unless the
+  // user opted into fullscreen. F10 still toggles fullscreen at runtime.
+  let fullscreenOnStart = false;
+  try {
+    fullscreenOnStart = new ConfigManager(getProjectRoot()).get().fullscreenOnStart ?? false;
+  } catch {
+    /* config unreadable — fall back to windowed */
+  }
 
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    // Open maximized to the full screen by default (console-like experience).
-    // F10 still toggles fullscreen on/off at runtime.
-    fullscreen: true,
+    fullscreen: fullscreenOnStart,
     title: "EmuraOS",
     backgroundColor: "#111827",
     webPreferences: {
@@ -43,6 +59,10 @@ function createWindow(): void {
       autoplayPolicy: "no-user-gesture-required",
     },
   });
+
+  // Not fullscreen → open maximized (large, console-like, but with the OS frame
+  // so it's clearly not fullscreen).
+  if (!fullscreenOnStart) mainWindow.maximize();
 
   // TODO: remove before production
   // mainWindow.webContents.openDevTools({ mode: "detach" });
