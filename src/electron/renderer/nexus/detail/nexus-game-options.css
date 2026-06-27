@@ -1,15 +1,33 @@
-/* nexus-game-options.css — per-game options modal (emulator override + actions). */
+/* nexus-game-options.css — EMURA "Opciones del juego" (rediseño handoff).
+   Faithful port of handoff_opciones_juego/game-options.css. Tokens are scoped
+   to the modal so the accent (#2f7bf6) and hairlines match the reference exactly
+   regardless of the theme's globals. */
 
 .nexus-root .go-stage {
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-2: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --text: #eef3ff;
+  --text-dim: rgba(238, 243, 255, 0.64);
+  --text-faint: rgba(238, 243, 255, 0.4);
+  --accent: #2f7bf6;
+  --accent-2: #5aa0ff;
+  --good: #4ade80;
+  --bad: #f43f5e;
+  --ease: cubic-bezier(0.4, 0.8, 0.3, 1);
+
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 70;
   display: grid;
   place-items: center;
-  padding: 28px;
-  background: rgba(4, 6, 11, 0.66);
+  padding: 26px;
+  background: rgba(4, 5, 9, 0.62);
   backdrop-filter: blur(10px);
-  animation: goFade 0.18s ease;
+  animation: goFade 0.2s var(--ease);
+  font-family: "Sora", system-ui, -apple-system, sans-serif;
+  color: var(--text);
 }
 @keyframes goFade {
   from {
@@ -18,53 +36,58 @@
 }
 
 .nexus-root .go-modal {
-  width: min(440px, 96vw);
-  max-height: 86vh;
+  width: min(440px, 94vw);
+  max-height: calc(100vh - 52px);
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
-  border: 1px solid var(--line-2);
-  background: linear-gradient(180deg, rgba(18, 21, 28, 0.98), rgba(11, 13, 18, 0.99));
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
   overflow: hidden;
-  animation: goRise 0.22s cubic-bezier(0.16, 0.84, 0.34, 1);
+  border-radius: 22px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(16, 19, 27, 0.99), rgba(10, 12, 18, 0.99));
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.62);
+  animation: goIn 0.24s var(--ease);
 }
-@keyframes goRise {
+@keyframes goIn {
   from {
-    transform: translateY(12px);
-    opacity: 0.5;
+    transform: translateY(14px) scale(0.985);
   }
 }
 
+/* ── header (cover thumb instead of a plain gear) ─────────── */
 .nexus-root .go-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 14px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--line);
 }
-.nexus-root .go-ic {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--accent-2, #5aa0ff);
+.nexus-root .go-cover {
+  width: 42px;
+  height: 56px;
   flex-shrink: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.nexus-root .go-cover .nx-cover {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
 }
 .nexus-root .go-head-txt {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
 }
 .nexus-root .go-head-txt h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
+  letter-spacing: -0.01em;
 }
 .nexus-root .go-head-txt p {
-  margin: 2px 0 0;
-  font-size: 13px;
+  margin: 1px 0 0;
+  font-size: 12.5px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -73,188 +96,344 @@
 .nexus-root .go-close {
   width: 34px;
   height: 34px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  border-radius: 9px;
-  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  border: 1px solid var(--line);
   background: var(--panel);
-  color: var(--text);
-  flex-shrink: 0;
+  color: var(--text-dim);
   cursor: pointer;
+  transition: all 0.14s;
 }
 .nexus-root .go-close:hover {
+  color: var(--text);
   background: var(--panel-2);
 }
 
 .nexus-root .go-body {
-  padding: 14px 18px 18px;
+  padding: 16px 18px 8px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
-.nexus-root .go-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin: 6px 0 8px;
+.nexus-root .go-body::-webkit-scrollbar {
+  width: 8px;
 }
-.nexus-root .go-label:not(:first-child) {
-  margin-top: 16px;
+.nexus-root .go-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
 }
 
-.nexus-root .go-list {
+.nexus-root .go-group-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 4px 9px;
+}
+
+/* ── emulator: grouped radio list (one container, hairlines) ── */
+.nexus-root .go-emu {
+  border-radius: 15px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  overflow: hidden;
+}
+.nexus-root .go-emu-opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 14px 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.nexus-root .go-emu-opt:last-child {
+  border-bottom: 0;
+}
+.nexus-root .go-emu-opt:hover {
+  background: var(--panel-2);
+}
+.nexus-root .go-emu-opt.on {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.nexus-root .go-emu-radio {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  display: grid;
+  place-items: center;
+  transition: border-color 0.14s;
+}
+.nexus-root .go-emu-opt.on .go-emu-radio {
+  border-color: var(--accent);
+}
+.nexus-root .go-emu-radio i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 0.16s var(--ease);
+}
+.nexus-root .go-emu-opt.on .go-emu-radio i {
+  transform: scale(1);
+}
+.nexus-root .go-emu-txt {
+  flex: 1;
+  min-width: 0;
+}
+.nexus-root .go-emu-txt b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.nexus-root .go-emu-txt span {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.nexus-root .go-emu-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent-2);
+  flex-shrink: 0;
+}
+.nexus-root .go-emu-opt.on .go-emu-bar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 26px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+/* ── actions: icon-leading rows with affordances ─────────── */
+.nexus-root .go-actions {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.nexus-root .go-opt {
+.nexus-root .go-act {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
+  gap: 13px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid transparent;
+  background: none;
   text-align: left;
-  transition: background 0.12s, border-color 0.12s;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
 }
-.nexus-root .go-opt:hover:not(:disabled) {
+.nexus-root .go-act:hover {
   background: var(--panel-2);
+  border-color: var(--line);
 }
-.nexus-root .go-opt.on {
-  border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 12%, var(--panel));
-}
-.nexus-root .go-opt:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.nexus-root .go-opt svg {
-  color: var(--accent);
+.nexus-root .go-act-ico {
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  transition: color 0.14s, background 0.14s;
 }
-.nexus-root .go-opt-txt {
-  display: flex;
-  flex-direction: column;
+.nexus-root .go-act:hover .go-act-ico {
+  color: var(--text);
+}
+.nexus-root .go-act-lbl {
+  flex: 1;
   min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
 }
-.nexus-root .go-opt-txt b {
-  font-size: 14px;
-  font-weight: 700;
+.nexus-root .go-act-lbl span {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.nexus-root .go-opt-sub {
+/* toggle state (favorito / fijar) */
+.nexus-root .go-act.on .go-act-ico {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--accent-2);
+}
+.nexus-root .go-act-state {
   font-size: 12px;
   color: var(--text-faint);
-}
-
-.nexus-root .go-empty {
-  font-size: 13px;
-  color: var(--text-faint);
-  padding: 8px 0;
-}
-
-.nexus-root .go-action {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: left;
-}
-.nexus-root .go-action:hover {
-  background: var(--panel-2);
-}
-.nexus-root .go-action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.nexus-root .go-action svg {
   flex-shrink: 0;
 }
-
-/* toggle row (boolean override) */
-.nexus-root .go-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s, border-color 0.12s;
-}
-.nexus-root .go-toggle:hover:not(:disabled) {
-  background: var(--panel-2);
-}
-.nexus-root .go-toggle.on {
-  border-color: var(--accent);
-}
-.nexus-root .go-toggle svg {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-.nexus-root .go-switch {
-  width: 38px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  flex-shrink: 0;
-  position: relative;
-  transition: background 0.15s;
-}
-.nexus-root .go-toggle.on .go-switch {
-  background: var(--accent);
-}
-.nexus-root .go-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.15s;
-}
-.nexus-root .go-toggle.on .go-knob {
-  transform: translateX(16px);
-}
-
-/* select row */
-.nexus-root .go-select-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 13px;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-}
-.nexus-root .go-select-row b {
-  font-size: 14px;
+.nexus-root .go-act.on .go-act-state {
+  color: var(--accent-2);
   font-weight: 700;
 }
-.nexus-root .go-select {
-  border-radius: 8px;
+.nexus-root .go-act-chev {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+/* destructive */
+.nexus-root .go-act.danger .go-act-ico {
+  color: #ff97a6;
+  background: color-mix(in oklab, var(--bad) 12%, transparent);
+}
+.nexus-root .go-act.danger:hover {
+  background: color-mix(in oklab, var(--bad) 12%, transparent);
+  border-color: color-mix(in oklab, var(--bad) 28%, transparent);
+}
+.nexus-root .go-act.danger .go-act-lbl {
+  color: #ffb3bf;
+}
+
+.nexus-root .go-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 2px 6px;
+}
+
+.nexus-root .go-foot {
+  padding: 12px 18px 18px;
+}
+
+/* ── toast ───────────────────────────────────────────────── */
+.nexus-root .go-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: rgba(14, 17, 24, 0.96);
   border: 1px solid var(--line-2);
-  background: var(--panel-2);
-  color: var(--text);
-  font-size: 13px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  font-size: 13.5px;
   font-weight: 600;
-  padding: 6px 8px;
+  animation: goToast 2s var(--ease) forwards;
+}
+@keyframes goToast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.nexus-root .go-toast .ic {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--good) 20%, transparent);
+  color: var(--good);
+}
+
+/* ── confirm dialog (destructive reset) — same palette ───── */
+.nexus-root .go-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(6, 7, 11, 0.62);
+  backdrop-filter: blur(4px);
+  border-radius: 22px;
+}
+.nexus-root .go-confirm-card {
+  width: 100%;
+  max-width: 340px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(20, 23, 31, 0.99), rgba(12, 14, 20, 0.99));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+.nexus-root .go-confirm-card .go-cf-ic {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #ff97a6;
+  background: color-mix(in oklab, var(--bad) 14%, transparent);
+}
+.nexus-root .go-confirm-card b {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+}
+.nexus-root .go-confirm-card p {
+  margin: 6px 0 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.nexus-root .go-confirm-acts {
+  display: flex;
+  gap: 8px;
+}
+.nexus-root .go-cbtn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13.5px;
   cursor: pointer;
+}
+.nexus-root .go-cbtn:hover {
+  background: var(--panel-2);
+}
+.nexus-root .go-cbtn.danger {
+  border-color: transparent;
+  background: var(--bad);
+  color: #fff;
+}
+.nexus-root .go-cbtn.danger:hover {
+  filter: brightness(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-root .go-stage * {
+    animation-duration: 0.01ms !important;
+  }
 }

@@ -1,16 +1,14 @@
 /**
- * NexusGameOptions — per-game options modal opened from the detail's "Opciones"
- * action. Game-scoped (not the global settings page):
- *  - emulator/core override for THIS game
- *  - Dolphin / RetroArch per-game tweaks (only for the resolved emulator)
- *  - favorite / pin shortcuts, reset this game's play time, open ROM location
+ * NexusGameOptions — EMURA "Opciones del juego" modal (handoff redesign), opened
+ * from the game detail. Game-scoped: choose the emulator for THIS game + real
+ * actions (favorite, pin, open ROM location, reset play time). Visuals are a
+ * 1:1 port of handoff_opciones_juego; wiring is our real config / library / FS.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NexusGame } from "../nexusModel";
-import type { GameOverride, DolphinGameConfig, RetroArchGameConfig } from "../../../../core/types";
 import { useApp } from "../../context/AppContext";
-import { SettingsIcon, CloseIcon, CheckIcon, HeartIcon, TrashIcon } from "../NexusIcons";
+import { NexusCover } from "../NexusCover";
 import "./nexus-game-options.css";
 
 interface EmuOption {
@@ -18,67 +16,61 @@ interface EmuOption {
   emulatorName: string;
 }
 
-function Toggle({
-  label,
-  hint,
-  on,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  on: boolean;
-  disabled?: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={"go-toggle" + (on ? " on" : "")}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-    >
-      <span className="go-opt-txt">
-        <b>{label}</b>
-        {hint && <span className="go-opt-sub">{hint}</span>}
-      </span>
-      <span className="go-switch">
-        <span className="go-knob" />
-      </span>
-    </button>
-  );
-}
-
-function SelectRow({
-  label,
-  value,
-  options,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="go-select-row">
-      <b>{label}</b>
-      <select
-        className="go-select"
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+// Functional glyphs ported verbatim from the handoff's icons.jsx, so they match
+// the reference exactly.
+type IconName = "close" | "check" | "heart" | "pin" | "folder" | "external" | "trash";
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  const c = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  const s = { width: size, height: size, display: "block" as const };
+  const v = "0 0 24 24";
+  switch (name) {
+    case "close":
+      return <svg style={s} viewBox={v}><path d="M6 6l12 12M18 6L6 18" {...c} /></svg>;
+    case "check":
+      return <svg style={s} viewBox={v}><path d="M5 12.5l4.5 4.5L19 7" {...c} /></svg>;
+    case "heart":
+      return (
+        <svg style={s} viewBox={v}>
+          <path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7a3.7 3.7 0 0 1 7 3.7C19 15.6 12 20 12 20z" {...c} />
+        </svg>
+      );
+    case "pin":
+      return (
+        <svg style={s} viewBox={v}>
+          <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" {...c} />
+          <path d="M12 14v7" {...c} />
+        </svg>
+      );
+    case "folder":
+      return (
+        <svg style={s} viewBox={v}>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" {...c} />
+        </svg>
+      );
+    case "external":
+      return (
+        <svg style={s} viewBox={v}>
+          <path d="M14 5h5v5M19 5l-8 8M11 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" {...c} />
+        </svg>
+      );
+    case "trash":
+      return (
+        <svg style={s} viewBox={v}>
+          <path d="M4 7h16" {...c} />
+          <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" {...c} />
+          <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" {...c} />
+          <path d="M10 11v6M14 11v6" {...c} />
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
 
 export function NexusGameOptions({
@@ -96,7 +88,7 @@ export function NexusGameOptions({
   onToggleFavorite: () => void;
   onTogglePin: () => void;
   onClose: () => void;
-  /** Fired when an override changes, so the ficha can refresh its Core display. */
+  /** Fired when the per-game emulator override changes (refreshes the ficha's Core). */
   onChanged?: () => void;
 }) {
   const app = useApp();
@@ -105,10 +97,17 @@ export function NexusGameOptions({
   const key = `${sys}:${file}`;
 
   const [emus, setEmus] = useState<EmuOption[]>([]);
-  const [override, setOverride] = useState<GameOverride>({});
-  const [loading, setLoading] = useState(true);
+  const [overrideId, setOverrideId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [toast, setToast] = useState<{ text: string; k: number } | null>(null);
+  const toastTimer = useRef<number | null>(null);
+
+  const fire = (text: string) => {
+    setToast({ text, k: Date.now() });
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 1900);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -120,11 +119,9 @@ export function NexusGameOptions({
         ]);
         if (cancelled) return;
         setEmus(list);
-        setOverride(overrides[key] ?? {});
+        setOverrideId(overrides[key]?.emulatorId ?? null);
       } catch (e) {
         console.warn("[game-options] load failed:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -132,23 +129,26 @@ export function NexusGameOptions({
     };
   }, [key, sys]);
 
+  // Esc / click-outside close (Esc captured so it doesn't bubble to the ficha).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        if (confirmReset) setConfirmReset(false);
+        else onClose();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+  }, [onClose, confirmReset]);
 
-  const overrideId = override.emulatorId ?? null;
-  const resolvedEmu = overrideId ?? emus[0]?.emulatorId;
-  const isDolphin = resolvedEmu === "dolphin";
-  const isRetro = resolvedEmu === "retroarch";
-  const dolphin = override.dolphin ?? {};
-  const retro = override.retroarch ?? {};
+  useEffect(
+    () => () => {
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    },
+    []
+  );
+
   const defaultEmu = emus[0];
 
   const chooseEmu = async (id: string | null) => {
@@ -156,7 +156,7 @@ export function NexusGameOptions({
     setBusy(true);
     try {
       await window.electronAPI.setEmulatorOverride(sys, file, id);
-      setOverride((o) => ({ ...o, emulatorId: id ?? undefined }));
+      setOverrideId(id);
       onChanged?.();
     } catch (e) {
       console.warn("[game-options] set emulator failed:", e);
@@ -165,34 +165,15 @@ export function NexusGameOptions({
     }
   };
 
-  const setDolphin = async <K extends keyof DolphinGameConfig>(k: K, v: DolphinGameConfig[K]) => {
-    try {
-      await window.electronAPI.setDolphinGameConfig(sys, file, { [k]: v });
-      setOverride((o) => ({ ...o, dolphin: { ...(o.dolphin ?? {}), [k]: v } }));
-    } catch (e) {
-      console.warn("[game-options] set dolphin failed:", e);
-    }
-  };
-
-  const setRetro = async <K extends keyof RetroArchGameConfig>(k: K, v: RetroArchGameConfig[K]) => {
-    try {
-      await window.electronAPI.setRetroArchGameConfig(sys, file, { [k]: v });
-      setOverride((o) => ({ ...o, retroarch: { ...(o.retroarch ?? {}), [k]: v } }));
-    } catch (e) {
-      console.warn("[game-options] set retroarch failed:", e);
-    }
-  };
-
-  const resetPlay = async () => {
-    if (busy) return;
+  const doReset = async () => {
     setBusy(true);
     try {
       await window.electronAPI.resetGamePlay(sys, file);
       await app.reloadUserLibrary();
-      setResetDone(true);
-      onChanged?.();
+      setConfirmReset(false);
+      fire("Tiempo jugado restablecido");
     } catch (e) {
-      console.warn("[game-options] reset play failed:", e);
+      console.warn("[game-options] reset failed:", e);
     } finally {
       setBusy(false);
     }
@@ -207,187 +188,149 @@ export function NexusGameOptions({
     >
       <div className="go-modal" role="dialog" aria-label="Opciones del juego">
         <div className="go-head">
-          <span className="go-ic">
-            <SettingsIcon size={19} />
+          <span className="go-cover">
+            <NexusCover game={game} rounded={0} />
           </span>
           <div className="go-head-txt">
             <h2>Opciones del juego</h2>
-            <p>{game.title}</p>
+            <p>
+              {game.title}
+              {game.systemName ? " · " + game.systemName : ""}
+            </p>
           </div>
           <button className="go-close" onClick={onClose} aria-label="Cerrar">
-            <CloseIcon size={19} />
+            <Icon name="close" size={19} />
           </button>
         </div>
 
         <div className="go-body">
           {/* ── Emulador ─────────────────────────────────────── */}
-          <div className="go-label">Emulador para este juego</div>
-          {loading ? (
-            <div className="go-empty">Cargando…</div>
-          ) : emus.length === 0 ? (
-            <div className="go-empty">No hay emuladores instalados para este sistema.</div>
-          ) : (
-            <div className="go-list">
+          <div>
+            <div className="go-group-lbl">Emulador para este juego</div>
+            <div className="go-emu">
               <button
-                className={"go-opt" + (overrideId === null ? " on" : "")}
+                className={"go-emu-opt" + (overrideId === null ? " on" : "")}
                 disabled={busy}
                 onClick={() => void chooseEmu(null)}
               >
-                <span className="go-opt-txt">
-                  <b>Predeterminado</b>
-                  {defaultEmu && <span className="go-opt-sub">{defaultEmu.emulatorName}</span>}
+                <span className="go-emu-bar" />
+                <span className="go-emu-radio">
+                  <i />
                 </span>
-                {overrideId === null && <CheckIcon size={16} />}
+                <span className="go-emu-txt">
+                  <b>Predeterminado</b>
+                  <span>{defaultEmu ? defaultEmu.emulatorName : "Emulador del sistema"}</span>
+                </span>
+                <span className="go-emu-tag">Recomendado</span>
               </button>
               {emus.map((e) => (
                 <button
                   key={e.emulatorId}
-                  className={"go-opt" + (overrideId === e.emulatorId ? " on" : "")}
+                  className={"go-emu-opt" + (overrideId === e.emulatorId ? " on" : "")}
                   disabled={busy}
                   onClick={() => void chooseEmu(e.emulatorId)}
                 >
-                  <span className="go-opt-txt">
-                    <b>{e.emulatorName}</b>
+                  <span className="go-emu-bar" />
+                  <span className="go-emu-radio">
+                    <i />
                   </span>
-                  {overrideId === e.emulatorId && <CheckIcon size={16} />}
+                  <span className="go-emu-txt">
+                    <b>{e.emulatorName}</b>
+                    <span>{e.emulatorId}</span>
+                  </span>
                 </button>
               ))}
             </div>
-          )}
-
-          {/* ── Dolphin tweaks ───────────────────────────────── */}
-          {!loading && isDolphin && (
-            <>
-              <div className="go-label">Ajustes de Dolphin</div>
-              <div className="go-list">
-                <Toggle
-                  label="Pantalla panorámica (16:9)"
-                  hint="Renderiza en 16:9 real, no 4:3 con bandas"
-                  on={!!dolphin.wideScreenHack}
-                  onChange={(v) => void setDolphin("wideScreenHack", v)}
-                />
-                <SelectRow
-                  label="Relación de aspecto"
-                  value={String(dolphin.aspectRatio ?? 0)}
-                  options={[
-                    { value: "0", label: "Automática" },
-                    { value: "1", label: "4:3" },
-                    { value: "2", label: "16:9" },
-                    { value: "3", label: "Estirar" },
-                  ]}
-                  onChange={(v) => void setDolphin("aspectRatio", Number(v) as 0 | 1 | 2 | 3)}
-                />
-                <SelectRow
-                  label="Velocidad de emulación"
-                  value={String(dolphin.emulationSpeed ?? 1)}
-                  options={[
-                    { value: "0", label: "Ilimitada" },
-                    { value: "0.5", label: "50%" },
-                    { value: "1", label: "100%" },
-                    { value: "2", label: "200%" },
-                  ]}
-                  onChange={(v) => void setDolphin("emulationSpeed", Number(v))}
-                />
-                <Toggle
-                  label="Overclock de CPU"
-                  on={!!dolphin.overclockEnable}
-                  onChange={(v) => void setDolphin("overclockEnable", v)}
-                />
-                <Toggle
-                  label="Saltar acceso a EFB"
-                  hint="Más rendimiento; puede romper algunos efectos"
-                  on={!!dolphin.skipEFBAccess}
-                  onChange={(v) => void setDolphin("skipEFBAccess", v)}
-                />
-                <Toggle
-                  label="Ignorar mando 2"
-                  on={!!dolphin.disablePort2}
-                  onChange={(v) => void setDolphin("disablePort2", v)}
-                />
-              </div>
-            </>
-          )}
-
-          {/* ── RetroArch tweaks ─────────────────────────────── */}
-          {!loading && isRetro && (
-            <>
-              <div className="go-label">Ajustes de RetroArch</div>
-              <div className="go-list">
-                <Toggle
-                  label="Filtro bilineal"
-                  hint="Suaviza la imagen"
-                  on={!!retro.bilinearFilter}
-                  onChange={(v) => void setRetro("bilinearFilter", v)}
-                />
-                <Toggle
-                  label="Escala entera"
-                  hint="Píxeles nítidos (múltiplos exactos)"
-                  on={!!retro.integerScale}
-                  onChange={(v) => void setRetro("integerScale", v)}
-                />
-                <SelectRow
-                  label="Relación de aspecto"
-                  value={String(retro.aspectRatio ?? 0)}
-                  options={[
-                    { value: "0", label: "4:3" },
-                    { value: "1", label: "16:9" },
-                  ]}
-                  onChange={(v) => void setRetro("aspectRatio", Number(v) as 0 | 1)}
-                />
-                <Toggle
-                  label="Run-ahead"
-                  hint="Reduce el input lag"
-                  on={!!retro.runAhead}
-                  onChange={(v) => void setRetro("runAhead", v)}
-                />
-                {retro.runAhead && (
-                  <SelectRow
-                    label="Fotogramas de run-ahead"
-                    value={String(retro.runAheadFrames ?? 1)}
-                    options={[1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n) }))}
-                    onChange={(v) => void setRetro("runAheadFrames", Number(v))}
-                  />
-                )}
-                <Toggle
-                  label="Rebobinado"
-                  on={!!retro.rewind}
-                  onChange={(v) => void setRetro("rewind", v)}
-                />
-              </div>
-            </>
-          )}
+          </div>
 
           {/* ── Acciones ─────────────────────────────────────── */}
-          <div className="go-label">Acciones</div>
-          <div className="go-list">
-            <button
-              className={"go-toggle" + (isFavorite ? " on" : "")}
-              onClick={onToggleFavorite}
-            >
-              <span className="go-opt-txt">
-                <b>Favorito</b>
-              </span>
-              <HeartIcon size={18} />
-            </button>
-            <button className={"go-toggle" + (pinned ? " on" : "")} onClick={onTogglePin}>
-              <span className="go-opt-txt">
-                <b>Fijar en el perfil</b>
-              </span>
-              {pinned && <CheckIcon size={16} />}
-            </button>
-            <button className="go-action" disabled={busy} onClick={() => void resetPlay()}>
-              <TrashIcon size={16} />
-              {resetDone ? "Tiempo restablecido" : "Restablecer tiempo jugado"}
-            </button>
-            <button
-              className="go-action"
-              onClick={() => void window.electronAPI.showInExplorer(game.rom.filePath)}
-            >
-              Abrir ubicación del ROM
-            </button>
+          <div>
+            <div className="go-group-lbl">Acciones</div>
+            <div className="go-actions">
+              <button
+                className={"go-act" + (isFavorite ? " on" : "")}
+                onClick={onToggleFavorite}
+              >
+                <span className="go-act-ico">
+                  <Icon name="heart" size={18} />
+                </span>
+                <span className="go-act-lbl">Favorito</span>
+                <span className="go-act-state">{isFavorite ? "Añadido" : ""}</span>
+              </button>
+              <button className={"go-act" + (pinned ? " on" : "")} onClick={onTogglePin}>
+                <span className="go-act-ico">
+                  <Icon name="pin" size={18} />
+                </span>
+                <span className="go-act-lbl">Fijar en el perfil</span>
+                <span className="go-act-state">{pinned ? "Fijado" : ""}</span>
+              </button>
+
+              <div className="go-divider" />
+
+              <button
+                className="go-act"
+                onClick={() => {
+                  void window.electronAPI.showInExplorer(game.rom.filePath);
+                  fire("Abriendo ubicación del ROM…");
+                }}
+              >
+                <span className="go-act-ico">
+                  <Icon name="folder" size={18} />
+                </span>
+                <span className="go-act-lbl">
+                  Abrir ubicación del ROM
+                  <span>{game.rom.filePath}</span>
+                </span>
+                <span className="go-act-chev">
+                  <Icon name="external" size={16} />
+                </span>
+              </button>
+              <button className="go-act danger" disabled={busy} onClick={() => setConfirmReset(true)}>
+                <span className="go-act-ico">
+                  <Icon name="trash" size={18} />
+                </span>
+                <span className="go-act-lbl">Restablecer tiempo jugado</span>
+              </button>
+            </div>
           </div>
+
+          <div className="go-foot" />
         </div>
+
+        {confirmReset && (
+          <div
+            className="go-confirm"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setConfirmReset(false);
+            }}
+          >
+            <div className="go-confirm-card" role="alertdialog" aria-modal="true">
+              <div className="go-cf-ic">
+                <Icon name="trash" size={22} />
+              </div>
+              <b>¿Restablecer el tiempo jugado?</b>
+              <p>Se borrará el tiempo y las sesiones de este juego. No se puede deshacer.</p>
+              <div className="go-confirm-acts">
+                <button className="go-cbtn" disabled={busy} onClick={() => setConfirmReset(false)}>
+                  Cancelar
+                </button>
+                <button className="go-cbtn danger" disabled={busy} onClick={() => void doReset()}>
+                  Restablecer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {toast && (
+        <div className="go-toast" key={toast.k}>
+          <span className="ic">
+            <Icon name="check" size={14} />
+          </span>{" "}
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }
