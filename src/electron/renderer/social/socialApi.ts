@@ -435,10 +435,11 @@ export async function listFriends(): Promise<FriendEdge[]> {
   const otherIds = friendships.map((f) => (f.requester_id === myId ? f.addressee_id : f.requester_id));
   if (otherIds.length === 0) return [];
 
-  const { data: profiles, error: pErr } = await db()
-    .from("profiles")
-    .select("*")
-    .in("id", otherIds);
+  // profiles is owner-only at the table level; read the OTHER parties' cards
+  // through the safe RPC (public fields only, honors show_name/show_age).
+  const { data: profiles, error: pErr } = await db().rpc("get_public_profiles", {
+    p_ids: otherIds,
+  });
   if (pErr) throw pErr;
   const byId = new Map((profiles as Profile[]).map((p) => [p.id, p]));
 
