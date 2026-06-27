@@ -38,6 +38,7 @@ import {
   PlayIcon,
   ClockIcon,
   RefreshIcon,
+  SettingsIcon,
   HeartIcon,
   CheckIcon,
   GridIcon,
@@ -190,6 +191,7 @@ function Actions({
   setPin,
   onToggleFavorite,
   onPlay,
+  onChangeEmulator,
 }: {
   game: NexusGame;
   fav: boolean;
@@ -197,6 +199,7 @@ function Actions({
   setPin: (fn: (v: boolean) => boolean) => void;
   onToggleFavorite: () => void;
   onPlay: (mode: PlayMode) => void;
+  onChangeEmulator: () => void;
 }) {
   const playing = hasPlayed(game);
   const lastWhen = relativeTime(game.play?.lastPlayed).toLowerCase();
@@ -218,8 +221,20 @@ function Actions({
           </span>
         </button>
       )}
-      <button className="gd-secondary foc-ring" data-foc onClick={() => onPlay("new")}>
-        <RefreshIcon size={16} /> {playing ? "Nueva partida" : "Opciones"}
+      <button
+        className="gd-secondary foc-ring"
+        data-foc
+        onClick={() => (playing ? onPlay("new") : onChangeEmulator())}
+      >
+        {playing ? (
+          <>
+            <RefreshIcon size={16} /> Nueva partida
+          </>
+        ) : (
+          <>
+            <SettingsIcon size={16} /> Opciones
+          </>
+        )}
       </button>
       <button
         className={"gd-iconbtn foc-ring" + (fav ? " on" : "")}
@@ -542,6 +557,7 @@ export function NexusGameDetail({
       setPin={setPin}
       onToggleFavorite={onToggleFavorite}
       onPlay={onPlay}
+      onChangeEmulator={onChangeEmulator}
     />
   );
 
