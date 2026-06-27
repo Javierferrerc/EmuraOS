@@ -174,3 +174,87 @@
 .nexus-root .go-action:hover {
   background: var(--panel-2);
 }
+.nexus-root .go-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.nexus-root .go-action svg {
+  flex-shrink: 0;
+}
+
+/* toggle row (boolean override) */
+.nexus-root .go-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.nexus-root .go-toggle:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.nexus-root .go-toggle.on {
+  border-color: var(--accent);
+}
+.nexus-root .go-toggle svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.nexus-root .go-switch {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.15s;
+}
+.nexus-root .go-toggle.on .go-switch {
+  background: var(--accent);
+}
+.nexus-root .go-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.nexus-root .go-toggle.on .go-knob {
+  transform: translateX(16px);
+}
+
+/* select row */
+.nexus-root .go-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.nexus-root .go-select-row b {
+  font-size: 14px;
+  font-weight: 700;
+}
+.nexus-root .go-select {
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 8px;
+  cursor: pointer;
+}

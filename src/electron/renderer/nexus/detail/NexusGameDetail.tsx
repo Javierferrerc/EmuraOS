@@ -631,6 +631,10 @@ export function NexusGameDetail({
       {optionsOpen && (
         <NexusGameOptions
           game={game}
+          isFavorite={isFavorite}
+          pinned={pinned}
+          onToggleFavorite={onToggleFavorite}
+          onTogglePin={() => setPin((v) => !v)}
           onClose={() => setOptionsOpen(false)}
           onChanged={() => setCoreRefresh((n) => n + 1)}
         />

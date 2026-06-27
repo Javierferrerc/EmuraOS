@@ -340,6 +340,7 @@ export interface ElectronAPI {
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache(): Promise<{ success: boolean; error?: string }>;
   resetPlayHistory(): Promise<{ success: boolean; error?: string }>;
+  resetGamePlay(systemId: string, fileName: string): Promise<boolean>;
   exportUserLibrary(): Promise<{
     success: boolean;
     path?: string;

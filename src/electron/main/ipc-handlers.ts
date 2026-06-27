@@ -1446,6 +1446,18 @@ export function registerIpcHandlers(
     return true;
   });
 
+  // Reset play time / sessions for a single game (per-game version of
+  // reset-play-history).
+  ipcMain.handle(
+    "reset-game-play",
+    (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown) => {
+      const s = SystemIdSchema.parse(systemId);
+      const f = FileNameSchema.parse(fileName);
+      getLib().resetGamePlay(s, f);
+      return true;
+    }
+  );
+
   ipcMain.handle(
     "toggle-favorite",
     (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown) => {

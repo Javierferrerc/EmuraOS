@@ -453,4 +453,22 @@ export class UserLibrary {
     data.playHistory = {};
     this.save(data);
   }
+
+  /** Clear play history (time + sessions) for a SINGLE game and drop it from
+   *  recently-played. Per-game version of resetPlayHistory. */
+  resetGamePlay(systemId: string, fileName: string): void {
+    const key = UserLibrary.makeKey(systemId, fileName);
+    const data = this.load();
+    let changed = false;
+    if (data.playHistory[key]) {
+      delete data.playHistory[key];
+      changed = true;
+    }
+    const filtered = data.recentlyPlayed.filter((k) => k !== key);
+    if (filtered.length !== data.recentlyPlayed.length) {
+      data.recentlyPlayed = filtered;
+      changed = true;
+    }
+    if (changed) this.save(data);
+  }
 }

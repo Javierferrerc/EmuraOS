@@ -331,6 +331,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Phase 13 PR2: Library / diagnostics / reset
   clearMetadataCache: () => ipcRenderer.invoke("clear-metadata-cache"),
   resetPlayHistory: () => ipcRenderer.invoke("reset-play-history"),
+  resetGamePlay: (systemId: string, fileName: string) =>
+    ipcRenderer.invoke("reset-game-play", systemId, fileName),
   exportUserLibrary: () => ipcRenderer.invoke("export-user-library"),
   openLogsFolder: () => ipcRenderer.invoke("open-logs-folder"),
   exportDiagnosticBundle: () =>
