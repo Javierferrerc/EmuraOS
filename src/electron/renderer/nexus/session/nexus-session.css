@@ -234,11 +234,6 @@
   border: 1px solid var(--line-2);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 60px -14px var(--tint);
   aspect-ratio: 16 / 9;
-  /* Never let the 16/9 frame overflow its grid cell (which would push the live
-   * area — and the native emulator that tracks it — past the visible card). */
-  max-width: 100%;
-  max-height: 100%;
-  margin: 0 auto;
   background: #05060a;
 }
 /* The native emulator window can't be clipped by CSS (overflow/border-radius are
