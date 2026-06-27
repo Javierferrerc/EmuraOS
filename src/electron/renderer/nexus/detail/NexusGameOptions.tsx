@@ -9,7 +9,14 @@ import { useEffect, useRef, useState } from "react";
 import type { NexusGame } from "../nexusModel";
 import { useApp } from "../../context/AppContext";
 import { NexusCover } from "../NexusCover";
+import { ChangeCoverModal, type CoverItem } from "../NexusCoverGallery";
 import "./nexus-game-options.css";
+
+/** Metadata is keyed by the file name without its extension. */
+function metaKey(fileName: string): string {
+  const i = fileName.lastIndexOf(".");
+  return i > 0 ? fileName.substring(0, i) : fileName;
+}
 
 interface EmuOption {
   emulatorId: string;
@@ -18,7 +25,7 @@ interface EmuOption {
 
 // Functional glyphs ported verbatim from the handoff's icons.jsx, so they match
 // the reference exactly.
-type IconName = "close" | "check" | "heart" | "pin" | "folder" | "external" | "trash";
+type IconName = "close" | "check" | "heart" | "pin" | "folder" | "external" | "trash" | "image";
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const c = {
     fill: "none",
@@ -57,6 +64,14 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
       return (
         <svg style={s} viewBox={v}>
           <path d="M14 5h5v5M19 5l-8 8M11 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" {...c} />
+        </svg>
+      );
+    case "image":
+      return (
+        <svg style={s} viewBox={v}>
+          <rect x="4" y="5" width="16" height="14" rx="2.5" {...c} />
+          <circle cx="9" cy="10" r="1.6" {...c} />
+          <path d="M5 16l4-3 3 2 3-3 4 4" {...c} />
         </svg>
       );
     case "trash":
@@ -102,6 +117,8 @@ export function NexusGameOptions({
   const [confirmReset, setConfirmReset] = useState(false);
   const [toast, setToast] = useState<{ text: string; k: number } | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
 
   const fire = (text: string) => {
     setToast({ text, k: Date.now() });
@@ -129,10 +146,33 @@ export function NexusGameOptions({
     };
   }, [key, sys]);
 
+  // Current cover preview (managed directly so it refreshes after a change —
+  // the NEXUS cover layer doesn't react to cover-version bumps).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!game.coverPath) {
+        if (!cancelled) setCoverUrl(null);
+        return;
+      }
+      try {
+        const url = await window.electronAPI.readCoverDataUrl(game.coverPath);
+        if (!cancelled) setCoverUrl(url ?? null);
+      } catch {
+        if (!cancelled) setCoverUrl(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [game.coverPath]);
+
   // Esc / click-outside close (Esc captured so it doesn't bubble to the ficha).
+  // The cover picker (a portal) owns Esc while it's open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (coverPickerOpen) return;
         e.stopPropagation();
         if (confirmReset) setConfirmReset(false);
         else onClose();
@@ -140,7 +180,44 @@ export function NexusGameOptions({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose, confirmReset]);
+  }, [onClose, confirmReset, coverPickerOpen]);
+
+  const coverItem: CoverItem = {
+    key,
+    systemId: sys,
+    fileName: file,
+    title: game.title,
+    systemName: game.systemName,
+    coverPath: game.coverPath,
+    coverSource: app.metadataMap[sys]?.[metaKey(file)]?.coverSource as CoverItem["coverSource"],
+    tint: game.tint,
+  };
+
+  const onCoverApplied = async (result: {
+    action: "libretro" | "steamgriddb" | "custom" | "reset";
+    coverPath?: string;
+  }) => {
+    setCoverPickerOpen(false);
+    try {
+      if (result.action === "reset") {
+        setCoverUrl(null);
+        await app.startFetchingCovers();
+      }
+      if (result.coverPath) {
+        try {
+          setCoverUrl(await window.electronAPI.readCoverDataUrl(result.coverPath));
+        } catch {
+          /* keep previous preview */
+        }
+      }
+      await app.loadAllMetadata();
+      app.bumpCoverVersion(sys, file);
+      onChanged?.();
+      fire(result.action === "reset" ? "Carátula restablecida" : "Carátula actualizada");
+    } catch (e) {
+      console.warn("[game-options] cover apply failed:", e);
+    }
+  };
 
   useEffect(
     () => () => {
@@ -189,7 +266,7 @@ export function NexusGameOptions({
       <div className="go-modal" role="dialog" aria-label="Opciones del juego">
         <div className="go-head">
           <span className="go-cover">
-            <NexusCover game={game} rounded={0} />
+            {coverUrl ? <img src={coverUrl} alt="" /> : <NexusCover game={game} rounded={0} />}
           </span>
           <div className="go-head-txt">
             <h2>Opciones del juego</h2>
@@ -247,6 +324,18 @@ export function NexusGameOptions({
           <div>
             <div className="go-group-lbl">Acciones</div>
             <div className="go-actions">
+              <button className="go-act" onClick={() => setCoverPickerOpen(true)}>
+                <span className="go-act-ico">
+                  <Icon name="image" size={18} />
+                </span>
+                <span className="go-act-lbl">
+                  Cambiar carátula
+                  <span>SteamGridDB, Libretro o una imagen propia</span>
+                </span>
+                <span className="go-act-chev">
+                  <Icon name="external" size={16} />
+                </span>
+              </button>
               <button
                 className={"go-act" + (isFavorite ? " on" : "")}
                 onClick={onToggleFavorite}
@@ -322,6 +411,15 @@ export function NexusGameOptions({
           </div>
         )}
       </div>
+
+      {coverPickerOpen && (
+        <ChangeCoverModal
+          item={coverItem}
+          currentUrl={coverUrl}
+          onApplied={(r) => void onCoverApplied(r)}
+          onClose={() => setCoverPickerOpen(false)}
+        />
+      )}
 
       {toast && (
         <div className="go-toast" key={toast.k}>

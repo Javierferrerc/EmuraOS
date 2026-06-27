@@ -35,7 +35,7 @@ function metaKey(fileName: string): string {
 
 type CoverSrc = "libretro" | "screenscraper" | "steamgriddb" | "custom" | undefined;
 
-interface CoverItem {
+export interface CoverItem {
   key: string; // systemId:fileName
   systemId: string;
   fileName: string;
@@ -291,7 +291,7 @@ type Busy =
   | { kind: "libretro" | "custom" | "reset" | "sgdb-list" }
   | { kind: "sgdb-apply"; gridId: number };
 
-function ChangeCoverModal({
+export function ChangeCoverModal({
   item,
   currentUrl,
   onApplied,
