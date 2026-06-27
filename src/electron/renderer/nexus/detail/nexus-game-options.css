@@ -1,0 +1,176 @@
+/* nexus-game-options.css — per-game options modal (emulator override + actions). */
+
+.nexus-root .go-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(4, 6, 11, 0.66);
+  backdrop-filter: blur(10px);
+  animation: goFade 0.18s ease;
+}
+@keyframes goFade {
+  from {
+    opacity: 0;
+  }
+}
+
+.nexus-root .go-modal {
+  width: min(440px, 96vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--line-2);
+  background: linear-gradient(180deg, rgba(18, 21, 28, 0.98), rgba(11, 13, 18, 0.99));
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  animation: goRise 0.22s cubic-bezier(0.16, 0.84, 0.34, 1);
+}
+@keyframes goRise {
+  from {
+    transform: translateY(12px);
+    opacity: 0.5;
+  }
+}
+
+.nexus-root .go-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.nexus-root .go-ic {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent-2, #5aa0ff);
+  flex-shrink: 0;
+}
+.nexus-root .go-head-txt {
+  min-width: 0;
+  flex: 1;
+}
+.nexus-root .go-head-txt h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.nexus-root .go-head-txt p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nexus-root .go-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.nexus-root .go-close:hover {
+  background: var(--panel-2);
+}
+
+.nexus-root .go-body {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+}
+.nexus-root .go-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 6px 0 8px;
+}
+.nexus-root .go-label:not(:first-child) {
+  margin-top: 16px;
+}
+
+.nexus-root .go-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nexus-root .go-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+.nexus-root .go-opt:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.nexus-root .go-opt.on {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, var(--panel));
+}
+.nexus-root .go-opt:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.nexus-root .go-opt svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.nexus-root .go-opt-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nexus-root .go-opt-txt b {
+  font-size: 14px;
+  font-weight: 700;
+}
+.nexus-root .go-opt-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.nexus-root .go-empty {
+  font-size: 13px;
+  color: var(--text-faint);
+  padding: 8px 0;
+}
+
+.nexus-root .go-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+.nexus-root .go-action:hover {
+  background: var(--panel-2);
+}

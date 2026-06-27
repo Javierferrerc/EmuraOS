@@ -34,6 +34,7 @@ import {
 } from "./gameDetailData";
 import { SYSTEM_ICONS } from "../../utils/sliderItems";
 import { EMULATOR_ICONS } from "../../components/settings/sections/emuladores/EmulatorIcon";
+import { NexusGameOptions } from "./NexusGameOptions";
 import {
   PlayIcon,
   ClockIcon,
@@ -110,7 +111,7 @@ interface CoreInfo {
   ready: boolean;
 }
 
-function useResolvedCore(game: NexusGame): CoreInfo | null {
+function useResolvedCore(game: NexusGame, refreshKey = 0): CoreInfo | null {
   const [core, setCore] = useState<CoreInfo | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -144,7 +145,7 @@ function useResolvedCore(game: NexusGame): CoreInfo | null {
     return () => {
       cancelled = true;
     };
-  }, [game.key, game.rom.systemId, game.rom.fileName]);
+  }, [game.key, game.rom.systemId, game.rom.fileName, refreshKey]);
   return core;
 }
 
@@ -191,7 +192,7 @@ function Actions({
   setPin,
   onToggleFavorite,
   onPlay,
-  onChangeEmulator,
+  onOptions,
 }: {
   game: NexusGame;
   fav: boolean;
@@ -199,7 +200,7 @@ function Actions({
   setPin: (fn: (v: boolean) => boolean) => void;
   onToggleFavorite: () => void;
   onPlay: (mode: PlayMode) => void;
-  onChangeEmulator: () => void;
+  onOptions: () => void;
 }) {
   const playing = hasPlayed(game);
   const lastWhen = relativeTime(game.play?.lastPlayed).toLowerCase();
@@ -224,7 +225,7 @@ function Actions({
       <button
         className="gd-secondary foc-ring"
         data-foc
-        onClick={() => (playing ? onPlay("new") : onChangeEmulator())}
+        onClick={() => (playing ? onPlay("new") : onOptions())}
       >
         {playing ? (
           <>
@@ -396,8 +397,16 @@ function MetaSection({ game }: { game: NexusGame }) {
   );
 }
 
-function CoreSection({ game, onChangeEmulator }: { game: NexusGame; onChangeEmulator: () => void }) {
-  const core = useResolvedCore(game);
+function CoreSection({
+  game,
+  onChangeEmulator,
+  refreshKey = 0,
+}: {
+  game: NexusGame;
+  onChangeEmulator: () => void;
+  refreshKey?: number;
+}) {
+  const core = useResolvedCore(game, refreshKey);
   return (
     <section className="gd-section">
       <SecHead icon={<CpuIcon size={18} />} title="Emulación" />
@@ -528,6 +537,9 @@ export function NexusGameDetail({
   const compat = useMemo(() => compatOf(game), [game.key]);
   const stills = useGameStills(game);
   const [pinned, setPin] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  // Bumped when the per-game emulator override changes, to refresh the Core display.
+  const [coreRefresh, setCoreRefresh] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useGameDetailFocus(rootRef, focusHandleRef, [game.key, density, showCompat, sectionOrder]);
@@ -557,7 +569,7 @@ export function NexusGameDetail({
       setPin={setPin}
       onToggleFavorite={onToggleFavorite}
       onPlay={onPlay}
-      onChangeEmulator={onChangeEmulator}
+      onOptions={() => setOptionsOpen(true)}
     />
   );
 
@@ -566,7 +578,7 @@ export function NexusGameDetail({
     meta: <MetaSection key="meta" game={game} />,
     emu: (
       <div key="emu" className="gd-cols">
-        <CoreSection game={game} onChangeEmulator={onChangeEmulator} />
+        <CoreSection game={game} onChangeEmulator={onChangeEmulator} refreshKey={coreRefresh} />
         <ActivitySection game={game} stills={stills} onPlay={onPlay} />
       </div>
     ),
@@ -615,6 +627,14 @@ export function NexusGameDetail({
       </header>
 
       <div className="gd-body">{order.map((k) => SECTIONS[k])}</div>
+
+      {optionsOpen && (
+        <NexusGameOptions
+          game={game}
+          onClose={() => setOptionsOpen(false)}
+          onChanged={() => setCoreRefresh((n) => n + 1)}
+        />
+      )}
     </div>
   );
 }
