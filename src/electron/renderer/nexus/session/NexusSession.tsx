@@ -120,11 +120,19 @@ export function NexusSession() {
 
   useEffect(() => {
     sendBounds();
+    // The pause/resume animation tweens with CSS transforms, which a
+    // ResizeObserver does NOT observe — so the emulator could get stuck on an
+    // intermediate (cut-off) rectangle. Re-send the settled bounds across the
+    // transition so it snaps to the final full-screen / box layout.
+    const raf = requestAnimationFrame(sendBounds);
+    const timers = [120, 320, 600].map((ms) => window.setTimeout(sendBounds, ms));
     const ro = new ResizeObserver(() => sendBounds());
     if (fullRef.current) ro.observe(fullRef.current);
     if (boxRef.current) ro.observe(boxRef.current);
     window.addEventListener("resize", sendBounds);
     return () => {
+      cancelAnimationFrame(raf);
+      timers.forEach((t) => window.clearTimeout(t));
       ro.disconnect();
       window.removeEventListener("resize", sendBounds);
     };
