@@ -60,12 +60,14 @@ function hueFromString(s: string): number {
   return h % 360;
 }
 
-/** Only data: URLs and the SteamGridDB CDN are allowed by the renderer CSP for
- * <img>; a Supabase storage avatar_url would be blocked, so we surface the
- * locally-stored avatar (what the app actually shows) instead. */
+/** Avatar URLs the renderer CSP allows for <img>: data: URLs, the SteamGridDB
+ * CDN, and Supabase Storage (img-src includes https://*.supabase.co). Anything
+ * else (e.g. an unknown host) is dropped so the tile falls back to the orb. */
 function cspSafeAvatar(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
-  return /^(data:|https:\/\/cdn2\.steamgriddb\.com)/.test(url) ? url : undefined;
+  return /^(data:|https:\/\/cdn2\.steamgriddb\.com|https:\/\/[a-z0-9-]+\.supabase\.co\/)/i.test(url)
+    ? url
+    : undefined;
 }
 
 // ── icons (ported from the handoff's icons.jsx, only what's used here) ──
