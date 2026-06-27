@@ -113,10 +113,15 @@ export function loadProfileEdit(fallbackName: string, profileId?: string | null)
     avatarUrl: null,
   };
   try {
-    // Prefer this profile's own data; fall back to the legacy global key once
-    // (pre-migration data) so an existing user doesn't lose their profile.
-    const raw =
-      localStorage.getItem(profileKey(profileId)) ?? localStorage.getItem(LS_PROFILE_LEGACY);
+    const id = profileId ?? loadActiveId();
+    // Read ONLY this profile's own key. The legacy global blob is inherited
+    // (one-time migration) by the DEFAULT "local" profile only — otherwise every
+    // not-yet-saved profile would read the same global data and appear to share
+    // pins / avatar / status.
+    let raw = localStorage.getItem(profileKey(profileId));
+    if (raw === null && (id === "local" || id == null)) {
+      raw = localStorage.getItem(LS_PROFILE_LEGACY);
+    }
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<NexusProfileEdit>;
       return {
