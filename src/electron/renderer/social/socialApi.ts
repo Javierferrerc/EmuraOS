@@ -286,22 +286,36 @@ export async function emailForUsername(username: string): Promise<string | null>
  *  Bare username is ambiguous now that usernames can repeat, so prefer email or
  *  the full `usuario#ID`; the bare-username path stays as a best-effort. */
 export async function signInWithIdentifier(identifier: string, password: string): Promise<void> {
-  const id = identifier.trim();
-  let email = id;
-  if (id.includes("#")) {
-    const hash = id.indexOf("#");
-    const uname = id.slice(0, hash).trim();
-    const tag = id.slice(hash + 1).trim();
-    const resolved = await emailForHandle(uname, tag);
-    if (!resolved) throw new Error("No existe una cuenta con ese usuario#ID.");
-    email = resolved;
-  } else if (!id.includes("@")) {
-    const resolved = await emailForUsername(id);
-    if (!resolved) throw new Error("No existe una cuenta con ese usuario.");
-    email = resolved;
+  // Resolution (username/handle → email) + the password check happen server-side
+  // in the `signin` Edge Function, so the client never maps an identifier to an
+  // account email (security finding #3). It returns only the session tokens.
+  const { data, error } = await db().functions.invoke("signin", {
+    body: { identifier: identifier.trim(), password },
+  });
+  if (error) {
+    // functions.invoke turns a non-2xx into an error whose `context` is the
+    // Response — surface the function's friendly message when we can.
+    let msg = "No se pudo iniciar sesión.";
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") {
+      try {
+        const body = (await ctx.json()) as { error?: string };
+        if (body?.error) msg = body.error;
+      } catch {
+        /* keep the default message */
+      }
+    }
+    throw new Error(msg);
   }
-  const { error } = await db().auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  const tokens = data as { access_token?: string; refresh_token?: string } | null;
+  if (!tokens?.access_token || !tokens?.refresh_token) {
+    throw new Error("Respuesta de inicio de sesión inválida.");
+  }
+  const { error: sErr } = await db().auth.setSession({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+  });
+  if (sErr) throw sErr;
 }
 
 /** Desktop OAuth: returns the provider authorization URL WITHOUT navigating, so
