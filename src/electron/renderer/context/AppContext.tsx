@@ -159,6 +159,9 @@ interface AppActions {
   setCurrentView: (view: "library" | "settings" | "emulator-config" | "game") => void;
   stopGame: () => Promise<void>;
   refreshScan: () => Promise<void>;
+  /** Re-read the per-profile activity store (favorites / collections / recents /
+   *  play history) — call after switching the active profile. */
+  reloadUserLibrary: () => Promise<void>;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
   detectEmulators: () => Promise<void>;
   launchGame: (rom: DiscoveredRom, emulatorId?: string) => Promise<void>;
@@ -551,6 +554,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       detectEmulators();
     }
     init();
+  }, []);
+
+  const reloadUserLibrary = useCallback(async () => {
+    const userLib = await window.electronAPI.getUserLibrary();
+    setFavorites(new Set(userLib.favorites));
+    setCollections(userLib.collections);
+    setRecentlyPlayed(userLib.recentlyPlayed);
+    setPlayHistory(userLib.playHistory);
   }, []);
 
   const refreshScan = useCallback(async () => {
@@ -1633,6 +1644,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentView,
     stopGame,
     refreshScan,
+    reloadUserLibrary,
     updateConfig,
     detectEmulators,
     launchGame,

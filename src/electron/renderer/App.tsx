@@ -580,7 +580,19 @@ export default function App() {
       {!booting && !activeProfile && (
         <NexusProfileSelect
           soundEnabled={app.config?.navSoundEnabled ?? true}
-          onEnter={(profile) => setActiveProfile(profile)}
+          onEnter={(profile) => {
+            // Point the per-profile activity store at this profile and reload it
+            // (own playtime / favorites / collections) BEFORE revealing the shell.
+            void (async () => {
+              try {
+                await window.electronAPI.setActiveProfile(profile.id);
+                await app.reloadUserLibrary();
+              } catch (e) {
+                console.warn("[profile] activate failed:", e);
+              }
+              setActiveProfile(profile);
+            })();
+          }}
         />
       )}
       {dropHighlight && (

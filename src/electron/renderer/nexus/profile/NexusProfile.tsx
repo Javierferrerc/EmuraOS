@@ -248,7 +248,7 @@ export function NexusProfile({
           pinned: pinnedPayload,
           stats: {
             play_seconds: stats.totalSeconds,
-            games: stats.ownedGames,
+            games: stats.playedGames,
             level: stats.level,
             xp: stats.xpTotal,
           },
@@ -345,7 +345,7 @@ export function NexusProfile({
         const patch: Parameters<typeof social.updateProfile>[0] = {
           stats: {
             play_seconds: stats.totalSeconds,
-            games: stats.ownedGames,
+            games: stats.playedGames,
             level: stats.level,
             xp: stats.xpTotal,
           },

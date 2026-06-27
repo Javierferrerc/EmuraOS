@@ -145,6 +145,19 @@ function getProjectRoot(): string {
   return app.getAppPath();
 }
 
+// Active profile whose per-profile activity store (favorites / collections /
+// play history) is in use. The ROM library/scan stays shared per machine; only
+// the activity file is keyed by profile. Set via the `library:set-active-profile`
+// IPC when a profile is entered/switched. null = the default ("local") profile.
+let activeProfileId: string | null = null;
+
+/** A UserLibrary bound to the active profile's activity file. Use everywhere
+ *  instead of `getLib()` so play history etc. are
+ *  per-profile. */
+function getLib(): UserLibrary {
+  return new UserLibrary(getProjectRoot(), activeProfileId);
+}
+
 /**
  * Run emulator-specific first-launch setup (e.g. write ROM folder into
  * Cemu's settings.xml so users are not prompted for a game path).
@@ -237,7 +250,7 @@ export function registerIpcHandlers(
     mapper: EmulatorMapper,
     emulatorsPath: string
   ): Promise<string | undefined> {
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     const override = lib.getGameOverride(rom.systemId, rom.fileName);
     const effective = override?.emulatorId ?? callerEmulatorId;
 
@@ -401,7 +414,7 @@ export function registerIpcHandlers(
             );
             if (durationSeconds > 0) {
               try {
-                const lib = new UserLibrary(getProjectRoot());
+                const lib = getLib();
                 lib.addPlayTime(
                   sessionRom.systemId,
                   sessionRom.fileName,
@@ -500,7 +513,7 @@ export function registerIpcHandlers(
     const result = scanner.scan(configManager.getRomsPath());
 
     // Record added dates for newly discovered ROMs (single load/save)
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     const allRoms: Array<{ systemId: string; fileName: string }> = [];
     for (const sys of result.systems) {
       for (const rom of sys.roms) {
@@ -553,7 +566,7 @@ export function registerIpcHandlers(
       }
       const result = launcher.launch(validated, emulatorsPath, effectiveEmuId);
       if (result.success) {
-        const lib = new UserLibrary(getProjectRoot());
+        const lib = getLib();
         lib.recordPlay(validated.systemId, validated.fileName);
       }
       return result;
@@ -1422,8 +1435,15 @@ export function registerIpcHandlers(
   // --- User Library handlers ---
 
   ipcMain.handle("get-user-library", () => {
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     return lib.getAll();
+  });
+
+  // Point the per-profile activity store at the entered profile. Called by the
+  // renderer when a profile is chosen / switched, before reloading the library.
+  ipcMain.handle("library:set-active-profile", (_event: IpcMainInvokeEvent, id: unknown) => {
+    activeProfileId = typeof id === "string" && id.trim() ? id.trim() : null;
+    return true;
   });
 
   ipcMain.handle(
@@ -1431,13 +1451,13 @@ export function registerIpcHandlers(
     (_event: IpcMainInvokeEvent, systemId: unknown, fileName: unknown) => {
       const validatedSystem = SystemIdSchema.parse(systemId);
       const validatedFile = FileNameSchema.parse(fileName);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       return lib.toggleFavorite(validatedSystem, validatedFile);
     }
   );
 
   ipcMain.handle("get-collections", () => {
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     return lib.getCollections();
   });
 
@@ -1445,7 +1465,7 @@ export function registerIpcHandlers(
     "create-collection",
     (_event: IpcMainInvokeEvent, name: unknown) => {
       const validatedName = CollectionNameSchema.parse(name);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       return lib.createCollection(validatedName);
     }
   );
@@ -1455,7 +1475,7 @@ export function registerIpcHandlers(
     (_event: IpcMainInvokeEvent, name: unknown, filter: unknown) => {
       const validatedName = CollectionNameSchema.parse(name);
       const validatedFilter = SmartCollectionFilterSchema.parse(filter);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       return lib.createSmartCollection(validatedName, validatedFilter);
     }
   );
@@ -1465,7 +1485,7 @@ export function registerIpcHandlers(
     (_event: IpcMainInvokeEvent, id: unknown, filter: unknown) => {
       const validatedId = z.string().min(1).max(100).parse(id);
       const validatedFilter = SmartCollectionFilterSchema.parse(filter);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.updateSmartCollectionFilter(validatedId, validatedFilter);
     }
   );
@@ -1475,7 +1495,7 @@ export function registerIpcHandlers(
     (_event: IpcMainInvokeEvent, id: unknown, name: unknown) => {
       const validatedId = CollectionIdSchema.parse(id);
       const validatedName = CollectionNameSchema.parse(name);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.renameCollection(validatedId, validatedName);
     }
   );
@@ -1484,7 +1504,7 @@ export function registerIpcHandlers(
     "delete-collection",
     (_event: IpcMainInvokeEvent, id: unknown) => {
       const validatedId = CollectionIdSchema.parse(id);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.deleteCollection(validatedId);
     }
   );
@@ -1500,7 +1520,7 @@ export function registerIpcHandlers(
       const validatedColl = CollectionIdSchema.parse(collectionId);
       const validatedSystem = SystemIdSchema.parse(systemId);
       const validatedFile = FileNameSchema.parse(fileName);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.addToCollection(validatedColl, validatedSystem, validatedFile);
     }
   );
@@ -1516,7 +1536,7 @@ export function registerIpcHandlers(
       const validatedColl = CollectionIdSchema.parse(collectionId);
       const validatedSystem = SystemIdSchema.parse(systemId);
       const validatedFile = FileNameSchema.parse(fileName);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.removeFromCollection(validatedColl, validatedSystem, validatedFile);
     }
   );
@@ -1536,7 +1556,7 @@ export function registerIpcHandlers(
         .array(RomCollectionKeySchema)
         .max(5000)
         .parse(keys);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.reorderCollection(validatedColl, validatedKeys);
     }
   );
@@ -1545,20 +1565,20 @@ export function registerIpcHandlers(
     "get-recently-played",
     (_event: IpcMainInvokeEvent, limit?: unknown) => {
       const validatedLimit = RecentlyPlayedLimitSchema.parse(limit);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       return lib.getRecentlyPlayed(validatedLimit);
     }
   );
 
   ipcMain.handle("get-rom-added-dates", () => {
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     return lib.getRomAddedDates();
   });
 
   // ── Phase 22 — Per-game overrides ────────────────────────────────
 
   ipcMain.handle("get-game-overrides", () => {
-    const lib = new UserLibrary(getProjectRoot());
+    const lib = getLib();
     return lib.getGameOverrides();
   });
 
@@ -1573,7 +1593,7 @@ export function registerIpcHandlers(
       const validatedSystem = SystemIdSchema.parse(systemId);
       const validatedFile = FileNameSchema.parse(fileName);
       const validatedEmu = NullableEmulatorIdSchema.parse(emulatorId);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.setEmulatorOverride(validatedSystem, validatedFile, validatedEmu);
     }
   );
@@ -1591,7 +1611,7 @@ export function registerIpcHandlers(
       // null clears the whole Dolphin block; a partial object merges.
       const validatedPatch =
         patch === null ? null : DolphinGameConfigPatchSchema.parse(patch);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.setDolphinOverride(validatedSystem, validatedFile, validatedPatch);
     }
   );
@@ -1621,7 +1641,7 @@ export function registerIpcHandlers(
       // null clears the whole RetroArch block; a partial object merges.
       const validatedPatch =
         patch === null ? null : RetroArchGameConfigPatchSchema.parse(patch);
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.setRetroArchOverride(validatedSystem, validatedFile, validatedPatch);
     }
   );
@@ -1748,7 +1768,7 @@ export function registerIpcHandlers(
       const validatedFile = FileNameSchema.parse(fileName);
       const validatedSeconds = typeof seconds === "number" && seconds > 0 ? Math.round(seconds) : 0;
       if (validatedSeconds > 0) {
-        const lib = new UserLibrary(getProjectRoot());
+        const lib = getLib();
         lib.addPlayTime(validatedSystem, validatedFile, validatedSeconds);
       }
     }
@@ -1893,7 +1913,7 @@ export function registerIpcHandlers(
       console.log("[ipc] launch-game-embedded result:", result.success, result.error || "");
 
       if (result.success) {
-        const lib = new UserLibrary(getProjectRoot());
+        const lib = getLib();
         lib.recordPlay(validated.systemId, validated.fileName);
       }
 
@@ -2547,7 +2567,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle("reset-play-history", () => {
     try {
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       lib.resetPlayHistory();
       return { success: true };
     } catch (err) {
@@ -2570,7 +2590,7 @@ export function registerIpcHandlers(
       : dialog.showSaveDialog(saveOptions));
     if (result.canceled || !result.filePath) return null;
     try {
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       const data = lib.getAll();
       writeFileSync(result.filePath, JSON.stringify(data, null, 2), "utf-8");
       return { success: true, path: result.filePath };
@@ -2609,7 +2629,7 @@ export function registerIpcHandlers(
     if (result.canceled || !result.filePath) return null;
     try {
       const configManager = new ConfigManager(getProjectRoot());
-      const lib = new UserLibrary(getProjectRoot());
+      const lib = getLib();
       const metaDir = path.join(getProjectRoot(), "metadata");
       let metadataListing: string[] = [];
       if (existsSync(metaDir)) {

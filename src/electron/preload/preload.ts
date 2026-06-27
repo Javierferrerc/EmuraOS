@@ -78,6 +78,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners("fullscreen-changed");
   },
   getUserLibrary: () => ipcRenderer.invoke("get-user-library"),
+  setActiveProfile: (id: string | null) =>
+    ipcRenderer.invoke("library:set-active-profile", id),
   toggleFavorite: (systemId: string, fileName: string) =>
     ipcRenderer.invoke("toggle-favorite", systemId, fileName),
   getCollections: () => ipcRenderer.invoke("get-collections"),

@@ -30,9 +30,23 @@ export class UserLibrary {
   private projectRoot: string;
   private filePath: string;
 
-  constructor(projectRoot?: string) {
+  /**
+   * Per-profile activity store. The ROM library/scan is shared per machine, but
+   * favorites, collections, recently-played and play history are PER PROFILE
+   * (tiny JSON of keys + counters, no ROM duplication), so playtime / games
+   * played / level differ per user.
+   *
+   * The default profile ("local", or no id) keeps the legacy
+   * `config/user-library.json` so existing data isn't lost; every other profile
+   * gets `config/user-library.<profileId>.json`.
+   */
+  constructor(projectRoot?: string, profileId?: string | null) {
     this.projectRoot = projectRoot ?? resolve(__dirname, "..", "..");
-    this.filePath = resolve(this.projectRoot, "config", "user-library.json");
+    const id = profileId && profileId !== "local" ? profileId : null;
+    const file = id
+      ? `user-library.${id.replace(/[^A-Za-z0-9_-]/g, "_")}.json`
+      : "user-library.json";
+    this.filePath = resolve(this.projectRoot, "config", file);
   }
 
   // --- Key helpers ---

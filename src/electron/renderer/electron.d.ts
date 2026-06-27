@@ -122,6 +122,8 @@ export interface ElectronAPI {
   onFullscreenChanged(callback: (isFullscreen: boolean) => void): void;
   removeFullscreenChangedListener(): void;
   getUserLibrary(): Promise<UserLibraryFile>;
+  /** Point the per-profile activity store at the given profile (null = default). */
+  setActiveProfile(id: string | null): Promise<boolean>;
   toggleFavorite(systemId: string, fileName: string): Promise<boolean>;
   getCollections(): Promise<Collection[]>;
   createCollection(name: string): Promise<Collection>;
