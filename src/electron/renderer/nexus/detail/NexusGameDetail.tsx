@@ -222,20 +222,13 @@ function Actions({
           </span>
         </button>
       )}
-      <button
-        className="gd-secondary foc-ring"
-        data-foc
-        onClick={() => (playing ? onPlay("new") : onOptions())}
-      >
-        {playing ? (
-          <>
-            <RefreshIcon size={16} /> Nueva partida
-          </>
-        ) : (
-          <>
-            <SettingsIcon size={16} /> Opciones
-          </>
-        )}
+      {playing && (
+        <button className="gd-secondary foc-ring" data-foc onClick={() => onPlay("new")}>
+          <RefreshIcon size={16} /> Nueva partida
+        </button>
+      )}
+      <button className="gd-secondary foc-ring" data-foc onClick={onOptions}>
+        <SettingsIcon size={16} /> Opciones
       </button>
       <button
         className={"gd-iconbtn foc-ring" + (fav ? " on" : "")}
