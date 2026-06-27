@@ -215,6 +215,10 @@ export function registerIpcHandlers(
   // Play-time tracking for embedded sessions
   let sessionStartedAt: number | null = null;
   let sessionRom: { systemId: string; fileName: string } | null = null;
+  // Window screen mode (fullscreen / maximized) captured right before a game
+  // session forces fullscreen, so it can be restored when the game closes
+  // instead of dropping the window to plain windowed mode.
+  let preGameWindowState: { fullscreen: boolean; maximized: boolean } | null = null;
   // Phase 22 — remember the active emulator id and rom title so the
   // post-launch script hook (fired from onSessionEnded) has the same env
   // bundle the pre-launch hook received. We also stash the file path so
@@ -400,6 +404,12 @@ export function registerIpcHandlers(
           sessionRom = event.rom
             ? { systemId: event.rom.systemId, fileName: event.rom.fileName }
             : null;
+          // Remember how the window looked before the game so we can restore it
+          // (fullscreen vs maximized) when the session ends.
+          preGameWindowState = {
+            fullscreen: win.isFullScreen(),
+            maximized: win.isMaximized(),
+          };
           win.setFullScreen(true);
           win.webContents.send("game-session-started", {
             ...event,
@@ -453,7 +463,24 @@ export function registerIpcHandlers(
           sessionRom = null;
           sessionLaunchContext = null;
 
-          if (win.isFullScreen()) win.setFullScreen(false);
+          // Restore the pre-game screen mode instead of always dropping to
+          // windowed: fullscreen stays fullscreen; a maximized window is
+          // re-maximized after leaving fullscreen (the transition is async, so
+          // maximize once it actually completes).
+          const wantMaximize = preGameWindowState?.maximized ?? false;
+          if (preGameWindowState?.fullscreen) {
+            if (!win.isFullScreen()) win.setFullScreen(true);
+          } else if (win.isFullScreen()) {
+            if (wantMaximize) {
+              win.once("leave-full-screen", () => {
+                if (!win.isDestroyed() && !win.isMaximized()) win.maximize();
+              });
+            }
+            win.setFullScreen(false);
+          } else if (wantMaximize && !win.isMaximized()) {
+            win.maximize();
+          }
+          preGameWindowState = null;
           win.webContents.send("game-session-ended");
           overlay = null;
         },
