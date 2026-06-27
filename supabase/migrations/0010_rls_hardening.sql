@@ -19,11 +19,21 @@ drop policy if exists profiles_private_rw on public.profiles_private;
 create policy profiles_private_rw on public.profiles_private
   for all using (id = auth.uid()) with check (id = auth.uid());
 
--- migrate any existing values, then drop the leaky column.
-insert into public.profiles_private (id, recovery_email)
-  select id, recovery_email from public.profiles where recovery_email is not null
-  on conflict (id) do update set recovery_email = excluded.recovery_email;
-alter table public.profiles drop column if exists recovery_email;
+-- migrate any existing values, then drop the leaky column. Guarded so the
+-- migration is safe to RE-RUN after the column has already been dropped.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles'
+      and column_name = 'recovery_email'
+  ) then
+    insert into public.profiles_private (id, recovery_email)
+      select id, recovery_email from public.profiles where recovery_email is not null
+      on conflict (id) do update set recovery_email = excluded.recovery_email;
+    alter table public.profiles drop column recovery_email;
+  end if;
+end $$;
 
 -- signup trigger now writes recovery_email into the private table.
 create or replace function public.handle_new_user()
