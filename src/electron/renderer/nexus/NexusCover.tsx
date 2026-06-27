@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { NexusGame } from "./nexusModel";
+import { useApp } from "../context/AppContext";
 
 interface NexusCoverProps {
   game: NexusGame;
@@ -37,6 +38,11 @@ function proceduralLayers(hue: number): { background: string } {
 }
 
 export function NexusCover({ game, showMeta = false, titleSize = 22, rounded = 14 }: NexusCoverProps) {
+  const { coverVersionByRom } = useApp();
+  // Cache-bust: a replaced/reset cover keeps the same on-disk path, so without
+  // this the thumbnail dataURL would never be re-read. bumpCoverVersion()
+  // increments this after a cover-mutating IPC.
+  const coverVersion = coverVersionByRom[`${game.rom.systemId}:${game.rom.fileName}`] ?? 0;
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -59,7 +65,7 @@ export function NexusCover({ game, showMeta = false, titleSize = 22, rounded = 1
     return () => {
       cancelled = true;
     };
-  }, [game.coverPath, game.rom.systemId, game.rom.fileName]);
+  }, [game.coverPath, game.rom.systemId, game.rom.fileName, coverVersion]);
 
   const hasReal = dataUrl && !failed;
 
