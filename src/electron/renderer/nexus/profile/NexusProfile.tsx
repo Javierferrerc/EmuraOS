@@ -9,11 +9,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useSocial } from "../../social/SocialContext";
+import {
+  uploadProfileImage,
+  deleteMediaByUrl,
+  uploadCoverDataUrl,
+  dataUrlToBlob,
+  type MediaBucket,
+} from "../../social/socialApi";
 import type { NexusGame } from "../nexusModel";
 import type { SgdbCandidate } from "../../../../core/types";
 import { NexusCover } from "../NexusCover";
 import { NexusGameCard } from "../NexusGameCard";
 import { NexusFriends } from "./NexusFriends";
+import { NexusPublicProfile } from "./NexusPublicProfile";
+import { NexusProfileShots } from "./NexusProfileShots";
 import {
   buildProfileStats,
   loadProfileEdit,
@@ -44,8 +53,31 @@ import {
 } from "../NexusIcons";
 import "./nexus-profile.css";
 
+/**
+ * Resolve a profile image value to a shareable cloud URL so other accounts can
+ * see it:
+ *  - data: URL (uploaded / dragged file) → upload to Storage, return public URL
+ *  - http(s) URL (e.g. SteamGridDB) → keep as-is
+ *  - null → null
+ */
+async function resolveCloudImage(
+  bucket: MediaBucket,
+  value: string | null
+): Promise<string | null> {
+  if (!value) return null;
+  if (value.startsWith("data:")) {
+    const blob = dataUrlToBlob(value);
+    const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+    const { url } = await uploadProfileImage(bucket, blob, ext);
+    return url;
+  }
+  return value;
+}
+
 interface NexusProfileProps {
   onBack: () => void;
+  /** Llamado tras cerrar sesión: vuelve al selector de perfiles. */
+  onSignedOut?: () => void;
   allGames: NexusGame[];
   isFavorite: (game: NexusGame) => boolean;
   onOpen: (game: NexusGame) => void;
@@ -57,6 +89,7 @@ type Tab = "resumen" | "amigos" | "actividad";
 
 export function NexusProfile({
   onBack,
+  onSignedOut,
   allGames,
   isFavorite,
   onOpen,
@@ -80,11 +113,16 @@ export function NexusProfile({
   const [draft, setDraft] = useState<NexusProfileEdit>(local);
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  // Surfaced when a cloud image upload / profile sync fails, so failures stop
+  // being silent (e.g. Storage RLS blocking the upload).
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("resumen");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false); // "Editar perfil" modal (nombre + estado)
+  const [leaving, setLeaving] = useState(false); // animación de salida al cerrar sesión
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null); // ver perfil de otro
 
   // Current (non-editing) identity, account-first.
   const current: NexusProfileEdit = {
@@ -159,6 +197,34 @@ export function NexusProfile({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.name, current.status, current.pinned]);
   const cancelEdit = useCallback(() => setEditing(false), []);
+
+  // Build the cloud showcase payload: title + system + a SHAREABLE cover URL.
+  // Each pinned game's local cover thumbnail is uploaded to Storage (cached by
+  // game key) so other accounts see real box art, not just a gamepad icon.
+  const buildPinnedPayload = useCallback(
+    async (keys: string[]) => {
+      const games = keys.map((k) => gamesByKey.get(k)).filter((g): g is NexusGame => !!g);
+      return Promise.all(
+        games.map(async (g) => {
+          let cover_url: string | null = null;
+          if (g.coverPath) {
+            try {
+              const dataUrl = await window.electronAPI.readThumbnailDataUrl(
+                g.rom.systemId,
+                g.rom.fileName
+              );
+              if (dataUrl) cover_url = await uploadCoverDataUrl(g.key, dataUrl);
+            } catch (e) {
+              console.warn("[profile] cover upload failed:", e);
+            }
+          }
+          return { title: g.title, system: g.systemName ?? null, cover_url };
+        })
+      );
+    },
+    [gamesByKey]
+  );
+
   const saveEdit = useCallback(async () => {
     const next: NexusProfileEdit = {
       name: draft.name.trim() || fallbackName,
@@ -170,11 +236,23 @@ export function NexusProfile({
     // Pinned (and a local cache of name/status) always persist locally.
     setLocal(next);
     saveProfileEdit(next);
-    // When signed in, the name/status belong to the account — sync them.
+    // When signed in, name/status/showcase/stats belong to the account — sync
+    // them so other accounts can see this profile.
     if (signedIn) {
       setSavingProfile(true);
       try {
-        await social.updateProfile({ display_name: next.name, status: next.status });
+        const pinnedPayload = await buildPinnedPayload(next.pinned);
+        await social.updateProfile({
+          display_name: next.name,
+          status: next.status,
+          pinned: pinnedPayload,
+          stats: {
+            play_seconds: stats.totalSeconds,
+            games: stats.ownedGames,
+            level: stats.level,
+            xp: stats.xpTotal,
+          },
+        });
       } catch (err) {
         console.warn("[profile] updateProfile failed:", err);
       } finally {
@@ -182,7 +260,7 @@ export function NexusProfile({
       }
     }
     setEditing(false);
-  }, [draft, fallbackName, signedIn, social]);
+  }, [draft, fallbackName, signedIn, social, buildPinnedPayload, stats]);
   // Save handler for the "Editar perfil" modal (name + status only; pins are
   // managed separately on the page). Mirrors saveEdit's persistence logic.
   const saveInfo = useCallback(
@@ -194,29 +272,114 @@ export function NexusProfile({
     }) => {
       const name = next.name.trim() || fallbackName;
       const status = next.status.trim();
-      const merged: NexusProfileEdit = {
-        name,
-        status,
-        pinned: local.pinned,
-        bannerUrl: next.bannerUrl,
-        avatarUrl: next.avatarUrl,
-      };
-      setLocal(merged);
-      saveProfileEdit(merged);
+      let bannerUrl = next.bannerUrl;
+      let avatarUrl = next.avatarUrl;
+      // Signed in: push foto/portada to the cloud (uploading any file/data URL
+      // to Storage) so other accounts can see them, and keep the resulting
+      // cloud URLs locally (avoids re-uploading the same image on the next save).
+      let cloudOk = true;
       if (signedIn) {
         setSavingProfile(true);
+        setSaveError(null);
+        const prevAvatar = local.avatarUrl;
+        const prevBanner = local.bannerUrl;
         try {
-          await social.updateProfile({ display_name: name, status });
+          [avatarUrl, bannerUrl] = await Promise.all([
+            resolveCloudImage("avatars", next.avatarUrl),
+            resolveCloudImage("banners", next.bannerUrl),
+          ]);
+          await social.updateProfile({
+            display_name: name,
+            status,
+            avatar_url: avatarUrl,
+            banner_url: bannerUrl,
+          });
+          // Delete the previous Storage objects we just replaced so old avatars
+          // / banners don't pile up as orphans in the bucket (no-op for non-
+          // Storage URLs like SteamGridDB).
+          if (prevAvatar && prevAvatar !== avatarUrl) void deleteMediaByUrl(prevAvatar);
+          if (prevBanner && prevBanner !== bannerUrl) void deleteMediaByUrl(prevBanner);
         } catch (err) {
+          cloudOk = false;
+          // Keep the local (data:) images so the user doesn't lose them, but
+          // surface WHY the cloud sync failed instead of swallowing it.
+          avatarUrl = next.avatarUrl;
+          bannerUrl = next.bannerUrl;
+          const msg = err instanceof Error ? err.message : String(err);
+          setSaveError(
+            /row-level security|unauthorized|policy|not.*owner/i.test(msg)
+              ? "No se pudo subir la imagen al servidor (permisos de almacenamiento). Falta aplicar la migración 0009 de Storage."
+              : "No se pudo guardar en la nube: " + msg
+          );
           console.warn("[profile] updateProfile failed:", err);
         } finally {
           setSavingProfile(false);
         }
       }
-      setInfoOpen(false);
+      const merged: NexusProfileEdit = {
+        name,
+        status,
+        pinned: local.pinned,
+        bannerUrl,
+        avatarUrl,
+      };
+      setLocal(merged);
+      saveProfileEdit(merged);
+      // Keep the modal open on a cloud failure so the error is visible.
+      if (cloudOk) setInfoOpen(false);
     },
-    [local.pinned, fallbackName, signedIn, social]
+    [local.pinned, local.avatarUrl, local.bannerUrl, fallbackName, signedIn, social]
   );
+
+  // Proactive cloud sync: when signed in, push this profile's shareable data
+  // (avatar/banner upload + showcase pins + stats) once per open so OTHER
+  // accounts actually see a complete profile — without relying on the user
+  // hitting each individual "Guardar". Never clobbers a cloud field with a
+  // local null (only includes fields we actually have).
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (!signedIn || syncedRef.current) return;
+    syncedRef.current = true;
+    void (async () => {
+      try {
+        const patch: Parameters<typeof social.updateProfile>[0] = {
+          stats: {
+            play_seconds: stats.totalSeconds,
+            games: stats.ownedGames,
+            level: stats.level,
+            xp: stats.xpTotal,
+          },
+        };
+        const pinnedPayload = await buildPinnedPayload(local.pinned);
+        if (pinnedPayload.length) patch.pinned = pinnedPayload;
+
+        let avatarUrl = local.avatarUrl ?? null;
+        let bannerUrl = local.bannerUrl ?? null;
+        if (avatarUrl) {
+          avatarUrl = await resolveCloudImage("avatars", avatarUrl);
+          patch.avatar_url = avatarUrl;
+        }
+        if (bannerUrl) {
+          bannerUrl = await resolveCloudImage("banners", bannerUrl);
+          patch.banner_url = bannerUrl;
+        }
+        await social.updateProfile(patch);
+
+        // If we just uploaded a data: image, persist the resulting cloud URL so
+        // the next open skips the re-upload, and drop the old object.
+        if (avatarUrl !== (local.avatarUrl ?? null) || bannerUrl !== (local.bannerUrl ?? null)) {
+          const merged: NexusProfileEdit = { ...local, avatarUrl, bannerUrl };
+          setLocal(merged);
+          saveProfileEdit(merged);
+          if (local.avatarUrl && local.avatarUrl !== avatarUrl) void deleteMediaByUrl(local.avatarUrl);
+          if (local.bannerUrl && local.bannerUrl !== bannerUrl) void deleteMediaByUrl(local.bannerUrl);
+        }
+      } catch (err) {
+        console.warn("[profile] cloud sync failed:", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
 
   const removePin = (key: string) =>
     setDraft((d) => ({ ...d, pinned: d.pinned.filter((k) => k !== key) }));
@@ -228,7 +391,7 @@ export function NexusProfile({
     );
 
   return (
-    <div className="profile">
+    <div className={"profile" + (leaving ? " pf-leaving" : "")}>
       <div className="pf-topbar">
         <button className="pf-back" onClick={onBack}>
           <BackIcon size={17} /> Biblioteca
@@ -297,7 +460,26 @@ export function NexusProfile({
                         role="menuitem"
                         onClick={() => {
                           setMenuOpen(false);
-                          void social.signOut();
+                          // Reproduce la animación de salida del perfil y luego
+                          // vuelve al selector. Esperamos a que TERMINEN tanto la
+                          // animación como signOut antes de navegar: así la shell
+                          // no se desmonta a media animación y el selector se
+                          // monta ya sin sesión (la cuenta queda bloqueada hasta
+                          // volver a iniciar sesión). Navegamos aunque signOut
+                          // falle para no quedar atascados en un perfil sin sesión.
+                          setLeaving(true);
+                          void (async () => {
+                            const animDone = new Promise<void>((r) =>
+                              window.setTimeout(r, 430)
+                            );
+                            try {
+                              await social.signOut();
+                            } catch (e) {
+                              console.warn("[profile] signOut failed:", e);
+                            }
+                            await animDone;
+                            onSignedOut?.();
+                          })();
                         }}
                       >
                         Cerrar sesión
@@ -470,12 +652,17 @@ export function NexusProfile({
                   </div>
                 )}
               </div>
+              {signedIn && social.user && (
+                <div className="pf-section">
+                  <NexusProfileShots userId={social.user.id} />
+                </div>
+              )}
             </>
           )}
 
           {tab === "amigos" && (
             <div className="pf-section">
-              <NexusFriends />
+              <NexusFriends onViewProfile={(id) => setViewingUserId(id)} />
             </div>
           )}
 
@@ -513,11 +700,19 @@ export function NexusProfile({
           initialBannerUrl={current.bannerUrl ?? null}
           initialAvatarUrl={current.avatarUrl ?? null}
           saving={savingProfile}
+          error={saveError}
           onCancel={() => {
-            if (!savingProfile) setInfoOpen(false);
+            if (!savingProfile) {
+              setSaveError(null);
+              setInfoOpen(false);
+            }
           }}
           onSave={(vals) => void saveInfo(vals)}
         />
+      )}
+
+      {viewingUserId && (
+        <NexusPublicProfile userId={viewingUserId} onBack={() => setViewingUserId(null)} />
       )}
     </div>
   );
@@ -571,6 +766,7 @@ function EditProfileModal({
   initialBannerUrl,
   initialAvatarUrl,
   saving,
+  error,
   onCancel,
   onSave,
 }: {
@@ -579,6 +775,7 @@ function EditProfileModal({
   initialBannerUrl: string | null;
   initialAvatarUrl: string | null;
   saving: boolean;
+  error?: string | null;
   onCancel: () => void;
   onSave: (vals: {
     name: string;
@@ -814,6 +1011,22 @@ function EditProfileModal({
           </div>
         </div>
 
+        {error && (
+          <div
+            className="ep-error"
+            style={{
+              margin: "0 20px",
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(255,120,130,0.4)",
+              background: "rgba(255,80,95,0.12)",
+              color: "#ff97a6",
+              fontSize: 13,
+            }}
+          >
+            {error}
+          </div>
+        )}
         <div className="ep-foot">
           <button type="button" className="ep-btn ghost" onClick={onCancel} disabled={saving}>
             Cancelar

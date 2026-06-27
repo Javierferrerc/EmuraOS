@@ -1,0 +1,141 @@
+/* quick-menu.css — EMURA menú rápido (Esc): cambiar usuario / cerrar app.
+ *
+ * Pixel-faithful port of the handoff `quick-menu.css` (source of truth).
+ * Two integration changes only — visuals/timing are untouched:
+ *   1. The handoff's global resets (`:root` tokens, `html/body`, `#root`,
+ *      bare `button`, `::selection`) are SCOPED to `.qm`/`.qm-poweroff` and
+ *      their descendants so they can't leak into the rest of the app. Tokens
+ *      live on `.qm`/`.qm-poweroff` and inherit down.
+ *   2. Self-contained Sora font is imported here (same family the boot screen
+ *      uses), so the menu renders correctly even if mounted in isolation.
+ * The unused footer/demo rules (keyboard-hint strips, `.qm-demo*`) are dropped
+ * — the hint footers were retired on purpose and must not return.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap");
+
+/* tokens — scoped to the menu subtree (was :root in the handoff) */
+.qm, .qm-poweroff {
+  --bg: #06070b; --bg-2: #0a0c12;
+  --panel: rgba(255,255,255,0.05); --panel-2: rgba(255,255,255,0.08);
+  --line: rgba(255,255,255,0.09); --line-2: rgba(255,255,255,0.16);
+  --text: #eef3ff; --text-dim: rgba(238,243,255,0.64); --text-faint: rgba(238,243,255,0.40);
+  --accent: #2f7bf6; --accent-2: #5aa0ff; --good: #4ade80; --bad: #f43f5e; --warn: #f5c451;
+  --ease: cubic-bezier(.4,.8,.3,1); --pop: cubic-bezier(.2,1.4,.4,1);
+  color: var(--text);
+  font-family: 'Sora', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.qm, .qm * { box-sizing: border-box; }
+.qm button { font-family: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+
+/* ── overlay ─────────────────────────────────────────────── */
+.qm { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 30px;
+  background: rgba(4,5,9,.66); backdrop-filter: blur(14px); animation: qmFade .22s var(--ease); }
+@keyframes qmFade { from { opacity: 0; } }
+.qm.closing { animation: qmFadeOut .18s var(--ease) forwards; }
+@keyframes qmFadeOut { to { opacity: 0; } }
+
+.qm-panel { width: min(620px, 94vw); display: flex; flex-direction: column; gap: 24px; animation: qmRise .26s var(--ease); }
+@keyframes qmRise { from { transform: translateY(16px); opacity: .5; } }
+
+/* header: who's playing + clock */
+.qm-head { display: flex; align-items: center; gap: 15px; }
+.qm-ava { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 0 0 3px color-mix(in oklab, var(--pcolor, var(--accent)) 30%, transparent); }
+.qm-ava-orb { width: 100%; height: 100%; }
+.qm-ava img { width: 100%; height: 100%; object-fit: cover; }
+.qm-head-txt { flex: 1; min-width: 0; }
+.qm-head-txt .lbl { font-size: 11px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--text-faint); }
+.qm-head-txt .name { font-size: 19px; font-weight: 800; letter-spacing: -.01em; margin-top: 2px; }
+.qm-clock { text-align: right; }
+.qm-clock .t { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.qm-clock .d { font-size: 11.5px; color: var(--text-faint); text-transform: capitalize; }
+
+/* options grid */
+.qm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.qm-opt { position: relative; display: flex; align-items: center; gap: 15px; padding: 18px 18px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); text-align: left;
+  transition: background .15s, border-color .15s, transform .12s; }
+.qm-opt:hover, .qm-opt.focus { background: var(--panel-2); border-color: var(--line-2); transform: translateY(-2px); }
+.qm-opt.focus { box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent), 0 0 0 5px color-mix(in oklab, var(--accent) 22%, transparent); }
+.qm-opt-ico { width: 46px; height: 46px; flex-shrink: 0; display: grid; place-items: center; border-radius: 13px; background: rgba(255,255,255,.06); color: var(--text); }
+.qm-opt.accent .qm-opt-ico { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-2); }
+.qm-opt.danger .qm-opt-ico { background: color-mix(in oklab, var(--bad) 16%, transparent); color: #ff97a6; }
+.qm-opt-txt { min-width: 0; }
+.qm-opt-txt b { display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; }
+.qm-opt-txt span { font-size: 12px; color: var(--text-faint); }
+.qm-opt.danger:hover { border-color: color-mix(in oklab, var(--bad) 35%, transparent); }
+.qm-opt.wide { grid-column: 1 / -1; }
+
+/* ── confirm sub-dialog ──────────────────────────────────── */
+.qm-confirm { width: min(420px, 92vw); border-radius: 22px; border: 1px solid var(--line-2); background: #0c0e14; box-shadow: 0 40px 100px rgba(0,0,0,.6); overflow: hidden; animation: qmRise .24s var(--ease); }
+.qm-confirm-body { padding: 30px 28px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.qm-confirm-ico { width: 60px; height: 60px; display: grid; place-items: center; border-radius: 18px; }
+.qm-confirm-ico.danger { background: color-mix(in oklab, var(--bad) 16%, transparent); color: #ff97a6; }
+.qm-confirm-ico.accent { background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent-2); }
+.qm-confirm-body h2 { margin: 0; font-size: 21px; font-weight: 800; letter-spacing: -.02em; }
+.qm-confirm-body p { margin: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.5; max-width: 320px; }
+.qm-confirm-foot { display: flex; gap: 10px; padding: 0 28px 26px; }
+.qm-cbtn { flex: 1; height: 48px; border-radius: 12px; font-size: 14.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 9px; transition: filter .15s, transform .15s, background .15s; }
+.qm-cbtn.ghost { border: 1px solid var(--line-2); background: var(--panel); color: var(--text); }
+.qm-cbtn.ghost:hover { background: var(--panel-2); }
+.qm-cbtn.danger { background: var(--bad); color: #fff; box-shadow: 0 10px 26px color-mix(in oklab, var(--bad) 36%, transparent); }
+.qm-cbtn.danger:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.qm-cbtn.accent { background: var(--accent); color: #fff; box-shadow: 0 10px 26px color-mix(in oklab, var(--accent) 36%, transparent); }
+.qm-cbtn.accent:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* power-off fade */
+.qm-poweroff { position: fixed; inset: 0; z-index: 90; background: #000; opacity: 0; display: grid; place-items: center; pointer-events: none; }
+.qm-poweroff.on { opacity: 1; transition: opacity .6s var(--ease); pointer-events: auto; }
+.qm-poweroff img { width: 70px; height: 70px; object-fit: contain; opacity: 0; }
+.qm-poweroff.on img { animation: qmDim 1.4s var(--ease) forwards; }
+@keyframes qmDim { 0% { opacity: .8; } 70% { opacity: .8; } 100% { opacity: 0; } }
+
+@media (max-width: 540px) { .qm-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .qm, .qm *, .qm-poweroff, .qm-poweroff * { animation-duration: .01ms !important; } }
+
+/* ════════ VARIANT: DOCK (centro de control inferior) ════════ */
+.qm.qm-v-dock { align-items: end; padding-bottom: 40px; }
+.qm-dock-wrap { width: min(720px, 96vw); display: flex; flex-direction: column; gap: 16px; animation: qmRise .26s var(--ease); }
+.qm-dock-head { display: flex; align-items: center; gap: 13px; padding: 0 6px; }
+.qm-dock-head .qm-ava { width: 42px; height: 42px; }
+.qm-dock-head .name { font-size: 20px; font-variant-numeric: tabular-nums; }
+.qm-dock { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px; border-radius: 22px; border: 1px solid var(--line-2);
+  background: rgba(12,14,20,.7); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.qm-dock-opt { display: flex; flex-direction: column; align-items: center; gap: 11px; padding: 22px 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); transition: background .15s, border-color .15s, transform .12s; }
+.qm-dock-opt:hover, .qm-dock-opt.focus { background: var(--panel-2); transform: translateY(-3px); }
+.qm-dock-opt.focus { box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent); }
+.qm-dock-ico { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; background: rgba(255,255,255,.06); color: var(--text); }
+.qm-dock-opt.accent .qm-dock-ico { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-2); }
+.qm-dock-opt.danger .qm-dock-ico { background: color-mix(in oklab, var(--bad) 16%, transparent); color: #ff97a6; }
+.qm-dock-lbl { font-size: 13px; font-weight: 700; }
+@media (max-width: 560px) { .qm-dock { grid-template-columns: repeat(2, 1fr); } }
+
+/* ════════ VARIANT: RAIL (riel lateral derecho) ════════ */
+.qm.qm-v-rail { justify-items: end; align-items: stretch; padding: 0; }
+.qm-rail { width: min(380px, 92vw); height: 100%; display: flex; flex-direction: column; gap: 22px; padding: 34px 28px;
+  background: linear-gradient(180deg, rgba(12,14,20,.98), rgba(8,10,16,.99)); border-left: 1px solid var(--line-2); box-shadow: -30px 0 80px rgba(0,0,0,.5);
+  animation: qmSlide .28s var(--ease); }
+@keyframes qmSlide { from { transform: translateX(40px); opacity: .4; } }
+.qm-rail .qm-head { gap: 13px; }
+.qm-rail-clock { padding: 0 2px; }
+.qm-rail-clock .t { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.qm-rail-clock .d { font-size: 12.5px; color: var(--text-faint); text-transform: capitalize; }
+.qm-rail-list { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+.qm-rail-list .qm-opt { width: 100%; }
+
+/* ════════ VARIANT: COMMAND (paleta spotlight) ════════ */
+.qm.qm-v-command { align-items: flex-start; padding-top: 14vh; }
+.qm-cmd { width: min(560px, 94vw); border-radius: 18px; border: 1px solid var(--line-2); background: #0c0e14; box-shadow: 0 40px 100px rgba(0,0,0,.6); overflow: hidden; animation: qmRise .22s var(--ease); }
+.qm-cmd-bar { display: flex; align-items: center; gap: 13px; padding: 0 18px; height: 60px; border-bottom: 1px solid var(--line); color: var(--text-dim); }
+.qm-cmd-input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font-size: 17px; font-family: inherit; }
+.qm-cmd-input::placeholder { color: var(--text-faint); }
+.qm-cmd-list { padding: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.qm-cmd-opt { display: flex; align-items: center; gap: 13px; padding: 12px 13px; border-radius: 12px; text-align: left; transition: background .12s; }
+.qm-cmd-opt:hover, .qm-cmd-opt.focus { background: var(--panel-2); }
+.qm-cmd-opt.focus { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent); }
+.qm-cmd-ico { width: 38px; height: 38px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--text); }
+.qm-cmd-opt.accent .qm-cmd-ico { background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-2); }
+.qm-cmd-opt.danger .qm-cmd-ico { background: color-mix(in oklab, var(--bad) 16%, transparent); color: #ff97a6; }
+.qm-cmd-txt { flex: 1; min-width: 0; }
+.qm-cmd-txt b { display: block; font-size: 14.5px; font-weight: 700; }
+.qm-cmd-txt span { font-size: 12px; color: var(--text-faint); }
+.qm-cmd-empty { padding: 26px; text-align: center; color: var(--text-faint); font-size: 14px; }

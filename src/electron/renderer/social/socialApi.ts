@@ -13,18 +13,124 @@
 
 import type { RealtimeChannel, Session, User } from "@supabase/supabase-js";
 import { getSupabase } from "./supabaseClient";
+import * as vault from "./sessionVault";
 import type {
   ActivityItem,
   FriendEdge,
   Friendship,
   PresenceState,
   Profile,
+  ProfileScreenshot,
 } from "./socialTypes";
 
 function db() {
   const c = getSupabase();
   if (!c) throw new Error("Social layer not configured (missing Supabase credentials).");
   return c;
+}
+
+// ── Cloud media (avatars / banners / screenshots) ──────────────────────────
+export type MediaBucket = "avatars" | "banners" | "screenshots";
+
+/** Public URL for an object in a public Storage bucket. */
+export function publicMediaUrl(bucket: MediaBucket, path: string): string {
+  return db().storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+/** Decode a `data:` URL into a Blob WITHOUT `fetch()`. The renderer CSP's
+ *  connect-src doesn't allow `data:`, so `fetch(dataUrl)` throws "Failed to
+ *  fetch" — this manual decode sidesteps that entirely. */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(",");
+  const head = dataUrl.slice(0, comma);
+  const body = dataUrl.slice(comma + 1);
+  const type = /^data:([^;,]+)/.exec(head)?.[1] || "application/octet-stream";
+  if (/;base64/i.test(head)) {
+    const bin = atob(body);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type });
+  }
+  return new Blob([decodeURIComponent(body)], { type });
+}
+
+/** Upload an image into the caller's folder ("<uid>/…") in a public bucket and
+ *  return its path + public URL. The path prefix is enforced by Storage RLS. */
+export async function uploadProfileImage(
+  bucket: MediaBucket,
+  file: Blob,
+  ext = "png"
+): Promise<{ path: string; url: string }> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const path = `${u.user.id}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await db().storage.from(bucket).upload(path, file, {
+    upsert: true,
+    contentType: file.type || `image/${ext}`,
+  });
+  if (error) throw error;
+  return { path, url: publicMediaUrl(bucket, path) };
+}
+
+/** Read any user's PUBLIC profile (safe fields only; honors show_name/age). */
+export async function getPublicProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await db().rpc("get_public_profile", { p_user_id: userId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as Profile) ?? null;
+}
+
+/** Read any user's PUBLIC profile by handle (username + #tag). */
+export async function getPublicProfileByHandle(
+  username: string,
+  tag: string
+): Promise<Profile | null> {
+  const { data, error } = await db().rpc("get_public_profile_by_handle", {
+    p_username: username,
+    p_tag: tag,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as Profile) ?? null;
+}
+
+/** List a user's screenshots (public), with resolved public URLs. */
+export async function listScreenshots(userId: string): Promise<ProfileScreenshot[]> {
+  const { data, error } = await db().rpc("list_public_screenshots", { p_user_id: userId });
+  if (error) throw error;
+  const rows = (data ?? []) as ProfileScreenshot[];
+  return rows.map((r) => ({ ...r, url: publicMediaUrl("screenshots", r.storage_path) }));
+}
+
+/** Upload a screenshot to the caller's gallery and return the stored row. */
+export async function addScreenshot(
+  file: Blob,
+  caption?: string,
+  gameRef?: string
+): Promise<ProfileScreenshot> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { path } = await uploadProfileImage("screenshots", file, "png");
+  const { data, error } = await db()
+    .from("screenshots")
+    .insert({
+      user_id: u.user.id,
+      storage_path: path,
+      caption: caption ?? null,
+      game_ref: gameRef ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  const row = data as ProfileScreenshot;
+  return { ...row, url: publicMediaUrl("screenshots", row.storage_path) };
+}
+
+/** Delete one of the caller's screenshots (row + stored file). */
+export async function deleteScreenshot(id: string, storagePath: string): Promise<void> {
+  await db().storage.from("screenshots").remove([storagePath]);
+  const { error } = await db().from("screenshots").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
@@ -36,6 +142,55 @@ export async function getSession(): Promise<Session | null> {
 export function onAuthChange(cb: (user: User | null) => void): () => void {
   const { data } = db().auth.onAuthStateChange((_event, session) => cb(session?.user ?? null));
   return () => data.subscription.unsubscribe();
+}
+
+// ── Multi-account session vault ────────────────────────────────────────────
+/** Persist the CURRENT session into the multi-account vault (keyed by user id)
+ *  so this account can be re-entered later without a password. Call on sign-in
+ *  and on token refresh. */
+export async function rememberCurrentSession(): Promise<void> {
+  const { data } = await db().auth.getSession();
+  const s = data.session;
+  if (s?.user && s.access_token && s.refresh_token) {
+    vault.rememberSession(s.user.id, {
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+    });
+  }
+}
+
+/** Restore a remembered account's session (no password). Returns its user, or
+ *  null if there is no stored session or its refresh token is no longer valid
+ *  (in which case the stale entry is dropped). */
+export async function restoreSession(userId: string): Promise<User | null> {
+  const stored = vault.getRememberedSession(userId);
+  if (!stored) return null;
+  const { data, error } = await db().auth.setSession(stored);
+  if (error || !data.session?.user) {
+    vault.forgetSession(userId);
+    return null;
+  }
+  // Tokens may have rotated on refresh — persist the fresh pair.
+  vault.rememberSession(data.session.user.id, {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  });
+  return data.session.user;
+}
+
+/** Drop a single account from the vault (explicit "Cerrar sesión"). */
+export function forgetRememberedSession(userId: string): void {
+  vault.forgetSession(userId);
+}
+
+/** Ids of accounts with a remembered session on this machine. */
+export function listRememberedAccounts(): string[] {
+  return vault.listRememberedUserIds();
+}
+
+/** Does this account have a password-less session stored? */
+export function hasRememberedSession(userId: string): boolean {
+  return vault.hasRememberedSession(userId);
 }
 
 export async function signUpEmail(email: string, password: string): Promise<void> {
@@ -59,19 +214,28 @@ export interface SignUpProfile {
   recovery_email: string;
 }
 
+/** Result of a sign-up: the new auth user id (present even when email
+ *  confirmation is pending) and whether Supabase returned a live session
+ *  (true only when email confirmation is disabled / auto-confirm). */
+export interface SignUpResult {
+  userId: string | null;
+  hasSession: boolean;
+}
+
 /** Full sign-up from the registration modal: creates the auth user and lets the
  *  trigger build the profile from the supplied metadata. */
 export async function signUpWithProfile(
   email: string,
   password: string,
   profile: SignUpProfile
-): Promise<void> {
-  const { error } = await db().auth.signUp({
+): Promise<SignUpResult> {
+  const { data, error } = await db().auth.signUp({
     email,
     password,
     options: { data: { ...profile, user_tag: profile.user_tag.toUpperCase() } },
   });
   if (error) throw error;
+  return { userId: data.user?.id ?? null, hasSession: !!data.session };
 }
 
 /** Live availability check for a username (anon-callable). True = free. */
@@ -88,6 +252,24 @@ export async function isUserTagAvailable(tag: string): Promise<boolean> {
   return Boolean(data);
 }
 
+/** Availability of a full handle (username + #ID). Riot-style: the PAIR must be
+ *  free — the username and tag may each repeat on their own. True = free. */
+export async function isHandleAvailable(name: string, tag: string): Promise<boolean> {
+  const { data, error } = await db().rpc("handle_available", { p_name: name, p_tag: tag });
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/** Resolve a handle (username + tag) to its account email (for handle sign-in). */
+export async function emailForHandle(username: string, tag: string): Promise<string | null> {
+  const { data, error } = await db().rpc("email_for_handle", {
+    p_username: username,
+    p_tag: tag,
+  });
+  if (error) throw error;
+  return (data as string | null) ?? null;
+}
+
 export async function signInEmail(email: string, password: string): Promise<void> {
   const { error } = await db().auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -100,11 +282,20 @@ export async function emailForUsername(username: string): Promise<string | null>
   return (data as string | null) ?? null;
 }
 
-/** Sign in with either an email or a username + password. */
+/** Sign in with an email, a `usuario#ID` handle, or a bare username + password.
+ *  Bare username is ambiguous now that usernames can repeat, so prefer email or
+ *  the full `usuario#ID`; the bare-username path stays as a best-effort. */
 export async function signInWithIdentifier(identifier: string, password: string): Promise<void> {
   const id = identifier.trim();
   let email = id;
-  if (!id.includes("@")) {
+  if (id.includes("#")) {
+    const hash = id.indexOf("#");
+    const uname = id.slice(0, hash).trim();
+    const tag = id.slice(hash + 1).trim();
+    const resolved = await emailForHandle(uname, tag);
+    if (!resolved) throw new Error("No existe una cuenta con ese usuario#ID.");
+    email = resolved;
+  } else if (!id.includes("@")) {
     const resolved = await emailForUsername(id);
     if (!resolved) throw new Error("No existe una cuenta con ese usuario.");
     email = resolved;
@@ -189,7 +380,12 @@ export async function ensureMyProfile(): Promise<Profile | null> {
 }
 
 export async function updateMyProfile(
-  patch: Partial<Pick<Profile, "display_name" | "username" | "status" | "avatar_url">>
+  patch: Partial<
+    Pick<
+      Profile,
+      "display_name" | "username" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats"
+    >
+  >
 ): Promise<Profile> {
   const { data: u } = await db().auth.getUser();
   if (!u.user) throw new Error("Not signed in.");
@@ -285,9 +481,120 @@ export async function removeFriend(friendshipId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function blockUser(friendshipId: string): Promise<void> {
-  const { error } = await db().from("friendships").update({ status: "blocked" }).eq("id", friendshipId);
+/** Block a user by id: clears any existing relationship in either direction,
+ *  then records a directional block (me → target). Works friend or not. */
+export async function blockUser(targetId: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const me = u.user.id;
+  await db()
+    .from("friendships")
+    .delete()
+    .or(
+      `and(requester_id.eq.${me},addressee_id.eq.${targetId}),and(requester_id.eq.${targetId},addressee_id.eq.${me})`
+    );
+  const { error } = await db()
+    .from("friendships")
+    .insert({ requester_id: me, addressee_id: targetId, status: "blocked" });
   if (error) throw error;
+}
+
+/** Lift a block I placed on a user. */
+export async function unblockUser(targetId: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { error } = await db()
+    .from("friendships")
+    .delete()
+    .eq("requester_id", u.user.id)
+    .eq("addressee_id", targetId)
+    .eq("status", "blocked");
+  if (error) throw error;
+}
+
+/** File a report against a user, with an optional free-text reason. */
+export async function reportUser(targetId: string, reason: string): Promise<void> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { error } = await db()
+    .from("reports")
+    .insert({ reporter_id: u.user.id, target_id: targetId, reason: reason.trim() || null });
+  if (error) throw error;
+}
+
+/** Search users by partial name or handle (discovery). Returns safe cards. */
+export async function searchProfiles(query: string, limit = 20): Promise<Profile[]> {
+  const { data, error } = await db().rpc("search_public_profiles", {
+    p_query: query,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as Profile[];
+}
+
+// ── Showcase cover sharing ────────────────────────────────────────────────
+// Pinned-game covers are LOCAL thumbnails (data URLs), so other accounts can't
+// see them. We upload each pinned cover once to a stable per-game path in the
+// public 'screenshots' bucket and cache the resulting URL by game key, so the
+// showcase renders real box art for everyone. (Covers live in the screenshots
+// bucket but never appear in the captures gallery — that reads the screenshots
+// TABLE, not the bucket.)
+const COVER_CACHE_KEY = "nx.coverCloud";
+
+function loadCoverCache(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+function saveCoverCache(c: Record<string, string>): void {
+  try {
+    localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(c));
+  } catch {
+    /* non-fatal */
+  }
+}
+function coverHash(key: string): string {
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) h = ((h * 33) ^ key.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/** Upload a pinned game's cover (a data URL) to Storage and return its public
+ *  URL, caching by game key so repeat syncs don't re-upload. */
+export async function uploadCoverDataUrl(key: string, dataUrl: string): Promise<string | null> {
+  if (!dataUrl.startsWith("data:")) return dataUrl; // already a shareable URL
+  const cache = loadCoverCache();
+  if (cache[key]) return cache[key];
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) return null;
+  const blob = dataUrlToBlob(dataUrl);
+  const path = `${u.user.id}/cover-${coverHash(key)}.png`;
+  const { error } = await db()
+    .storage.from("screenshots")
+    .upload(path, blob, { upsert: true, contentType: blob.type || "image/png" });
+  if (error) throw error;
+  const url = publicMediaUrl("screenshots", path);
+  cache[key] = url;
+  saveCoverCache(cache);
+  return url;
+}
+
+/** Best-effort delete of a Storage object from its public URL. No-op for
+ *  non-Storage URLs (e.g. SteamGridDB) so callers can pass any image value. */
+export async function deleteMediaByUrl(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  const m = url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+  if (!m) return;
+  const bucket = m[1];
+  const path = decodeURIComponent(m[2]);
+  if (bucket !== "avatars" && bucket !== "banners" && bucket !== "screenshots") return;
+  try {
+    await db().storage.from(bucket).remove([path]);
+  } catch {
+    /* non-fatal: orphan cleanup is best-effort */
+  }
 }
 
 // ── Activity ─────────────────────────────────────────────────────────────

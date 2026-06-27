@@ -33,10 +33,16 @@ interface SocialContextValue {
 
   signUpEmail: (email: string, password: string) => Promise<void>;
   /** Full registration from the modal (creates auth user + profile via trigger). */
-  registerAccount: (email: string, password: string, profile: api.SignUpProfile) => Promise<void>;
+  registerAccount: (
+    email: string,
+    password: string,
+    profile: api.SignUpProfile
+  ) => Promise<api.SignUpResult>;
   /** Live uniqueness checks used while the registration form is filled. */
   checkUsername: (name: string) => Promise<boolean>;
   checkUserTag: (tag: string) => Promise<boolean>;
+  /** Riot-style availability: the username#tag PAIR must be free. */
+  checkHandle: (name: string, tag: string) => Promise<boolean>;
   signInEmail: (email: string, password: string) => Promise<void>;
   /** Sign in with either a username or an email + password. */
   signIn: (identifier: string, password: string) => Promise<void>;
@@ -46,10 +52,27 @@ interface SocialContextValue {
   resetPassword: (email: string, token: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
-  updateProfile: (patch: Partial<Pick<Profile, "display_name" | "status">>) => Promise<void>;
+  updateProfile: (
+    patch: Partial<
+      Pick<Profile, "display_name" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats">
+    >
+  ) => Promise<void>;
   addFriendByCode: (code: string) => Promise<{ ok: boolean; message: string }>;
   /** Add by either a handle ("usuario#TAG") or a friend code ("NX-0000-0000"). */
   addFriend: (input: string) => Promise<{ ok: boolean; message: string }>;
+  /** Resolve a handle/code to a full public profile WITHOUT adding (search box). */
+  findProfile: (
+    input: string
+  ) => Promise<{ ok: boolean; profile: Profile | null; message: string }>;
+  /** Add a friend from an already-resolved profile (e.g. a search result). */
+  addFriendProfile: (profile: Profile) => Promise<{ ok: boolean; message: string }>;
+  /** Search users by partial name or handle (discovery). */
+  searchProfiles: (query: string) => Promise<Profile[]>;
+  /** Block / unblock a user by id. */
+  blockUser: (targetId: string) => Promise<void>;
+  unblockUser: (targetId: string) => Promise<void>;
+  /** Report a user (optional free-text reason). */
+  reportUser: (targetId: string, reason: string) => Promise<void>;
   respondRequest: (friendshipId: string, accept: boolean) => Promise<void>;
   removeFriend: (friendshipId: string) => Promise<void>;
 }
@@ -71,6 +94,8 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [friends, setFriends] = useState<FriendEdge[]>([]);
   const [presence, setPresence] = useState<Map<string, PresenceState>>(new Map());
+  // True after a stretch of no input → broadcast presence as "away" (idle).
+  const [away, setAway] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -101,12 +126,19 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     api
       .getSession()
       .then((s) => {
-        if (!cancelled) setUser(s?.user ?? null);
+        if (cancelled) return;
+        setUser(s?.user ?? null);
+        // Stash the restored session in the multi-account vault so this account
+        // can be re-entered without a password after switching users.
+        if (s?.user) void api.rememberCurrentSession();
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    const off = api.onAuthChange((u) => setUser(u));
+    const off = api.onAuthChange((u) => {
+      setUser(u);
+      if (u) void api.rememberCurrentSession();
+    });
     return () => {
       cancelled = true;
       off();
@@ -173,18 +205,44 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Push "now playing" updates onto the existing presence channel.
+  // Idle detection → presence "away". Any input resets the timer; after a
+  // stretch of inactivity we flip to away, which the update effect broadcasts.
+  useEffect(() => {
+    if (!user) return;
+    const IDLE_MS = 5 * 60 * 1000;
+    let timer: number;
+    const reset = () => {
+      setAway((a) => (a ? false : a));
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setAway(true), IDLE_MS);
+    };
+    const events: (keyof WindowEventMap)[] = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "wheel",
+      "touchstart",
+    ];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [user]);
+
+  // Push "now playing" / away updates onto the existing presence channel.
   useEffect(() => {
     const channel = channelRef.current;
     const u = userRef.current;
     if (!channel || !u) return;
     void api.updatePresence(channel, {
       user_id: u.id,
-      status: "online",
+      status: away ? "away" : "online",
       playing,
       since: new Date().toISOString(),
     });
-  }, [playing]);
+  }, [playing, away]);
 
   // ── Actions ──────────────────────────────────────────────────────
   const signUpEmail = useCallback(async (email: string, password: string) => {
@@ -202,7 +260,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, profile: api.SignUpProfile) => {
       setError(null);
       try {
-        await api.signUpWithProfile(email, password, profile);
+        return await api.signUpWithProfile(email, password, profile);
       } catch (e) {
         const m = e instanceof Error ? e.message : String(e);
         setError(m);
@@ -214,6 +272,10 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
   const checkUsername = useCallback((name: string) => api.isUsernameAvailable(name), []);
   const checkUserTag = useCallback((tag: string) => api.isUserTagAvailable(tag), []);
+  const checkHandle = useCallback(
+    (name: string, tag: string) => api.isHandleAvailable(name, tag),
+    []
+  );
 
   const signInEmail = useCallback(async (email: string, password: string) => {
     setError(null);
@@ -238,6 +300,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Explicit "Cerrar sesión" = a real logout for THIS account: drop its
+    // remembered session so it asks for a password next time (switching users
+    // does NOT call this, so other accounts stay remembered).
+    const uid = userRef.current?.id;
+    if (uid) api.forgetRememberedSession(uid);
     await api.signOut();
     setUser(null);
   }, []);
@@ -262,7 +329,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   }, [loadFriends]);
 
   const updateProfile = useCallback(
-    async (patch: Partial<Pick<Profile, "display_name" | "status">>) => {
+    async (
+      patch: Partial<
+        Pick<
+          Profile,
+          "display_name" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats"
+        >
+      >
+    ) => {
       const p = await api.updateMyProfile(patch);
       setProfile(p);
     },
@@ -322,6 +396,76 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     [requestFriend]
   );
 
+  // Resolve a handle ("usuario#TAG") or friend code to a FULL public profile
+  // (safe fields), WITHOUT sending a request — powers the "Buscar usuario" box,
+  // so you can view anyone's public profile before deciding to add them.
+  const findProfile = useCallback(
+    async (
+      input: string
+    ): Promise<{ ok: boolean; profile: Profile | null; message: string }> => {
+      const raw = input.trim();
+      if (!raw) return { ok: false, profile: null, message: "Introduce un usuario#ID o un código." };
+      try {
+        let lean: Profile | null;
+        if (raw.includes("#")) {
+          const hash = raw.indexOf("#");
+          const username = raw.slice(0, hash).trim();
+          const tag = raw.slice(hash + 1).trim();
+          if (!username || !tag)
+            return {
+              ok: false,
+              profile: null,
+              message: "Formato no válido. Usa usuario#ID (p. ej. alex#AX12).",
+            };
+          lean = await api.findByHandle(username, tag);
+        } else {
+          lean = await api.findByCode(raw);
+        }
+        if (!lean)
+          return {
+            ok: false,
+            profile: null,
+            message: "No se encontró a nadie con ese usuario#ID o código.",
+          };
+        // Enrich the minimal lookup card with the full public profile (tag,
+        // estado, stats, portada…) — the same source the profile view reads.
+        const full = await api.getPublicProfile(lean.id);
+        return { ok: true, profile: full ?? lean, message: "" };
+      } catch (e) {
+        return { ok: false, profile: null, message: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    []
+  );
+
+  // Send a request to an already-resolved profile (from the search result),
+  // reusing the friendly self/duplicate error mapping.
+  const addFriendProfile = useCallback(
+    (profile: Profile) => requestFriend(profile, "No se encontró a ese usuario."),
+    [requestFriend]
+  );
+
+  const searchProfiles = useCallback((query: string) => api.searchProfiles(query), []);
+
+  const blockUser = useCallback(
+    async (targetId: string) => {
+      await api.blockUser(targetId);
+      await loadFriends();
+    },
+    [loadFriends]
+  );
+  const unblockUser = useCallback(
+    async (targetId: string) => {
+      await api.unblockUser(targetId);
+      await loadFriends();
+    },
+    [loadFriends]
+  );
+  const reportUser = useCallback(
+    (targetId: string, reason: string) => api.reportUser(targetId, reason),
+    []
+  );
+
   const respondRequest = useCallback(
     async (friendshipId: string, accept: boolean) => {
       await api.respondToRequest(friendshipId, accept);
@@ -338,30 +482,76 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     [loadFriends]
   );
 
-  const value: SocialContextValue = {
-    configured,
-    loading,
-    user,
-    profile,
-    friends,
-    presence,
-    error,
-    signUpEmail,
-    registerAccount,
-    checkUsername,
-    checkUserTag,
-    signInEmail,
-    signIn,
-    requestPasswordReset,
-    resetPassword,
-    signOut,
-    refresh,
-    updateProfile,
-    addFriendByCode,
-    addFriend,
-    respondRequest,
-    removeFriend,
-  };
+  // Memoized so the context value keeps a stable identity across re-renders
+  // that don't change social state (every callback here is useCallback-stable).
+  // Without this, consumers that depend on the whole `social` object in an
+  // effect (e.g. the register modal's debounced username/ID availability check)
+  // re-run on every provider re-render — e.g. when the host component ticks a
+  // clock once a second — causing an endless "comprobando disponibilidad" loop.
+  const value = useMemo<SocialContextValue>(
+    () => ({
+      configured,
+      loading,
+      user,
+      profile,
+      friends,
+      presence,
+      error,
+      signUpEmail,
+      registerAccount,
+      checkUsername,
+      checkUserTag,
+      checkHandle,
+      signInEmail,
+      signIn,
+      requestPasswordReset,
+      resetPassword,
+      signOut,
+      refresh,
+      updateProfile,
+      addFriendByCode,
+      addFriend,
+      findProfile,
+      addFriendProfile,
+      searchProfiles,
+      blockUser,
+      unblockUser,
+      reportUser,
+      respondRequest,
+      removeFriend,
+    }),
+    [
+      configured,
+      loading,
+      user,
+      profile,
+      friends,
+      presence,
+      error,
+      signUpEmail,
+      registerAccount,
+      checkUsername,
+      checkUserTag,
+      checkHandle,
+      signInEmail,
+      signIn,
+      requestPasswordReset,
+      resetPassword,
+      signOut,
+      refresh,
+      updateProfile,
+      addFriendByCode,
+      addFriend,
+      findProfile,
+      addFriendProfile,
+      searchProfiles,
+      blockUser,
+      unblockUser,
+      reportUser,
+      respondRequest,
+      removeFriend,
+    ]
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

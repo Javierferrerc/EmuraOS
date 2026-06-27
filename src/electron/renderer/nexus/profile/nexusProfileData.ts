@@ -11,6 +11,7 @@
  */
 
 import type { PlayRecord } from "../../../../core/types";
+import { loadActiveId } from "../profileselect/nexusProfileSelectData";
 
 export interface NexusProfileStats {
   totalSeconds: number;
@@ -75,7 +76,20 @@ export function buildProfileStats({
 }
 
 // ── Persisted editable profile (name / status / pinned game keys) ──────
-const LS_PROFILE = "nx.profile";
+// Each profile keeps its OWN edit layer, keyed by its profile id, so that two
+// local profiles (or accounts) on the same device never clobber each other's
+// name/avatar/status/pinned. `nx.profile` (no id) is the legacy single-profile
+// key, still read as a one-time fallback so existing data isn't lost.
+const LS_PROFILE_LEGACY = "nx.profile";
+const LS_PROFILE_PREFIX = "nx.profile:";
+
+/** Storage key for a given profile. Falls back to the currently-active profile
+ * (set by the selector on enter) when no id is passed, and to the legacy
+ * single-profile key only when there is no active profile at all. */
+function profileKey(profileId?: string | null): string {
+  const id = profileId ?? loadActiveId();
+  return id ? LS_PROFILE_PREFIX + id : LS_PROFILE_LEGACY;
+}
 
 export interface NexusProfileEdit {
   name: string;
@@ -90,7 +104,7 @@ export interface NexusProfileEdit {
 
 export const MAX_PINNED = 6;
 
-export function loadProfileEdit(fallbackName: string): NexusProfileEdit {
+export function loadProfileEdit(fallbackName: string, profileId?: string | null): NexusProfileEdit {
   const base: NexusProfileEdit = {
     name: fallbackName,
     status: "",
@@ -99,7 +113,10 @@ export function loadProfileEdit(fallbackName: string): NexusProfileEdit {
     avatarUrl: null,
   };
   try {
-    const raw = localStorage.getItem(LS_PROFILE);
+    // Prefer this profile's own data; fall back to the legacy global key once
+    // (pre-migration data) so an existing user doesn't lose their profile.
+    const raw =
+      localStorage.getItem(profileKey(profileId)) ?? localStorage.getItem(LS_PROFILE_LEGACY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<NexusProfileEdit>;
       return {
@@ -116,10 +133,10 @@ export function loadProfileEdit(fallbackName: string): NexusProfileEdit {
   return base;
 }
 
-export function saveProfileEdit(edit: NexusProfileEdit): void {
+export function saveProfileEdit(edit: NexusProfileEdit, profileId?: string | null): void {
   try {
     localStorage.setItem(
-      LS_PROFILE,
+      profileKey(profileId),
       JSON.stringify({
         name: edit.name,
         status: edit.status,

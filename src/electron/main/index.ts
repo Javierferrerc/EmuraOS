@@ -150,7 +150,7 @@ app.whenReady().then(() => {
     ? "default-src 'self'; " +
       "script-src 'self' 'unsafe-inline'; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
+      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com https://*.supabase.co; " +
       "connect-src 'self' ws: https://*.supabase.co wss://*.supabase.co; " +
       "font-src 'self' https://fonts.gstatic.com; " +
       "object-src 'none'; " +
@@ -158,7 +158,7 @@ app.whenReady().then(() => {
     : "default-src 'self'; " +
       "script-src 'self'; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com; " +
+      "img-src 'self' data: https://cdn2.steamgriddb.com https://steamgriddb.com https://*.supabase.co; " +
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co; " +
       "font-src 'self' https://fonts.gstatic.com; " +
       "object-src 'none'; " +

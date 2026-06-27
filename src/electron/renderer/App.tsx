@@ -13,6 +13,7 @@ import { UpdateModal } from "./components/UpdateModal";
 import { DisambiguationDialog } from "./components/DisambiguationDialog";
 import { GameDetailModal } from "./components/GameDetailModal";
 import { QuickLaunch } from "./components/QuickLaunch";
+import { QuickMenu } from "./components/QuickMenu/QuickMenu";
 import { CollectionsModal } from "./components/CollectionsModal";
 import { CollectionViewerModal } from "./components/CollectionViewerModal";
 import { BulkSelectBar } from "./components/BulkSelectBar";
@@ -31,6 +32,7 @@ import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
 import { BootGamer } from "./boot/BootGamer";
 import { NexusProfileSelect } from "./nexus/profileselect/NexusProfileSelect";
 import type { NexusProfileEntry } from "./nexus/profileselect/nexusProfileSelectData";
+import { saveActiveId } from "./nexus/profileselect/nexusProfileSelectData";
 import type { SettingsContext as ISettingsContext } from "./schemas/settings-schema-types";
 
 export default function App() {
@@ -47,6 +49,11 @@ export default function App() {
   // and before the library. Choosing a profile (passwordless, with a welcome
   // animation) reveals the library underneath. `null` = not chosen yet.
   const [activeProfile, setActiveProfile] = useState<NexusProfileEntry | null>(null);
+  // EMURA quick menu (Esc) — mounted on top of the library/settings shell to
+  // resume, switch user, open settings or quit. Opened by the global Esc
+  // listener below (only when no other overlay owns the screen); once open the
+  // QuickMenu itself owns Esc (capture-phase) to resume.
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const addRomWizardShownRef = useRef(false);
 
   // Phase 20 slice 5: `?` opens the shortcuts cheatsheet unless focus is
@@ -79,6 +86,55 @@ export default function App() {
     updateInfo,
     dismissUpdateModal,
   } = app;
+
+  // Global Esc → open the quick menu. Only fires when the app shell is in front
+  // (booted, a profile is active, not mid-game) and no other overlay already
+  // owns Esc — otherwise Esc must close that overlay instead. Once the menu is
+  // open it consumes Esc itself (capture phase), so this never reopens it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || quickMenuOpen) return;
+      if (booting || !activeProfile) return;
+      if (currentView === "game" || isGameRunning) return;
+      const overlayOpen =
+        showWizard ||
+        showAddRomWizard ||
+        showCheatsheet ||
+        isCemuKeysModalOpen ||
+        showCemuKeysError ||
+        isUpdateModalOpen ||
+        !!app.detailModalRom ||
+        app.quickLaunchOpen ||
+        app.collectionsModalOpen ||
+        !!app.viewingCollectionId;
+      if (overlayOpen) return;
+      // Consume the opening keystroke in the capture phase so the shell behind
+      // (e.g. the NEXUS grid, which maps Esc → BACK) doesn't also react to it.
+      // We only stop it here, in the branch that actually opens — when another
+      // overlay owns Esc we returned above without touching the event.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setQuickMenuOpen(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [
+    quickMenuOpen,
+    booting,
+    activeProfile,
+    currentView,
+    isGameRunning,
+    showWizard,
+    showAddRomWizard,
+    showCheatsheet,
+    isCemuKeysModalOpen,
+    showCemuKeysError,
+    isUpdateModalOpen,
+    app.detailModalRom,
+    app.quickLaunchOpen,
+    app.collectionsModalOpen,
+    app.viewingCollectionId,
+  ]);
 
   // Bridge: mirror `currentView` → navigation stack.
   //
@@ -327,6 +383,15 @@ export default function App() {
     if (NEW_SETTINGS_ENABLED) navigation.navigateTo("/settings");
   };
 
+  // Volver al selector de perfiles: limpiar el perfil activo (y su id
+  // persistido) desmonta toda la shell —deja de cargar info del perfil— y
+  // hace que NexusProfileSelect vuelva a montarse. Lo usan tanto el menú
+  // rápido ("Cambiar de usuario") como el "Cerrar sesión" del perfil.
+  const returnToProfileSelect = () => {
+    saveActiveId(null);
+    setActiveProfile(null);
+  };
+
   // The library view renders either the standard Layout or, when the user
   // picks the "nexus" theme, the full alternate NEXUS shell. Both consume the
   // same AppContext data; only the chrome differs.
@@ -337,13 +402,14 @@ export default function App() {
   const settingsPage =
     isNexus && NEW_SETTINGS_ENABLED ? <NexusSettings onExit={exitSettings} /> : <SettingsPage />;
   const libraryPage = isNexus ? (
-    <NexusShell onOpenSettings={openSettings} />
+    <NexusShell onOpenSettings={openSettings} onSwitchUser={returnToProfileSelect} />
   ) : (
     <Layout
       inputDisabled={
         showWizard ||
         showAddRomWizard ||
         isGameRunning ||
+        quickMenuOpen ||
         !!app.detailModalRom ||
         app.quickLaunchOpen ||
         app.collectionsModalOpen ||
@@ -449,6 +515,26 @@ export default function App() {
         <UpdateModal updateInfo={updateInfo} onDismiss={dismissUpdateModal} />
       )}
       <DisambiguationDialog />
+      {quickMenuOpen && activeProfile && (
+        <QuickMenu
+          profile={activeProfile}
+          variant="grid"
+          onResume={() => setQuickMenuOpen(false)}
+          onSwitchUser={() => {
+            setQuickMenuOpen(false);
+            returnToProfileSelect();
+          }}
+          onSettings={() => {
+            setQuickMenuOpen(false);
+            openSettings();
+          }}
+          onQuit={() => {
+            // El fundido a negro (1.5s) ya ha corrido dentro de QuickMenu; aquí
+            // solo cerramos la ventana de Electron, como hace el selector.
+            window.close();
+          }}
+        />
+      )}
       {app.quickLaunchOpen && <QuickLaunch />}
       {app.collectionsModalOpen && <CollectionsModal />}
       <CollectionViewerModal />

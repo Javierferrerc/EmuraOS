@@ -15,7 +15,10 @@
   --accent: #3b82f6; --good: #4ade80; --warn: #f5c451; --bad: #f43f5e;
   --ease: cubic-bezier(.4,.8,.3,1);
 
-  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; overflow: auto;
+  /* Above the profile selector overlay (.ps is z-index 9996), since this modal
+     portals to <body> and can be launched from the selector's "Crear cuenta".
+     Still below the boot screen (100000). */
+  position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 24px; overflow: auto;
   color: var(--text);
   font-family: 'Sora', system-ui, -apple-system, sans-serif;
   background:
