@@ -84,6 +84,10 @@ export interface AppConfig {
   backgroundOpacity?: number;
   cardClickAction?: "launch" | "detail";
   libraryViewMode?: "grid" | "list" | "compact";
+  /** NEXUS library — visual style of the system selector rail at the top of
+   *  the library (Configuración → Apariencia → Sistemas). Defaults to the
+   *  original chips strip. */
+  librarySelectorStyle?: "chips" | "two" | "breadcrumb" | "seg";
   libraryFilters?: {
     genre?: string;          // single genre filter (empty string = all)
     decade?: string;         // "all", "2020s", "2010s", "2000s", "1990s", "1980s", "1970s"

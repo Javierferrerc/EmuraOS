@@ -162,13 +162,27 @@ describe("PR2 real SettingsSections", () => {
     expect(gamepadRow!.kind).toBe("info");
   });
 
-  it("Apariencia section has 4 tabs (Efectos, Fondo, Colores, Sonidos)", () => {
-    expect(aparienciaSection.tabs!.length).toBe(4);
+  it("Apariencia section has 5 tabs (Efectos, Sistemas, Fondo, Colores, Sonidos)", () => {
+    expect(aparienciaSection.tabs!.length).toBe(5);
     const tabIds = aparienciaSection.tabs!.map((t) => t.id);
     expect(tabIds).toContain("ap-effects");
+    expect(tabIds).toContain("sistemas");
     expect(tabIds).toContain("ap-background");
     expect(tabIds).toContain("ap-colors");
     expect(tabIds).toContain("ap-sounds");
+  });
+
+  it("Sistemas tab sits right after Efectos and is the custom selector view", () => {
+    const tabs = aparienciaSection.tabs!;
+    const efectosIdx = tabs.findIndex((t) => t.id === "ap-effects");
+    const sistemas = tabs[efectosIdx + 1];
+    expect(sistemas.id).toBe("sistemas");
+    expect(sistemas.label).toBe("Sistemas");
+    expect(sistemas.custom).toBe("selector");
+    // Seed row: lib.selectorStyle defaults to "chips".
+    const row = sistemas.groups[0]!.rows.find((r) => r.id === "lib.selectorStyle");
+    expect(row).toBeDefined();
+    expect(row!.kind).toBe("dropdown");
   });
 
   it("Biblioteca section has Ordenación tab as first tab", () => {

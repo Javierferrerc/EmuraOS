@@ -232,6 +232,14 @@ export interface SettingsTab {
   id: string;
   label: string;
   groups: SettingsGroup[];
+  /**
+   * Tab-level escape hatch (mirrors the section-level customComponent idea):
+   * the NEXUS settings shell renders a bespoke view for this tab instead of
+   * its groups ("selector" = Apariencia → Sistemas). The rows still exist in
+   * `groups` so shells without a custom renderer degrade to standard rows;
+   * the standard SettingsRoot filters these tabs out (NEXUS-only setting).
+   */
+  custom?: "selector";
 }
 
 export interface SettingsSection {
