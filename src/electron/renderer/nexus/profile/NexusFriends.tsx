@@ -122,7 +122,6 @@ function ForgotPasswordPanel({ initialId, onBack }: { initialId: string; onBack:
   const social = useSocial();
   const [step, setStep] = useState<"request" | "verify">("request");
   const [identifier, setIdentifier] = useState(initialId);
-  const [email, setEmail] = useState(""); // resolved account email (kept for verify)
   const [otp, setOtp] = useState("");
   const [newPw, setNewPw] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -135,8 +134,7 @@ function ForgotPasswordPanel({ initialId, onBack }: { initialId: string; onBack:
     setBusy(true);
     setMsg(null);
     try {
-      const resolved = await social.requestPasswordReset(identifier.trim());
-      setEmail(resolved);
+      await social.requestPasswordReset(identifier.trim());
       setStep("verify");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : String(err));
@@ -159,7 +157,7 @@ function ForgotPasswordPanel({ initialId, onBack }: { initialId: string; onBack:
     setMsg(null);
     try {
       // On success the user ends up signed in → NexusFriends swaps to FriendsBody.
-      await social.resetPassword(email, otp.trim(), newPw);
+      await social.resetPassword(identifier.trim(), otp.trim(), newPw);
     } catch (err) {
       setMsg(err instanceof Error ? err.message : String(err));
     } finally {

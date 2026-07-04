@@ -29,6 +29,30 @@ function db() {
   return c;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Guard an id that will be interpolated into a PostgREST filter string. */
+function assertUuid(id: string): void {
+  if (!UUID_RE.test(id)) throw new Error("Invalid user id.");
+}
+
+/** functions.invoke turns a non-2xx into an error whose `context` is the
+ *  Response — surface the Edge Function's friendly `error` message when we can,
+ *  falling back to `fallback`. */
+async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const ctx = (error as { context?: Response }).context;
+  if (ctx && typeof ctx.json === "function") {
+    try {
+      const body = (await ctx.json()) as { error?: string };
+      if (body?.error) return body.error;
+    } catch {
+      /* keep the fallback */
+    }
+  }
+  return fallback;
+}
+
 // ── Cloud media (avatars / banners / screenshots) ──────────────────────────
 export type MediaBucket = "avatars" | "banners" | "screenshots";
 
@@ -275,13 +299,6 @@ export async function signInEmail(email: string, password: string): Promise<void
   if (error) throw error;
 }
 
-/** Resolve a username to its account email (for username-based sign-in). */
-export async function emailForUsername(username: string): Promise<string | null> {
-  const { data, error } = await db().rpc("email_for_username", { p_username: username });
-  if (error) throw error;
-  return (data as string | null) ?? null;
-}
-
 /** Sign in with an email, a `usuario#ID` handle, or a bare username + password.
  *  Bare username is ambiguous now that usernames can repeat, so prefer email or
  *  the full `usuario#ID`; the bare-username path stays as a best-effort. */
@@ -293,19 +310,7 @@ export async function signInWithIdentifier(identifier: string, password: string)
     body: { identifier: identifier.trim(), password },
   });
   if (error) {
-    // functions.invoke turns a non-2xx into an error whose `context` is the
-    // Response — surface the function's friendly message when we can.
-    let msg = "No se pudo iniciar sesión.";
-    const ctx = (error as { context?: Response }).context;
-    if (ctx && typeof ctx.json === "function") {
-      try {
-        const body = (await ctx.json()) as { error?: string };
-        if (body?.error) msg = body.error;
-      } catch {
-        /* keep the default message */
-      }
-    }
-    throw new Error(msg);
+    throw new Error(await functionErrorMessage(error, "No se pudo iniciar sesión."));
   }
   const tokens = data as { access_token?: string; refresh_token?: string } | null;
   if (!tokens?.access_token || !tokens?.refresh_token) {
@@ -346,33 +351,43 @@ export async function signOut(): Promise<void> {
  *  a username or an email; returns the resolved email so the verify step can
  *  use it. The Supabase "Reset Password" email template must expose `{{ .Token }}`
  *  for the 6-digit code to appear. */
-export async function requestPasswordReset(identifier: string): Promise<string> {
-  let email = identifier.trim();
-  if (!email.includes("@")) {
-    const resolved = await emailForUsername(email);
-    if (!resolved) throw new Error("No existe una cuenta con ese usuario o email.");
-    email = resolved;
-  }
-  const { error } = await db().auth.resetPasswordForEmail(email);
-  if (error) throw error;
-  return email;
+export async function requestPasswordReset(identifier: string): Promise<void> {
+  // Resolution (username → email) and the recovery email happen server-side in
+  // the `password-reset` Edge Function, so the client never learns the account
+  // email (closes the username → email enumeration; see migration 0012).
+  const { error } = await db().functions.invoke("password-reset", {
+    body: { action: "request", identifier: identifier.trim() },
+  });
+  if (error) throw new Error(await functionErrorMessage(error, "No se pudo enviar el código."));
 }
 
-/** Finish recovery: verify the emailed code (establishes a session) and set the
- *  new password. On success the user ends up signed in. */
+/** Finish recovery: the Edge Function verifies the emailed code, sets the new
+ *  password server-side, and returns the session tokens. On success the user
+ *  ends up signed in. `identifier` (not the email) drives the server-side
+ *  resolution, so the email is never handled by the client. */
 export async function resetPasswordWithOtp(
-  email: string,
+  identifier: string,
   token: string,
   newPassword: string
 ): Promise<void> {
-  const { error: vErr } = await db().auth.verifyOtp({
-    email: email.trim(),
-    token: token.trim(),
-    type: "recovery",
+  const { data, error } = await db().functions.invoke("password-reset", {
+    body: {
+      action: "verify",
+      identifier: identifier.trim(),
+      token: token.trim(),
+      newPassword,
+    },
   });
-  if (vErr) throw vErr;
-  const { error: uErr } = await db().auth.updateUser({ password: newPassword });
-  if (uErr) throw uErr;
+  if (error) throw new Error(await functionErrorMessage(error, "Código o cuenta no válidos."));
+  const tokens = data as { access_token?: string; refresh_token?: string } | null;
+  if (!tokens?.access_token || !tokens?.refresh_token) {
+    throw new Error("Respuesta de restablecimiento inválida.");
+  }
+  const { error: sErr } = await db().auth.setSession({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+  });
+  if (sErr) throw sErr;
 }
 
 // ── Profile ──────────────────────────────────────────────────────────────
@@ -499,6 +514,10 @@ export async function removeFriend(friendshipId: string): Promise<void> {
 /** Block a user by id: clears any existing relationship in either direction,
  *  then records a directional block (me → target). Works friend or not. */
 export async function blockUser(targetId: string): Promise<void> {
+  // targetId is interpolated into a PostgREST filter string below, so validate
+  // it is a plain UUID before use (RLS still constrains the delete, but this
+  // removes any filter-injection surface).
+  assertUuid(targetId);
   const { data: u } = await db().auth.getUser();
   if (!u.user) throw new Error("Not signed in.");
   const me = u.user.id;
@@ -516,6 +535,7 @@ export async function blockUser(targetId: string): Promise<void> {
 
 /** Lift a block I placed on a user. */
 export async function unblockUser(targetId: string): Promise<void> {
+  assertUuid(targetId);
   const { data: u } = await db().auth.getUser();
   if (!u.user) throw new Error("Not signed in.");
   const { error } = await db()

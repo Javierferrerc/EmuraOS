@@ -7,7 +7,8 @@ export interface SecurityEvent {
     | "PATH_TRAVERSAL_BLOCKED"
     | "URL_SCHEME_BLOCKED"
     | "RATE_LIMIT_HIT"
-    | "AUTH_FAILURE";
+    | "AUTH_FAILURE"
+    | "EXEC_NOT_ALLOWLISTED";
   channel?: string;
   detail?: string;
   severity: "warn" | "error" | "info";

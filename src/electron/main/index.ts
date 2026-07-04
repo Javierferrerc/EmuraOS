@@ -1,12 +1,12 @@
 import "dotenv/config";
-import { app, BrowserWindow, globalShortcut, Menu, session } from "electron";
+import { app, BrowserWindow, globalShortcut, Menu, session, shell } from "electron";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { registerIpcHandlers } from "./ipc-handlers.js";
 import { migrateDataIfNeeded } from "./data-migrator.js";
 import { isGameActive, claimF10Fire } from "./game-state.js";
-import { setSecurityLogDir } from "../../core/security-logger.js";
+import { setSecurityLogDir, logSecurityEvent } from "../../core/security-logger.js";
 import { MetadataCache } from "../../core/metadata-cache.js";
 import { migrateThumbnailVersion } from "../../core/thumbnail-cache.js";
 import { ConfigManager } from "../../core/config-manager.js";
@@ -74,6 +74,30 @@ function createWindow(): void {
       path.join(__dirname, "..", "renderer", MAIN_WINDOW_VITE_NAME, "index.html")
     );
   }
+
+  // Navigation lockdown (defense-in-depth). The app loads only local content,
+  // so any attempt to open a new window or navigate the main frame to a remote
+  // origin is treated as hostile: new windows are denied outright (external
+  // links must go through the scheme-restricted `open-external` IPC), and
+  // in-frame navigation is confined to the app's own origin.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+  const appOrigin = MAIN_WINDOW_VITE_DEV_SERVER_URL ?? "file://";
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith(appOrigin)) {
+      event.preventDefault();
+      logSecurityEvent({
+        type: "URL_SCHEME_BLOCKED",
+        channel: "will-navigate",
+        detail: url,
+        severity: "warn",
+      });
+    }
+  });
 
   // Chromium's Gamepad API requires document.hasFocus() to return valid data.
   // Detached DevTools steals focus — restore it once loaded (with a small

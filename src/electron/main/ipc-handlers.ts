@@ -18,7 +18,7 @@ import {
 } from "node:fs";
 import type { Dirent } from "node:fs";
 import { pipeline } from "node:stream/promises";
-import { ConfigManager } from "../../core/config-manager.js";
+import { ConfigManager, SECRET_MASK } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
 import { EmulatorMapper } from "../../core/emulator-mapper.js";
@@ -143,6 +143,47 @@ function getProjectRoot(): string {
     return path.join(os.homedir(), "EmuraOS");
   }
   return app.getAppPath();
+}
+
+/**
+ * True if `resolvedPath` is one of, or lives under, the allowed roots. Used to
+ * confine renderer-supplied file-read requests to managed directories so a
+ * compromised renderer cannot read arbitrary files off disk.
+ */
+function isPathUnderAllowedRoots(
+  resolvedPath: string,
+  allowedRoots: string[]
+): boolean {
+  return allowedRoots.some(
+    (root) => resolvedPath === root || resolvedPath.startsWith(root + path.sep)
+  );
+}
+
+/** Managed image directories the renderer may read images from. Everything the
+ *  app writes (covers, thumbnails, heroes, screenshots) lives under
+ *  config/metadata, so that single root covers them all. */
+function managedImageRoots(): string[] {
+  const projectRoot = getProjectRoot();
+  return [
+    path.join(projectRoot, "metadata"),
+    path.join(projectRoot, "covers"),
+    path.join(projectRoot, "config", "metadata"),
+  ];
+}
+
+/**
+ * Files the user explicitly chose this session via a native pick dialog. A
+ * renderer can only ask main to process (e.g. resize to an avatar) a path the
+ * user actually selected — it can't feed an arbitrary filesystem path. Reset on
+ * process exit; bounded so it can't grow unbounded.
+ */
+const userPickedFiles = new Set<string>();
+function rememberPickedFile(filePath: string): void {
+  if (userPickedFiles.size > 500) userPickedFiles.clear();
+  userPickedFiles.add(path.resolve(filePath).toLowerCase());
+}
+function wasPickedByUser(resolvedPath: string): boolean {
+  return userPickedFiles.has(resolvedPath.toLowerCase());
 }
 
 // Active profile whose per-profile activity store (favorites / collections /
@@ -491,7 +532,8 @@ export function registerIpcHandlers(
 
   ipcMain.handle("get-config", () => {
     const configManager = new ConfigManager(getProjectRoot());
-    return configManager.get();
+    // Never hand cleartext credentials to the renderer — see getPublicConfig.
+    return configManager.getPublicConfig();
   });
 
   ipcMain.handle("update-config", (_event, partial: unknown) => {
@@ -1357,6 +1399,28 @@ export function registerIpcHandlers(
       const ext = path.extname(resolved).toLowerCase();
       const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
       if (!allowedExts.includes(ext)) return null;
+
+      // Allow managed image dirs, plus the single wallpaper the user has
+      // explicitly configured (which can legitimately live anywhere). Anything
+      // else is a traversal attempt from the renderer.
+      const configuredBg =
+        new ConfigManager(getProjectRoot()).get().backgroundImage;
+      const allowedRoots = managedImageRoots();
+      const isAllowed =
+        isPathUnderAllowedRoots(resolved, allowedRoots) ||
+        (Boolean(configuredBg) &&
+          resolved.toLowerCase() ===
+            path.resolve(configuredBg as string).toLowerCase());
+      if (!isAllowed) {
+        logSecurityEvent({
+          type: "PATH_TRAVERSAL_BLOCKED",
+          channel: "read-background-data-url",
+          detail: `Blocked path: ${imagePath}`,
+          severity: "warn",
+        });
+        return null;
+      }
+
       if (!existsSync(resolved)) return null;
       try {
         const data = readFileSync(resolved);
@@ -1716,18 +1780,34 @@ export function registerIpcHandlers(
   ipcMain.handle(
     "ra-login",
     async (_event: IpcMainInvokeEvent, payload: unknown) => {
-      const { username, password, webApiKey } = RaLoginSchema.parse(payload);
+      const { username, webApiKey, password: rawPassword } =
+        RaLoginSchema.parse(payload);
+      let password = rawPassword;
+      const cm = new ConfigManager(getProjectRoot());
+
+      // The renderer only ever holds masked secrets (see getPublicConfig), so
+      // the "Connect" action echoes SECRET_MASK back. Resolve it to the real
+      // stored credential here in main, where the plaintext lives.
+      if (password === SECRET_MASK) {
+        password = cm.get().retroAchievementsPassword ?? "";
+      }
+      const resolvedWebApiKey =
+        webApiKey === SECRET_MASK ? undefined : webApiKey;
+      if (!password) {
+        return { success: false, error: "Introduce tu contraseña." };
+      }
+
       const client = new RetroAchievementsClient();
       const result = await client.login(username, password);
       if (!result.success || !result.token) {
         return { success: false, error: result.error ?? "Login fallido" };
       }
-      const cm = new ConfigManager(getProjectRoot());
       cm.update({
         retroAchievementsUsername: result.username ?? username,
         retroAchievementsPassword: password,
         retroAchievementsToken: result.token,
-        retroAchievementsWebApiKey: webApiKey ?? cm.get().retroAchievementsWebApiKey,
+        retroAchievementsWebApiKey:
+          resolvedWebApiKey ?? cm.get().retroAchievementsWebApiKey,
         retroAchievementsEnabled: true,
       });
       cm.save();
@@ -2182,9 +2262,30 @@ export function registerIpcHandlers(
       if (!existsSync(validated)) {
         throw new Error(`Executable not found: ${validated}`);
       }
+
+      // Allowlist: only launch executables that resolve to a known, installed
+      // emulator. This removes the "spawn any program on disk" primitive that a
+      // compromised renderer could otherwise abuse.
+      const target = path.resolve(validated).toLowerCase();
+      const mapper = new EmulatorMapper(getEmulatorsPath());
+      const allowed = mapper
+        .resolveAllInstalled(getEmulatorsPath())
+        .map((r) => path.resolve(r.executablePath).toLowerCase());
+
+      if (!allowed.includes(target)) {
+        logSecurityEvent({
+          type: "EXEC_NOT_ALLOWLISTED",
+          channel: "launch-emulator-gui",
+          detail: validated,
+          severity: "warn",
+        });
+        throw new Error("Executable is not an allowlisted emulator");
+      }
+
       const child = spawn(validated, [], {
         detached: true,
         stdio: "ignore",
+        shell: false,
       });
       child.unref();
       return { pid: child.pid ?? null };
@@ -2216,6 +2317,21 @@ export function registerIpcHandlers(
           return { success: false, error: "Ruta no válida." };
         }
         const resolved = path.resolve(sourcePath);
+        // Only process files the user actually picked this session, or images
+        // already under a managed dir — never an arbitrary renderer-supplied
+        // path (which a compromised renderer could use to read private files).
+        if (
+          !wasPickedByUser(resolved) &&
+          !isPathUnderAllowedRoots(resolved, managedImageRoots())
+        ) {
+          logSecurityEvent({
+            type: "PATH_TRAVERSAL_BLOCKED",
+            channel: "image-file-to-avatar",
+            detail: `Blocked path: ${sourcePath}`,
+            severity: "warn",
+          });
+          return { success: false, error: "Ruta no permitida." };
+        }
         if (!existsSync(resolved)) {
           return { success: false, error: "El archivo no existe." };
         }
@@ -2257,6 +2373,7 @@ export function registerIpcHandlers(
         ? dialog.showOpenDialog(win, options)
         : dialog.showOpenDialog(options));
       if (result.canceled || result.filePaths.length === 0) return null;
+      rememberPickedFile(result.filePaths[0]);
       return result.filePaths[0];
     }
   );

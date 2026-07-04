@@ -51,6 +51,22 @@ export class EmulatorMapper {
     return results;
   }
 
+  /**
+   * Resolve every emulator whose executable actually exists on disk (under
+   * emulatorsPath or a known defaultPath). Used to build an allowlist of
+   * legitimate executables the renderer is permitted to launch, so a
+   * compromised renderer cannot spawn an arbitrary program.
+   */
+  resolveAllInstalled(emulatorsPath?: string): ResolvedEmulator[] {
+    const results: ResolvedEmulator[] = [];
+    for (const emu of this.emulators) {
+      const systemId = emu.systems[0] ?? "";
+      const found = this.findExecutable(emu, systemId, emulatorsPath);
+      if (found) results.push(found);
+    }
+    return results;
+  }
+
   resolveById(emulatorId: string, systemId: string, emulatorsPath?: string): ResolvedEmulator | null {
     const emu = this.emulators.find(
       (e) => e.id === emulatorId && e.systems.includes(systemId)

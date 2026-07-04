@@ -169,8 +169,9 @@ out/
 # Google Drive API key (baked locally, never committed)
 config/gdrive-config.json
 
-# User library (favorites, recently played, play history)
+# User library (favorites, recently played, play history) — base + per-profile
 config/user-library.json
+config/user-library.*.json
 
 # Stray Windows 'nul' redirect artifacts
 nul

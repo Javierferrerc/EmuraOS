@@ -1,8 +1,9 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { VitePlugin } from "@electron-forge/plugin-vite";
-import { cpSync, writeFileSync } from "node:fs";
+import { cpSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { flipFuses, FuseVersion, FuseV1Options } from "@electron/fuses";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -19,6 +20,9 @@ const config: ForgeConfig = {
       /^\/scripts($|\/)/,
       /^\/assets\/installer($|\/)/,
       /^\/electron-builder\.yml$/,
+      // Never bundle local env files into the asar. VITE_ vars are already
+      // inlined at build time, so the raw .env is not needed at runtime.
+      /^\/\.env($|\.)/,
     ],
   },
   hooks: {
@@ -58,6 +62,35 @@ const config: ForgeConfig = {
           path.join(outputPath, "resources", "app-update.yml"),
           appUpdateYml
         );
+
+        // Harden the packaged Electron binary via fuses (build-time flags that
+        // can't be toggled at runtime). We flip them here rather than via
+        // @electron-forge/plugin-fuses because that plugin isn't installed; the
+        // @electron/fuses runtime ships transitively.
+        //   - RunAsNode / EnableNodeCliInspectArguments / NodeOptions env:
+        //     off → the binary can't be coerced into a general-purpose Node
+        //     process (ELECTRON_RUN_AS_NODE, --inspect, NODE_OPTIONS).
+        //   - OnlyLoadAppFromAsar: on → refuse to run app code from outside the
+        //     packaged asar.
+        //   - EnableCookieEncryption: on → encrypt the cookie store at rest.
+        // NOTE: EnableEmbeddedAsarIntegrityValidation is intentionally left off
+        // until Windows code signing lands — enabling it without a proper
+        // signed/integrity-injected build can prevent the app from starting.
+        const exeName = readdirSync(outputPath).find(
+          (f) =>
+            f.toLowerCase().endsWith(".exe") &&
+            statSync(path.join(outputPath, f)).isFile()
+        );
+        if (exeName) {
+          await flipFuses(path.join(outputPath, exeName), {
+            version: FuseVersion.V1,
+            [FuseV1Options.RunAsNode]: false,
+            [FuseV1Options.EnableNodeCliInspectArguments]: false,
+            [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+            [FuseV1Options.OnlyLoadAppFromAsar]: true,
+            [FuseV1Options.EnableCookieEncryption]: true,
+          });
+        }
       }
     },
   },
