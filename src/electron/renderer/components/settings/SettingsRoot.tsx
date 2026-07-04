@@ -36,7 +36,10 @@ const SECTIONS: SettingsSection[] = [
   emuladoresSection,
   retroachievementsSection,
   avanzadoSection,
-];
+  // Tabs with a `custom` renderer are NEXUS-shell views (e.g. Apariencia →
+  // Sistemas controls the NEXUS rail); this standard shell has no renderer
+  // for them and the setting has no effect outside the NEXUS theme.
+].map((s) => (s.tabs?.some((t) => t.custom) ? { ...s, tabs: s.tabs!.filter((t) => !t.custom) } : s));
 import { SettingsLayout } from "./shell/SettingsLayout";
 import { SaveBar } from "./shell/SaveBar";
 import { SettingsSidebar } from "./shell/SettingsSidebar";

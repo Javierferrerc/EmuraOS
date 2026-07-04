@@ -91,6 +91,40 @@ export const aparienciaSection: SettingsSection = {
       ],
     },
     {
+      // Custom tab — the NEXUS shell renders SelectorStyleView (4 estilos +
+      // vista previa del rail real) instead of this row; the row itself seeds
+      // the default and keeps the preference schema-driven.
+      id: "sistemas",
+      label: "Sistemas",
+      custom: "selector",
+      groups: [
+        {
+          id: "ap-sistemas-g",
+          rows: [
+            {
+              id: "lib.selectorStyle",
+              kind: "dropdown",
+              label: "Estilo del selector de sistema",
+              description:
+                "Cómo se muestran las familias y sistemas en la parte superior de la biblioteca.",
+              options: [
+                { value: "chips", label: "Chips" },
+                { value: "two", label: "Dos niveles" },
+                { value: "breadcrumb", label: "Breadcrumb" },
+                { value: "seg", label: "Segmentado" },
+              ],
+              get: (ctx) => ctx.config?.librarySelectorStyle ?? "chips",
+              set: async (value, ctx) => {
+                await ctx.updateConfig({
+                  librarySelectorStyle: value as "chips" | "two" | "breadcrumb" | "seg",
+                });
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
       id: "ap-background",
       label: "Fondo",
       groups: [

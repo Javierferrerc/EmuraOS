@@ -32,6 +32,8 @@ import { retroachievementsSection } from "../../components/settings/sections/ret
 import { avanzadoSection } from "../../components/settings/sections/avanzado";
 import { RowView, GroupView, resolveDisabled } from "./NexusSettingsRows";
 import { NexusEmuladores } from "./NexusEmuladores";
+import { NexusSelectorStyle } from "./NexusSelectorStyle";
+import type { RailStyle } from "../NexusSystemRail";
 import { NexusCoverGallery } from "../NexusCoverGallery";
 import { NexusSoundSettings } from "./NexusSoundSettings";
 import { NexusMetadataScrape } from "./NexusMetadataScrape";
@@ -93,6 +95,23 @@ export function NexusSettings({ onExit }: NexusSettingsProps) {
     setPendingChanges({});
   }, [app, pendingChanges]);
   const handleDiscard = useCallback(() => setPendingChanges({}), []);
+
+  // Selector-style draft (Apariencia → Sistemas). Re-picking the saved style
+  // drops the pending key so the save bar hides again — mirroring the
+  // reference's draft-vs-committed dirty check.
+  const savedSelectorStyle: RailStyle = app.config?.librarySelectorStyle ?? "chips";
+  const setSelectorStyle = useCallback(
+    (style: RailStyle) => {
+      setPendingChanges((prev) => {
+        if (style === (app.config?.librarySelectorStyle ?? "chips")) {
+          const { librarySelectorStyle: _drop, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, librarySelectorStyle: style };
+      });
+    },
+    [app.config?.librarySelectorStyle]
+  );
 
   const ctx: ISettingsContext = useMemo(
     () => ({
@@ -159,6 +178,9 @@ export function NexusSettings({ onExit }: NexusSettingsProps) {
   const tabId = tabs ? tabBySec[secId] ?? tabs[0].id : null;
   const curTab = tabs ? tabs.find((t) => t.id === tabId) ?? tabs[0] : null;
   const groups = tabs ? curTab!.groups : section.groups ?? [];
+  // Tab-level custom view ("selector" = Apariencia → Sistemas): renders a
+  // bespoke component instead of the tab's groups.
+  const effCustom = curTab?.custom ?? null;
 
   const selectSection = useCallback((id: string) => setSecId(id), []);
 
@@ -246,7 +268,13 @@ export function NexusSettings({ onExit }: NexusSettingsProps) {
               </div>
             )}
             <div className="set-scroll" data-setscroll>
-              {section.id === "sonido" ? (
+              {effCustom === "selector" ? (
+                <NexusSelectorStyle
+                  value={mergedConfig?.librarySelectorStyle ?? "chips"}
+                  saved={savedSelectorStyle}
+                  setValue={setSelectorStyle}
+                />
+              ) : section.id === "sonido" ? (
                 <NexusSoundSettings ctx={ctx} />
               ) : section.id === "emuladores" ? (
                 <div className="set-embed">

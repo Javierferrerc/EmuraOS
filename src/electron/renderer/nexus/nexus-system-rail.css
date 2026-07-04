@@ -1,0 +1,249 @@
+/**
+ * NexusSystemRail — alternate system-selector layouts (Dos niveles /
+ * Breadcrumb / Segmentado), ported 1:1 from the handoff's system-rail.css.
+ * The "chips" style keeps the original .nx-rail rules in nexus.css.
+ *
+ * Token values (--panel, --line, --text-faint, --accent, --ease…) resolve
+ * from the enclosing root (.nexus-root in the library, .nexus-settings in the
+ * Configuración preview frame), so these rules work in both places.
+ */
+
+/* shared bits */
+.sr-fam-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sr-glyph {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ═══════ 2 · DOS NIVELES (family row + system row) ═══════ */
+.sr-two {
+  padding: 14px 26px 6px;
+}
+.sr-two-fams {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sr-two-fam {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.sr-two-fam:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+.sr-two-fam.active {
+  color: #fff;
+  background: color-mix(in oklab, var(--ct) 20%, transparent);
+  border-color: color-mix(in oklab, var(--ct) 45%, transparent);
+}
+.sr-two-fam.lib.active {
+  background: var(--panel-2);
+  border-color: var(--line-2);
+}
+.sr-two-sys {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.sr-two-sys::-webkit-scrollbar {
+  display: none;
+}
+.sr-two-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition: all 0.14s;
+  flex-shrink: 0;
+}
+.sr-two-pill:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.sr-two-pill.active {
+  color: #fff;
+  background: color-mix(in oklab, var(--ct) 22%, transparent);
+  border-color: color-mix(in oklab, var(--ct) 48%, transparent);
+}
+.sr-two-pill .yr {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.sr-two-pill.active .yr {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ═══════ 3 · BREADCRUMB + DROPDOWN ═══════ */
+.sr-bc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 26px;
+}
+.sr-bc-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  transition: all 0.14s;
+}
+.sr-bc-node:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.sr-bc-node.here {
+  color: #fff;
+  background: color-mix(in oklab, var(--ct) 16%, var(--panel-2));
+  border-color: color-mix(in oklab, var(--ct) 40%, transparent);
+}
+.sr-bc-chev {
+  color: var(--text-faint);
+  display: inline-grid;
+  place-items: center;
+}
+.sr-dd {
+  position: relative;
+}
+.sr-dd-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  padding: 7px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: #0d1017;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: srPop 0.16s var(--ease);
+}
+@keyframes srPop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.sr-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-align: left;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.sr-dd-item:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.sr-dd-item.on {
+  color: #fff;
+  background: color-mix(in oklab, var(--ct2, var(--accent)) 18%, transparent);
+}
+.sr-dd-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sr-dd-item .nm {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.sr-dd-item .yr {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ═══════ 4 · SEGMENTADO (compact segmented controls) ═══════ */
+.sr-seg-wrap {
+  padding: 18px 26px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sr-seg {
+  display: inline-flex;
+  padding: 5px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+  gap: 3px;
+}
+.sr-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  transition: all 0.14s;
+}
+.sr-seg-btn.on {
+  color: #fff;
+  background: color-mix(in oklab, var(--ct) 24%, var(--panel-3));
+}
+.sr-seg-btn:hover:not(.on) {
+  color: var(--text);
+}
+.sr-seg-div {
+  align-self: center;
+  width: 1px;
+  height: 26px;
+  background: var(--line-2);
+}
+.sr-count {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+
+/* Gamepad/keyboard focus ring — mirrors .nx-rail-chip.nav-focused */
+.sr-two-fam.nav-focused,
+.sr-two-pill.nav-focused,
+.sr-bc-node.nav-focused,
+.sr-seg-btn.nav-focused {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 70%, transparent);
+}

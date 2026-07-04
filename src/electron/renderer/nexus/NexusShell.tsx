@@ -28,7 +28,7 @@ import {
 import type { NexusLayout, NexusHomeHandle, NavDir } from "./nexusTypes";
 import { NexusStatusBar } from "./NexusStatusBar";
 import { NexusSidebar } from "./NexusSidebar";
-import { NexusRailNav } from "./NexusRailNav";
+import { NexusSystemRail } from "./NexusSystemRail";
 import { NexusHome } from "./NexusHome";
 import { NexusProfile } from "./profile/NexusProfile";
 import { SocialProvider } from "../social/SocialContext";
@@ -36,7 +36,6 @@ import { NexusErrorBoundary } from "./NexusErrorBoundary";
 import { NexusGameDetail } from "./detail/NexusGameDetail";
 import type { GameDetailFocusHandle } from "./detail/useGameDetailFocus";
 import { NexusSearchOverlay } from "./NexusSearchOverlay";
-import { NexusHintBar } from "./NexusHintBar";
 import { NexusLaunchSequence } from "./launch/NexusLaunchSequence";
 import { NexusSessionSummary } from "./session/NexusSessionSummary";
 import { NexusImportGames, type ImportItem } from "./import/NexusImportGames";
@@ -509,11 +508,13 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
             )}
             <div className="nx-content">
               {nav === "rail" && (
-                <NexusRailNav
+                <NexusSystemRail
+                  variant={config?.librarySelectorStyle ?? "chips"}
                   families={families}
                   activePlatform={platform}
                   navFocused={zone === "systems"}
                   onSelect={selectPlatform}
+                  gameCount={filtered.length}
                 />
               )}
               <NexusHome
@@ -535,8 +536,6 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
             </div>
           </div>
         )}
-
-        {!profileOpen && <NexusHintBar />}
 
         {detailGame && (
           <NexusGameDetail
