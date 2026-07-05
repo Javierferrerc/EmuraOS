@@ -1,13 +1,39 @@
 import { existsSync, mkdirSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep, isAbsolute, normalize } from "node:path";
 import type {
   DriveEmulatorMapping,
   EmulatorDefinition,
   EmulatorDownloadProgress,
 } from "./types.js";
 import { GDriveClient, type DriveFileEntry } from "./gdrive-client.js";
+import { logSecurityEvent } from "./security-logger.js";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+/**
+ * Join a remote-supplied relative path under a trusted root, refusing any path
+ * that would escape the root (zip-slip). The Drive folder listing is untrusted
+ * input, so a malicious `relPath` like `..\\..\\evil.exe` or an absolute path
+ * must never write outside the install directory.
+ */
+export function safeResolveUnder(root: string, relPath: string): string {
+  const normalized = normalize(relPath).replace(/^[/\\]+/, "");
+  const dest = resolve(root, normalized);
+  const rootResolved = resolve(root);
+  if (
+    isAbsolute(relPath) ||
+    (dest !== rootResolved && !dest.startsWith(rootResolved + sep))
+  ) {
+    logSecurityEvent({
+      type: "PATH_TRAVERSAL_BLOCKED",
+      channel: "emulator-download",
+      detail: relPath,
+      severity: "error",
+    });
+    throw new Error(`Unsafe download path rejected: ${relPath}`);
+  }
+  return dest;
+}
 const DOWNLOAD_CONCURRENCY = 25;
 const PROGRESS_EMIT_INTERVAL_MS = 100;
 
@@ -205,7 +231,7 @@ export class EmulatorDownloader {
 
     try {
       await runParallel(entries, DOWNLOAD_CONCURRENCY, async (entry) => {
-        const destPath = join(installPath, entry.relPath);
+        const destPath = safeResolveUnder(installPath, entry.relPath);
         mkdirSync(dirname(destPath), { recursive: true });
 
         // Resume: skip if a file already exists at the target with the

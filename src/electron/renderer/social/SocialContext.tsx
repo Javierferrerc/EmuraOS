@@ -46,10 +46,12 @@ interface SocialContextValue {
   signInEmail: (email: string, password: string) => Promise<void>;
   /** Sign in with either a username or an email + password. */
   signIn: (identifier: string, password: string) => Promise<void>;
-  /** Start password recovery; returns the resolved account email. */
-  requestPasswordReset: (identifier: string) => Promise<string>;
-  /** Verify the emailed code and set a new password (ends up signed in). */
-  resetPassword: (email: string, token: string, newPassword: string) => Promise<void>;
+  /** Start password recovery for a username/email identifier. The account email
+   *  is resolved server-side and never returned to the client. */
+  requestPasswordReset: (identifier: string) => Promise<void>;
+  /** Verify the emailed code for `identifier` and set a new password (ends up
+   *  signed in). */
+  resetPassword: (identifier: string, token: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   updateProfile: (
@@ -314,8 +316,8 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     []
   );
   const resetPassword = useCallback(
-    (email: string, token: string, newPassword: string) =>
-      api.resetPasswordWithOtp(email, token, newPassword),
+    (identifier: string, token: string, newPassword: string) =>
+      api.resetPasswordWithOtp(identifier, token, newPassword),
     []
   );
 

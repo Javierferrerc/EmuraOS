@@ -16,7 +16,10 @@ import {
   readFileSync,
   statSync,
 } from "node:fs";
-import { EmulatorDownloader } from "../../src/core/emulator-downloader.js";
+import {
+  EmulatorDownloader,
+  safeResolveUnder,
+} from "../../src/core/emulator-downloader.js";
 import { GDriveClient } from "../../src/core/gdrive-client.js";
 import type {
   EmulatorDefinition,
@@ -27,6 +30,29 @@ const TEST_ROOT = resolve(import.meta.dirname, "__test_emulator_downloader__");
 const FAKE_ROOT_FOLDER_ID = "test-root-folder-id";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+describe("safeResolveUnder (zip-slip guard)", () => {
+  const root = resolve(TEST_ROOT, "install");
+
+  it("resolves a normal relative path under the root", () => {
+    const dest = safeResolveUnder(root, join("cores", "core.dll"));
+    expect(dest.startsWith(root)).toBe(true);
+    expect(dest).toContain("core.dll");
+  });
+
+  it("rejects a parent-traversal relPath", () => {
+    expect(() => safeResolveUnder(root, "..\\..\\evil.exe")).toThrow();
+    expect(() => safeResolveUnder(root, "../../evil.exe")).toThrow();
+  });
+
+  it("rejects an absolute relPath", () => {
+    expect(() => safeResolveUnder(root, "C:\\Windows\\System32\\evil.exe")).toThrow();
+  });
+
+  it("rejects a nested path that climbs out", () => {
+    expect(() => safeResolveUnder(root, join("a", "..", "..", "b.exe"))).toThrow();
+  });
+});
 
 interface FakeDriveFile {
   id: string;

@@ -187,6 +187,102 @@ describe("GameLauncher", () => {
     expect(result.error).toContain("No emulator found");
   });
 
+  describe("buildArgv (injection-safe)", () => {
+    const snes9x: ResolvedEmulator = {
+      definition: {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      executablePath: "C:\\Snes9x\\snes9x-x64.exe",
+      systemId: "snes",
+    };
+
+    const retroarch: ResolvedEmulator = {
+      definition: {
+        id: "retroarch",
+        name: "RetroArch",
+        executable: "retroarch.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" -L "{args}" "{romPath}"',
+        args: { snes: "cores\\snes9x_libretro.dll" },
+        defaultArgs: "",
+      },
+      executablePath: "C:\\RetroArch\\retroarch.exe",
+      systemId: "snes",
+    };
+
+    it("splits a simple template into exe + single rom arg", () => {
+      const { exe, args } = launcher.buildArgv(
+        snes9x,
+        "C:\\roms\\snes\\SuperMarioWorld.sfc"
+      );
+      expect(exe).toBe("C:\\Snes9x\\snes9x-x64.exe");
+      expect(args).toEqual(["C:\\roms\\snes\\SuperMarioWorld.sfc"]);
+    });
+
+    it("keeps per-system args and rom path as distinct elements", () => {
+      const { exe, args } = launcher.buildArgv(
+        retroarch,
+        "C:\\roms\\snes\\Game.sfc"
+      );
+      expect(exe).toBe("C:\\RetroArch\\retroarch.exe");
+      expect(args).toEqual([
+        "-L",
+        "cores\\snes9x_libretro.dll",
+        "C:\\roms\\snes\\Game.sfc",
+      ]);
+    });
+
+    it("does not emit an empty argv element when args is empty", () => {
+      const emu: ResolvedEmulator = {
+        ...snes9x,
+        definition: {
+          ...snes9x.definition,
+          launchTemplate: '"{executable}" -L "{args}" "{romPath}"',
+        },
+      };
+      const { args } = launcher.buildArgv(emu, "C:\\roms\\nes\\game.nes");
+      expect(args).not.toContain("");
+      expect(args).toEqual(["-L", "C:\\roms\\nes\\game.nes"]);
+    });
+
+    it("keeps a rom path with spaces as one argument", () => {
+      const { args } = launcher.buildArgv(
+        snes9x,
+        "C:\\roms\\snes\\Super Mario World (USA).sfc"
+      );
+      expect(args).toEqual(["C:\\roms\\snes\\Super Mario World (USA).sfc"]);
+    });
+
+    it("does not let a double quote in the rom path split argv", () => {
+      const evil = 'C:\\roms\\evil" --load-core "C:\\evil.dll';
+      const { args } = launcher.buildArgv(snes9x, evil);
+      // The whole malicious string stays in ONE argument — the quote does not
+      // toggle tokenization, so no extra flags are injected.
+      expect(args).toEqual([evil]);
+      expect(args.length).toBe(1);
+    });
+
+    it("does not treat rom-path flag-like text as separate arguments", () => {
+      const evil = "C:\\roms\\--appendconfig C:\\attacker.cfg .sfc";
+      const { args } = launcher.buildArgv(retroarch, evil);
+      // The injected "--appendconfig ..." lives inside the single rom argument,
+      // not as its own argv tokens after the core.
+      expect(args).toEqual([
+        "-L",
+        "cores\\snes9x_libretro.dll",
+        evil,
+      ]);
+    });
+  });
+
   it("should return error when no emulator is found", () => {
     // Use isolated mapper so defaultPaths don't find real system emulators
     const customData = [

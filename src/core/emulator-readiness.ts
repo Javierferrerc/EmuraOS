@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { resolve, dirname, basename } from "node:path";
+import { resolve, dirname, basename, sep } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import type {
   DetectedEmulator,
@@ -69,6 +69,16 @@ export class EmulatorReadiness {
     for (const [corePath, url] of uniqueCores) {
       current++;
       const absoluteCorePath = resolve(emuDir, corePath);
+      // Defense-in-depth: corePath comes from packaged emulators.json (trusted),
+      // but never let a tampered entry write the downloaded DLL outside emuDir.
+      const emuDirResolved = resolve(emuDir);
+      if (
+        absoluteCorePath !== emuDirResolved &&
+        !absoluteCorePath.startsWith(emuDirResolved + sep)
+      ) {
+        errors.push(`${corePath}: unsafe core path rejected`);
+        continue;
+      }
       const coreName = basename(corePath, ".dll").replace("_libretro", "");
 
       if (existsSync(absoluteCorePath)) {

@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, lstatSync } from "node:fs";
 import { resolve, extname, dirname } from "node:path";
 import type { DiscoveredRom, ScanResult } from "./types.js";
 import { SystemsRegistry } from "./systems-registry.js";
@@ -78,10 +78,16 @@ export class RomScanner {
 
       let stats;
       try {
-        stats = statSync(fullPath);
+        // lstat (not stat) so symlinks are seen as symlinks and skipped below,
+        // rather than followed — a symlink in a ROM folder must not let the
+        // scan escape the ROM tree or loop.
+        stats = lstatSync(fullPath);
       } catch {
         continue;
       }
+
+      // Skip symlinks (and any other non-regular entry) entirely.
+      if (stats.isSymbolicLink()) continue;
 
       if (stats.isDirectory()) {
         roms.push(

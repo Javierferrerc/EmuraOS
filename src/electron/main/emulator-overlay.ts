@@ -5,31 +5,6 @@ import os from "node:os";
 import process from "node:process";
 import { app, screen, type BrowserWindow } from "electron";
 
-/**
- * Parse a command string into executable + args, respecting quoted segments.
- */
-function parseCommand(command: string): [string, string[]] {
-  const parts: string[] = [];
-  let current = "";
-  let inQuote = false;
-
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i];
-    if (ch === '"') {
-      inQuote = !inQuote;
-    } else if (ch === " " && !inQuote) {
-      if (current.length > 0) {
-        parts.push(current);
-        current = "";
-      }
-    } else {
-      current += ch;
-    }
-  }
-  if (current.length > 0) parts.push(current);
-
-  return [parts[0], parts.slice(1)];
-}
 import type {
   DiscoveredRom,
   ResolvedEmulator,
@@ -182,7 +157,10 @@ export class EmulatorOverlay {
     // actually runs.
     this.cleanedUp = false;
 
-    let command = launcher.buildCommand(resolved, rom.filePath);
+    // Display/logging string (never re-parsed into argv — see buildArgv).
+    const command = launcher.buildCommand(resolved, rom.filePath);
+    // Injection-safe argv: the rom path is confined to a single element.
+    const { exe, args } = launcher.buildArgv(resolved, rom.filePath);
     const isRetroArch = resolved.definition.id === "retroarch";
     const isCitra = resolved.definition.id === "citra";
     const isPCSX2 = resolved.definition.id === "pcsx2";
@@ -203,7 +181,7 @@ export class EmulatorOverlay {
         `retro-launcher-ra-${Date.now()}.cfg`
       );
       writeFileSync(this.tmpConfigPath, configContent, "utf-8");
-      command += ` --appendconfig "${this.tmpConfigPath}"`;
+      args.push("--appendconfig", this.tmpConfigPath);
     }
 
     // For Citra, patch qt-config.ini to hide the menubar (via Qt fullscreen
@@ -251,12 +229,12 @@ export class EmulatorOverlay {
     setGameActive(true);
 
     try {
-      const [exe, args] = parseCommand(command);
       const exeDir = path.dirname(exe);
       const child = spawn(exe, args, {
         detached: false,
         stdio: "pipe",
         cwd: exeDir,
+        shell: false,
       });
 
       if (!child.pid) {

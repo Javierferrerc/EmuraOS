@@ -77,6 +77,44 @@ describe("EmulatorMapper", () => {
     expect(resolved!.executablePath).toContain("snes9x-x64.exe");
   });
 
+  it("resolveAllInstalled returns only emulators whose executable exists", () => {
+    const customData = [
+      {
+        id: "snes9x",
+        name: "Snes9x",
+        executable: "snes9x-x64.exe",
+        defaultPaths: [],
+        systems: ["snes"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+      {
+        id: "mgba",
+        name: "mGBA",
+        executable: "mGBA.exe",
+        defaultPaths: [],
+        systems: ["gba"],
+        launchTemplate: '"{executable}" "{romPath}"',
+        args: {},
+        defaultArgs: "",
+      },
+    ];
+    const customPath = resolve(TEST_DIR, "installed-emulators.json");
+    writeFileSync(customPath, JSON.stringify(customData));
+    const isolatedMapper = new EmulatorMapper(customPath);
+
+    // Only snes9x is present on disk.
+    const emuDir = resolve(TEST_DIR, "snes9x");
+    mkdirSync(emuDir, { recursive: true });
+    writeFileSync(resolve(emuDir, "snes9x-x64.exe"), "fake-exe");
+
+    const installed = isolatedMapper.resolveAllInstalled(TEST_DIR);
+    expect(installed).toHaveLength(1);
+    expect(installed[0].definition.id).toBe("snes9x");
+    expect(installed[0].executablePath).toContain("snes9x-x64.exe");
+  });
+
   it("should return null when no emulator executable is found", () => {
     // Use isolated mapper so defaultPaths don't find real system emulators
     const customData = [
