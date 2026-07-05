@@ -1,7 +1,11 @@
 {
   "configFile": "retroarch.cfg",
   "configFormat": "keyvalue",
-  "configLocations": ["{emuDir}/retroarch.cfg"],
+  "configLocations": {
+    "win32": ["{emuDir}/retroarch.cfg"],
+    "darwin": ["{appdata}/RetroArch/retroarch.cfg"],
+    "linux": ["{appdata}/retroarch/retroarch.cfg", "{home}/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg"]
+  },
   "categories": [
     {
       "id": "general",

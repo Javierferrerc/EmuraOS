@@ -1,7 +1,11 @@
 {
   "configFile": "settings.xml",
   "configFormat": "xml",
-  "configLocations": ["{emuDir}/settings.xml"],
+  "configLocations": {
+    "win32": ["{emuDir}/settings.xml"],
+    "darwin": ["{emuDir}/settings.xml", "{appdata}/Cemu/settings.xml"],
+    "linux": ["{emuDir}/settings.xml", "{appdata}/Cemu/settings.xml", "{home}/.var/app/info.cemu.Cemu/config/Cemu/settings.xml"]
+  },
   "categories": [
     {
       "id": "general",

@@ -85,6 +85,7 @@ import {
   ensureThumbnail,
 } from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
+import { acquireEmulator } from "../../core/emulator-acquisition.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
 import type {
@@ -214,6 +215,15 @@ function runPerEmulatorSetup(
   executablePath: string,
   romsPath: string
 ): void {
+  // Flatpak installs keep their config inside the app sandbox and manage
+  // portable-mode markers themselves — nothing to place next to a binary
+  // that doesn't exist on our side of the sandbox.
+  if (isFlatpakRef(executablePath)) return;
+
+  // The PPSSPP portable-mode marker (memstickpath.txt) is a Windows-layout
+  // convention; on macOS/Linux PPSSPP always uses ~/.config/ppsspp.
+  const portableSetupSupported = process.platform === "win32";
+
   if (emulatorId === "cemu" && systemId === "wiiu") {
     try {
       const registry = new SystemsRegistry(getSystemsPath());
@@ -235,7 +245,7 @@ function runPerEmulatorSetup(
     }
   }
 
-  if (emulatorId === "ppsspp") {
+  if (emulatorId === "ppsspp" && portableSetupSupported) {
     try {
       const result = ensurePpssppPortable(executablePath);
       if (result.updated) {
@@ -701,9 +711,9 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle("get-emulator-defs", () => {
-    return JSON.parse(
-      readFileSync(getEmulatorsPath(), "utf-8")
-    ) as EmulatorDefinition[];
+    // Normalized for the running platform (emulators.json v2 may carry
+    // per-platform records) — the renderer always sees flat values.
+    return new EmulatorMapper(getEmulatorsPath()).getAll();
   });
 
   ipcMain.handle(
@@ -713,10 +723,29 @@ export function registerIpcHandlers(
       if (cachedDriveListing && !refresh) {
         return cachedDriveListing;
       }
+
+      const emulatorDefs = new EmulatorMapper(getEmulatorsPath()).getAll();
+
+      // Outside Windows there is no Drive catalog — downloadability comes
+      // from each definition's per-platform acquisition (flatpak/https).
+      // Reuse the same mapping shape the renderer already keys off.
+      if (process.platform !== "win32") {
+        const mapping: Record<string, DriveEmulatorMapping> = {};
+        for (const def of emulatorDefs) {
+          if (def.acquisition && def.acquisition.provider !== "gdrive") {
+            mapping[def.id.toLowerCase()] = {
+              emulatorId: def.id,
+              folderId: def.acquisition.provider,
+              fileCount: 0,
+              totalBytes: 0,
+            };
+          }
+        }
+        cachedDriveListing = mapping;
+        return mapping;
+      }
+
       try {
-        const emulatorDefs: EmulatorDefinition[] = JSON.parse(
-          readFileSync(getEmulatorsPath(), "utf-8")
-        );
         const downloader = new EmulatorDownloader(getProjectRoot());
         cachedDriveListing = await downloader.listAvailable(emulatorDefs);
         return cachedDriveListing;
@@ -737,11 +766,22 @@ export function registerIpcHandlers(
       const controller = new AbortController();
       activeDownloads.set(validatedId, controller);
       const configManager = new ConfigManager(getProjectRoot());
-      const downloader = new EmulatorDownloader(getProjectRoot());
+      const def = new EmulatorMapper(getEmulatorsPath()).getById(validatedId);
+      if (!def) {
+        activeDownloads.delete(validatedId);
+        return {
+          success: false,
+          installPath: "",
+          error: `Unknown emulator "${validatedId}" on this platform`,
+        };
+      }
       try {
-        return await downloader.download(
-          validatedId,
+        // Routes by the definition's per-platform acquisition: gdrive on
+        // Windows (unchanged), flatpak/https zip on Linux/macOS.
+        return await acquireEmulator(
+          def,
           configManager.getEmulatorsPath(),
+          getProjectRoot(),
           (progress) => {
             event.sender.send("emulator-download-progress", progress);
           },

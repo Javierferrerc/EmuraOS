@@ -1,7 +1,11 @@
 {
   "configFile": "ppsspp.ini",
   "configFormat": "ini",
-  "configLocations": ["{emuDir}/memstick/PSP/SYSTEM/ppsspp.ini"],
+  "configLocations": {
+    "win32": ["{emuDir}/memstick/PSP/SYSTEM/ppsspp.ini"],
+    "darwin": ["{home}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini"],
+    "linux": ["{home}/.config/ppsspp/PSP/SYSTEM/ppsspp.ini", "{home}/.var/app/org.ppsspp.PPSSPP/config/ppsspp/PSP/SYSTEM/ppsspp.ini"]
+  },
   "categories": [
     {
       "id": "general",

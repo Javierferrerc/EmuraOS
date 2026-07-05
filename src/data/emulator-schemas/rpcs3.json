@@ -1,7 +1,11 @@
 {
   "configFile": "config.yml",
   "configFormat": "yaml",
-  "configLocations": ["{emuDir}/config.yml"],
+  "configLocations": {
+    "win32": ["{emuDir}/config.yml"],
+    "darwin": ["{appdata}/rpcs3/config.yml"],
+    "linux": ["{appdata}/rpcs3/config.yml", "{home}/.var/app/net.rpcs3.RPCS3/config/rpcs3/config.yml"]
+  },
   "categories": [
     {
       "id": "general",
