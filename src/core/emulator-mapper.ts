@@ -69,7 +69,7 @@ export function normalizeEmulatorDefinition(
     launchTemplate: src.launchTemplate,
     args: forPlatform(src.args, platform) ?? {},
     defaultArgs: src.defaultArgs,
-    coreUrls: src.coreUrls,
+    coreUrls: forPlatform(src.coreUrls, platform),
     acquisition: forPlatform(src.acquisition, platform),
   };
 }

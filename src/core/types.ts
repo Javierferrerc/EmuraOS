@@ -177,7 +177,10 @@ export interface EmulatorDefinitionSource {
   launchTemplate: string;
   args: PerPlatform<Record<string, string>>;
   defaultArgs: string;
-  coreUrls?: Record<string, string>;
+  /** Core-file → download-URL map. URLs may embed a `{buildbot}` token that
+   *  expands to the platform/arch-specific libretro buildbot base at
+   *  download time (see platform.libretroBuildbotBase). */
+  coreUrls?: PerPlatform<Record<string, string>>;
   acquisition?: PerPlatform<EmulatorAcquisition>;
 }
 
