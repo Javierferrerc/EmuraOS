@@ -171,6 +171,11 @@ export function runPostLaunchScript(
       stdio: "ignore",
       shell: false,
     });
+    // Async spawn failures (ENOENT/EACCES) must be consumed or they crash
+    // the process as an uncaughtException.
+    child.on("error", (err) => {
+      console.warn("[launch-scripts] post-launch script error:", err);
+    });
     child.unref();
   } catch (err) {
     console.warn("[launch-scripts] failed to spawn post-launch script:", err);

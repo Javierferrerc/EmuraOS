@@ -1443,6 +1443,9 @@ export class EmulatorOverlay {
           ["/PID", String(pid), "/T", "/F"],
           { detached: true, stdio: "ignore", windowsHide: true }
         );
+        killer.on("error", (err) => {
+          console.warn("[overlay] taskkill error:", err);
+        });
         killer.unref();
       } else if (pid) {
         // POSIX: the monitored session spawns detached (own process group),

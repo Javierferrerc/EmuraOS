@@ -2352,6 +2352,11 @@ export function registerIpcHandlers(
         stdio: "ignore",
         shell: false,
       });
+      // Consume async spawn failures (ENOENT/EACCES) — an unhandled
+      // "error" event would crash the main process.
+      child.on("error", (err) => {
+        console.warn("[launch-emulator-gui] process error:", err);
+      });
       child.unref();
       return { pid: child.pid ?? null };
     }

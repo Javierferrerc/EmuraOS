@@ -143,6 +143,13 @@ export class GameLauncher {
         shell: false,
       });
 
+      // spawn() reports ENOENT/EACCES asynchronously; without a listener
+      // that "error" event becomes an uncaughtException and kills the
+      // whole process (bites on POSIX when the executable bit is missing).
+      child.on("error", (err) => {
+        console.warn(`[launcher] emulator process error: ${err.message}`);
+      });
+
       child.unref();
 
       return {
