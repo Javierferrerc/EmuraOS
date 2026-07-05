@@ -58,10 +58,14 @@ const config: ForgeConfig = {
         "",
       ].join("\n");
       for (const outputPath of outputPaths) {
-        writeFileSync(
-          path.join(outputPath, "resources", "app-update.yml"),
-          appUpdateYml
+        // On macOS the resources dir lives inside the .app bundle.
+        const macAppName = readdirSync(outputPath).find((f) =>
+          f.endsWith(".app")
         );
+        const resourcesDir = macAppName
+          ? path.join(outputPath, macAppName, "Contents", "Resources")
+          : path.join(outputPath, "resources");
+        writeFileSync(path.join(resourcesDir, "app-update.yml"), appUpdateYml);
 
         // Harden the packaged Electron binary via fuses (build-time flags that
         // can't be toggled at runtime). We flip them here rather than via
@@ -74,15 +78,28 @@ const config: ForgeConfig = {
         //     packaged asar.
         //   - EnableCookieEncryption: on → encrypt the cookie store at rest.
         // NOTE: EnableEmbeddedAsarIntegrityValidation is intentionally left off
-        // until Windows code signing lands — enabling it without a proper
+        // until code signing lands — enabling it without a proper
         // signed/integrity-injected build can prevent the app from starting.
-        const exeName = readdirSync(outputPath).find(
-          (f) =>
-            f.toLowerCase().endsWith(".exe") &&
-            statSync(path.join(outputPath, f)).isFile()
-        );
-        if (exeName) {
-          await flipFuses(path.join(outputPath, exeName), {
+        //
+        // The Electron binary to flip differs per OS:
+        //   win32:  <out>/<name>.exe
+        //   darwin: <out>/<name>.app  (flipFuses accepts the bundle path)
+        //   linux:  <out>/<name>     (extensionless executable)
+        let fuseTarget: string | null = null;
+        if (macAppName) {
+          fuseTarget = path.join(outputPath, macAppName);
+        } else {
+          const exeName = readdirSync(outputPath).find((f) => {
+            const full = path.join(outputPath, f);
+            if (!statSync(full).isFile()) return false;
+            if (f.toLowerCase().endsWith(".exe")) return true;
+            // Linux: the executable is the package name with no extension.
+            return f === "emuraos";
+          });
+          if (exeName) fuseTarget = path.join(outputPath, exeName);
+        }
+        if (fuseTarget) {
+          await flipFuses(fuseTarget, {
             version: FuseVersion.V1,
             [FuseV1Options.RunAsNode]: false,
             [FuseV1Options.EnableNodeCliInspectArguments]: false,
@@ -95,7 +112,7 @@ const config: ForgeConfig = {
     },
   },
   makers: [
-    new MakerZIP({}, ["win32"]),
+    new MakerZIP({}, ["win32", "darwin", "linux"]),
   ],
   plugins: [
     new VitePlugin({

@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app, shell } from "electron";
 import electronUpdater, { type UpdateInfo as EuUpdateInfo } from "electron-updater";
 import type {
   UpdateInfo,
@@ -12,6 +12,25 @@ const { autoUpdater } = electronUpdater;
 
 const RELEASES_PAGE =
   "https://github.com/Javierferrerc/EmuraOS/releases/latest";
+
+/**
+ * Phase 28 — whether electron-updater can actually INSTALL updates here:
+ *  - Windows: yes (per-user NSIS, silent install)
+ *  - Linux:   only when running from an AppImage (electron-updater swaps
+ *             the image in place); .deb installs update via apt instead
+ *  - macOS:   requires a signed + notarized build — until the Apple
+ *             Developer certificate lands, updates are notify-only
+ * When false we still CHECK for updates (latest*.yml) and notify, but
+ * download/install actions open the releases page instead.
+ */
+export function updatesInstallable(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  if (platform === "win32") return true;
+  if (platform === "linux") return Boolean(env.APPIMAGE);
+  return false;
+}
 
 /** Channel payloads the updater pushes to the renderer. */
 export type UpdaterEvent =
@@ -44,8 +63,11 @@ export class AutoUpdater {
 
   constructor(private readonly send: SendFn) {
     // We drive the lifecycle ourselves; don't pop the built-in dialog.
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
+    // Where installing isn't possible (unsigned mac, non-AppImage Linux)
+    // never auto-download — checkForUpdates() still reports availability
+    // and the renderer's actions open the releases page.
+    autoUpdater.autoDownload = updatesInstallable();
+    autoUpdater.autoInstallOnAppQuit = updatesInstallable();
     // Surface the updater's own logs through the normal console.
     autoUpdater.logger = console;
 
@@ -132,6 +154,12 @@ export class AutoUpdater {
    */
   async downloadUpdate(): Promise<void> {
     if (!app.isPackaged) return;
+    if (!updatesInstallable()) {
+      // Notify-only platforms: hand the user to the releases page — the
+      // updater can't replace the app here.
+      await shell.openExternal(RELEASES_PAGE);
+      return;
+    }
     await autoUpdater.downloadUpdate();
   }
 
@@ -141,6 +169,10 @@ export class AutoUpdater {
    * pass isSilent=true. isForceRunAfter=true restarts the app.
    */
   async installUpdate(): Promise<void> {
+    if (!updatesInstallable()) {
+      await shell.openExternal(RELEASES_PAGE);
+      return;
+    }
     if (!this.downloadedInfo) {
       throw new Error("No update has been downloaded yet");
     }

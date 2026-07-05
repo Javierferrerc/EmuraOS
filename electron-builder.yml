@@ -1,5 +1,8 @@
-# electron-builder config — NSIS installer for Windows
-# Usage: npm run make:installer  (requires `npm run package` first)
+# electron-builder config — installers for the three OSes
+# Usage (after `npm run package` on the same OS):
+#   Windows: npm run make:installer        → NSIS .exe + latest.yml
+#   macOS:   npm run make:installer:mac    → .dmg + .zip + latest-mac.yml
+#   Linux:   npm run make:installer:linux  → .AppImage + .deb + latest-linux.yml
 
 appId: com.emuraos.app
 productName: EmuraOS
@@ -30,6 +33,39 @@ win:
   # mismatch would 404 the auto-update download. A dash-only name keeps the
   # file, its .blockmap, the latest.yml url, and the GitHub asset identical.
   artifactName: ${productName}-Setup-${version}.${ext}
+
+# macOS. The zip target is REQUIRED for electron-updater (it updates from
+# the zip, the dmg is only the human-facing installer). Until an Apple
+# Developer ID certificate is provisioned the build ships unsigned
+# (identity: null) — Gatekeeper users need right-click → Open on first
+# launch, and in-app updates run in notify-only mode (see auto-updater.ts).
+# When signing lands: set identity, enable hardenedRuntime + notarize.
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.games
+  identity: null
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+linux:
+  icon: assets/icon.png
+  category: Game
+  maintainer: Javier Ferrer
+  synopsis: Open-source retro gaming frontend
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
