@@ -2908,6 +2908,24 @@ export function registerIpcHandlers(
     };
   });
 
+  // ── Phase 28: platform capabilities ──────────────────────────────
+  // The renderer gates OS-dependent UI (embedded-session settings, F10/F11
+  // hotkey hints) on capabilities, not on platform names, so a future
+  // capability change is a one-line edit here.
+  ipcMain.handle("get-platform-capabilities", () => {
+    const isWin = process.platform === "win32";
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      /** Win32 window embedding (game renders inside the launcher). */
+      canEmbedEmulator: isWin,
+      /** GetAsyncKeyState-based F10/F11 polling during a session. */
+      canPollSessionHotkeys: isWin,
+      /** How launch-game-embedded behaves here. */
+      sessionMode: isWin ? "embedded" : "monitored",
+    };
+  });
+
   ipcMain.handle("open-app-config-file", async () => {
     try {
       const configManager = new ConfigManager(getProjectRoot());

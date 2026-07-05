@@ -153,6 +153,15 @@ export class EmulatorOverlay {
       };
     }
 
+    // Window embedding is Windows-only (Win32 SetWindowPos/SetWindowLongPtr
+    // via koffi). macOS forbids cross-process reparenting and Wayland has no
+    // equivalent, so on POSIX the session degrades to "launch + monitor":
+    // the emulator runs as its own native window while EmuraOS keeps the
+    // full session lifecycle (events, play tracking, stop).
+    if (process.platform !== "win32") {
+      return this.launchMonitored(rom, resolved, launcher);
+    }
+
     // Reset idempotency guard so the next cleanup (after this session ends)
     // actually runs.
     this.cleanedUp = false;
@@ -339,6 +348,102 @@ export class EmulatorOverlay {
         this.repositionEmulator();
         if (this.emuHwnd) focusWindow(this.emuHwnd);
       }, 300);
+
+      return {
+        success: true,
+        emulatorId: resolved.definition.id,
+        romPath: rom.filePath,
+        command,
+        pid: child.pid,
+      };
+    } catch (err) {
+      this.cleanup();
+      return {
+        success: false,
+        emulatorId: resolved.definition.id,
+        romPath: rom.filePath,
+        command,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
+   * POSIX degraded session: spawn the emulator as a normal top-level window
+   * and monitor its lifetime. No Win32 embedding, no config patching, no
+   * keyboard polling — the emulator's own UI/hotkeys apply. Session events
+   * (onSessionStarted/onSessionEnded) fire exactly like the embedded path so
+   * the renderer's session flow is identical on every OS.
+   */
+  private launchMonitored(
+    rom: DiscoveredRom,
+    resolved: ResolvedEmulator,
+    launcher: GameLauncher
+  ): EmbeddedLaunchResult {
+    this.cleanedUp = false;
+
+    const command = launcher.buildCommand(resolved, rom.filePath);
+    const { exe, args } = launcher.buildArgv(resolved, rom.filePath);
+
+    // RetroArch: ask for fullscreen so the session feels console-like even
+    // without embedding. Other emulators keep their own window preferences.
+    if (resolved.definition.id === "retroarch") {
+      args.push("--fullscreen");
+    }
+
+    setGameActive(true);
+
+    try {
+      // detached → own process group, so stopGame can kill the emulator and
+      // any helpers it spawned via process.kill(-pid).
+      const isFlatpakLaunch = exe === "flatpak";
+      const cwd =
+        !isFlatpakLaunch && path.isAbsolute(exe) ? path.dirname(exe) : undefined;
+      const child = spawn(exe, args, {
+        detached: true,
+        stdio: "ignore",
+        cwd,
+        shell: false,
+      });
+
+      if (!child.pid) {
+        setGameActive(false);
+        return {
+          success: false,
+          emulatorId: resolved.definition.id,
+          romPath: rom.filePath,
+          command,
+          error: "Failed to spawn emulator process",
+        };
+      }
+
+      this.process = child;
+      this.currentRom = rom;
+      this.currentEmulatorId = resolved.definition.id;
+      this.lastExitCode = null;
+
+      child.on("exit", (code) => {
+        console.log("[overlay] emulator exited with code:", code);
+        this.lastExitCode = code;
+        this.cleanup();
+      });
+      child.on("error", (err) => {
+        console.warn("[overlay] emulator process error:", err);
+        this.cleanup();
+      });
+
+      // End the session if the launcher window closes mid-game.
+      const onClose = (): void => this.stopGame();
+      this.win.on("close", onClose);
+      this.boundHandlers.push({
+        event: "close",
+        handler: onClose as (...cbArgs: unknown[]) => void,
+      });
+
+      this.callbacks.onSessionStarted({
+        rom,
+        emulatorId: resolved.definition.id,
+      });
 
       return {
         success: true,
@@ -1339,6 +1444,16 @@ export class EmulatorOverlay {
           { detached: true, stdio: "ignore", windowsHide: true }
         );
         killer.unref();
+      } else if (pid) {
+        // POSIX: the monitored session spawns detached (own process group),
+        // so a negative-pid kill takes down the emulator plus any helper
+        // processes it forked. Fall back to a single-process kill if the
+        // group kill is not permitted.
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          proc.kill("SIGKILL");
+        }
       } else {
         proc.kill("SIGKILL");
       }

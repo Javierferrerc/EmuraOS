@@ -365,6 +365,15 @@ export interface ElectronAPI {
     platform: string;
     arch: string;
   }>;
+  /** Phase 28 — OS capability flags. Gate embedded-session UI (hotkey
+   *  hints, embedding-only settings) on these, never on platform names. */
+  getPlatformCapabilities(): Promise<{
+    platform: string;
+    arch: string;
+    canEmbedEmulator: boolean;
+    canPollSessionHotkeys: boolean;
+    sessionMode: "embedded" | "monitored";
+  }>;
   openAppConfigFile(): Promise<{
     success: boolean;
     path?: string;
