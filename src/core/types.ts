@@ -146,6 +146,42 @@ export interface AppConfig {
   retroAchievementsHardcore?: boolean;
 }
 
+export type SupportedPlatformId = "win32" | "darwin" | "linux";
+
+/** A value that is either platform-agnostic (legacy plain shape) or a
+ *  per-platform record. A record with no entry for the current platform
+ *  means "unavailable on this OS". */
+export type PerPlatform<T> = T | Partial<Record<SupportedPlatformId, T>>;
+
+/** How the in-app "Download" button obtains this emulator on a platform.
+ *  - gdrive:  curated portable Windows build from the project's Drive
+ *  - https:   official release archive (zip) downloaded directly
+ *  - flatpak: installed from Flathub via `flatpak install --user`  */
+export interface EmulatorAcquisition {
+  provider: "gdrive" | "https" | "flatpak";
+  /** flatpak: Flathub application id (e.g. org.DolphinEmu.dolphin-emu). */
+  appId?: string;
+  /** https: direct URL to a zip archive of the emulator. */
+  url?: string;
+}
+
+/** Raw emulators.json entry (v2). String/array/record fields may be
+ *  per-platform records; EmulatorMapper flattens them for the running OS at
+ *  load time so the rest of the app keeps working with plain values. */
+export interface EmulatorDefinitionSource {
+  id: string;
+  name: string;
+  executable: PerPlatform<string>;
+  defaultPaths: PerPlatform<string[]>;
+  systems: string[];
+  launchTemplate: string;
+  args: PerPlatform<Record<string, string>>;
+  defaultArgs: string;
+  coreUrls?: Record<string, string>;
+  acquisition?: PerPlatform<EmulatorAcquisition>;
+}
+
+/** Emulator definition resolved for the current platform (flat values). */
 export interface EmulatorDefinition {
   id: string;
   name: string;
@@ -156,6 +192,7 @@ export interface EmulatorDefinition {
   args: Record<string, string>;
   defaultArgs: string;
   coreUrls?: Record<string, string>;
+  acquisition?: EmulatorAcquisition;
 }
 
 export interface ResolvedEmulator {
@@ -178,7 +215,7 @@ export interface DetectedEmulator {
   name: string;
   executablePath: string;
   systems: string[];
-  source: "emulatorsPath" | "defaultPath";
+  source: "emulatorsPath" | "defaultPath" | "flatpak";
 }
 
 export interface DetectionResult {
@@ -483,7 +520,13 @@ export interface EmulatorSettingDefinition {
 export interface EmulatorConfigSchema {
   configFile: string;
   configFormat: "ini" | "keyvalue" | "json" | "yaml" | "xml";
-  configLocations: string[];
+  /** Config-file location templates ({emuDir}/{appdata}/{userdata}/{docs}/
+   *  {home} tokens). Either a plain array (legacy — applies on every OS) or
+   *  a per-platform record; a platform with no entry has no known config
+   *  location on that OS. */
+  configLocations:
+    | string[]
+    | Partial<Record<"win32" | "darwin" | "linux", string[]>>;
   categories: {
     id: string;
     name: string;

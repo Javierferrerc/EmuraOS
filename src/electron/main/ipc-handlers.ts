@@ -21,7 +21,12 @@ import { pipeline } from "node:stream/promises";
 import { ConfigManager, SECRET_MASK } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
-import { EmulatorMapper } from "../../core/emulator-mapper.js";
+import {
+  EmulatorMapper,
+  isFlatpakRef,
+  flatpakAppId,
+} from "../../core/emulator-mapper.js";
+import { normalizePathForCompare } from "../../core/platform.js";
 import { GameLauncher } from "../../core/game-launcher.js";
 import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { EmulatorReadiness } from "../../core/emulator-readiness.js";
@@ -180,10 +185,10 @@ function managedImageRoots(): string[] {
 const userPickedFiles = new Set<string>();
 function rememberPickedFile(filePath: string): void {
   if (userPickedFiles.size > 500) userPickedFiles.clear();
-  userPickedFiles.add(path.resolve(filePath).toLowerCase());
+  userPickedFiles.add(normalizePathForCompare(filePath));
 }
 function wasPickedByUser(resolvedPath: string): boolean {
-  return userPickedFiles.has(resolvedPath.toLowerCase());
+  return userPickedFiles.has(normalizePathForCompare(resolvedPath));
 }
 
 // Active profile whose per-profile activity store (favorites / collections /
@@ -1409,8 +1414,8 @@ export function registerIpcHandlers(
       const isAllowed =
         isPathUnderAllowedRoots(resolved, allowedRoots) ||
         (Boolean(configuredBg) &&
-          resolved.toLowerCase() ===
-            path.resolve(configuredBg as string).toLowerCase());
+          normalizePathForCompare(resolved) ===
+            normalizePathForCompare(configuredBg as string));
       if (!isAllowed) {
         logSecurityEvent({
           type: "PATH_TRAVERSAL_BLOCKED",
@@ -2259,18 +2264,29 @@ export function registerIpcHandlers(
     "launch-emulator-gui",
     (_event: IpcMainInvokeEvent, executablePath: unknown) => {
       const validated = ExecutablePathSchema.parse(executablePath);
-      if (!existsSync(validated)) {
+      const isFlatpak = isFlatpakRef(validated);
+      if (!isFlatpak && !existsSync(validated)) {
         throw new Error(`Executable not found: ${validated}`);
       }
 
       // Allowlist: only launch executables that resolve to a known, installed
       // emulator. This removes the "spawn any program on disk" primitive that a
-      // compromised renderer could otherwise abuse.
-      const target = path.resolve(validated).toLowerCase();
+      // compromised renderer could otherwise abuse. Path comparison is
+      // case-insensitive only on Windows (normalizePathForCompare) — on a
+      // case-sensitive FS two paths differing in case are different files.
+      const normalizeRef = (ref: string) =>
+        isFlatpakRef(ref) ? ref : normalizePathForCompare(ref);
+      const target = normalizeRef(validated);
       const mapper = new EmulatorMapper(getEmulatorsPath());
+      // NOTE: resolveAllInstalled expects the emulators INSTALL dir (from
+      // config), not the emulators.json path — passing the JSON path here
+      // used to silently exclude managed installs from the allowlist.
+      const emulatorsInstallDir = new ConfigManager(
+        getProjectRoot()
+      ).getEmulatorsPath();
       const allowed = mapper
-        .resolveAllInstalled(getEmulatorsPath())
-        .map((r) => path.resolve(r.executablePath).toLowerCase());
+        .resolveAllInstalled(emulatorsInstallDir)
+        .map((r) => normalizeRef(r.executablePath));
 
       if (!allowed.includes(target)) {
         logSecurityEvent({
@@ -2282,7 +2298,10 @@ export function registerIpcHandlers(
         throw new Error("Executable is not an allowlisted emulator");
       }
 
-      const child = spawn(validated, [], {
+      const spawnSpec = isFlatpak
+        ? { exe: "flatpak", args: ["run", flatpakAppId(validated)] }
+        : { exe: validated, args: [] as string[] };
+      const child = spawn(spawnSpec.exe, spawnSpec.args, {
         detached: true,
         stdio: "ignore",
         shell: false,

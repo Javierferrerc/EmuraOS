@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import {
   parseKeyValue,
   serializeKeyValue,
@@ -85,7 +86,7 @@ export function resolveRetroArchConfigDir(
   retroArchExecutablePath: string | null,
   appDataPath: string
 ): string | null {
-  if (retroArchExecutablePath) {
+  if (retroArchExecutablePath && !retroArchExecutablePath.startsWith("flatpak:")) {
     const installDir = path.dirname(retroArchExecutablePath);
     const portableConfig = path.join(installDir, "config");
     // portable.ini marker or an already-present config dir both confirm the
@@ -96,14 +97,35 @@ export function resolveRetroArchConfigDir(
     ) {
       return portableConfig;
     }
-    const roaming = path.join(appDataPath, "RetroArch", "config");
-    if (existsSync(roaming)) return roaming;
+    const roaming = roamingRetroArchConfigDir(appDataPath);
+    if (roaming) return roaming;
     // Neither exists yet — RetroArch will create the portable one on next
     // launch, so target it.
     return portableConfig;
   }
-  const roaming = path.join(appDataPath, "RetroArch", "config");
-  return existsSync(roaming) ? roaming : null;
+  return roamingRetroArchConfigDir(appDataPath);
+}
+
+/** OS roaming `config/` dir: %APPDATA%/RetroArch (Windows), ~/Library/
+ *  Application Support/RetroArch (macOS), ~/.config/retroarch (Linux —
+ *  lowercase) or the Flatpak sandbox variant. */
+function roamingRetroArchConfigDir(appDataPath: string): string | null {
+  const dirName = process.platform === "linux" ? "retroarch" : "RetroArch";
+  const roaming = path.join(appDataPath, dirName, "config");
+  if (existsSync(roaming)) return roaming;
+  if (process.platform === "linux") {
+    const flatpak = path.join(
+      os.homedir(),
+      ".var",
+      "app",
+      "org.libretro.RetroArch",
+      "config",
+      "retroarch",
+      "config"
+    );
+    if (existsSync(flatpak)) return flatpak;
+  }
+  return null;
 }
 
 /** Per-game override file path. RetroArch uses the content basename without

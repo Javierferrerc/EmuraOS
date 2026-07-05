@@ -8,8 +8,10 @@ import {
   closeSync,
 } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { parseIni, serializeIni, type IniData } from "./config-parsers.js";
 import type { DolphinGameConfig } from "./types.js";
+import { getPlatform, userDataDir } from "./platform.js";
 
 /**
  * Dolphin per-game configuration writer.
@@ -71,15 +73,19 @@ function disabledPortStr(v: boolean): string {
 
 /**
  * Resolve Dolphin's User directory. Honors portable mode (a `portable.txt`
- * next to `Dolphin.exe`) and falls back to the two well-known default
- * locations on Windows. Returns null when no installation we know about
- * is detectable — the caller surfaces a "Dolphin not installed?" error
- * rather than guessing.
+ * next to the executable — supported by Dolphin on every OS) and falls back
+ * to the platform's well-known locations:
+ *  - Windows: Documents/Dolphin Emulator, then %APPDATA%/Dolphin Emulator
+ *  - macOS:   ~/Library/Application Support/Dolphin
+ *  - Linux:   ~/.local/share/dolphin-emu (also the Flatpak data variant)
+ * Returns null when no installation we know about is detectable — the
+ * caller surfaces a "Dolphin not installed?" error rather than guessing.
  */
 export function resolveDolphinUserDir(
   dolphinExecutablePath: string | null,
   appDataPath: string,
-  documentsPath: string
+  documentsPath: string,
+  platform: NodeJS.Platform = process.platform
 ): string | null {
   if (dolphinExecutablePath) {
     const installDir = path.dirname(dolphinExecutablePath);
@@ -87,13 +93,39 @@ export function resolveDolphinUserDir(
       return path.join(installDir, "User");
     }
   }
-  const documentsCandidate = path.join(documentsPath, "Dolphin Emulator");
-  if (existsSync(documentsCandidate)) return documentsCandidate;
-  const appDataCandidate = path.join(appDataPath, "Dolphin Emulator");
-  if (existsSync(appDataCandidate)) return appDataCandidate;
-  // Even if neither dir exists yet, prefer the Documents convention so
-  // Dolphin picks up our file the next time it launches.
-  return documentsCandidate;
+
+  switch (getPlatform(platform)) {
+    case "darwin": {
+      // macOS builds keep everything under Application Support/Dolphin.
+      return path.join(appDataPath, "Dolphin");
+    }
+    case "linux": {
+      // GameSettings live under the XDG *data* dir, not the config dir.
+      // Flatpak installs keep it inside the app sandbox under ~/.var/app.
+      const xdgData = path.join(userDataDir(platform), "dolphin-emu");
+      if (existsSync(xdgData)) return xdgData;
+      const flatpakData = path.join(
+        os.homedir(),
+        ".var",
+        "app",
+        "org.DolphinEmu.dolphin-emu",
+        "data",
+        "dolphin-emu"
+      );
+      if (existsSync(flatpakData)) return flatpakData;
+      return xdgData;
+    }
+    case "win32":
+    default: {
+      const documentsCandidate = path.join(documentsPath, "Dolphin Emulator");
+      if (existsSync(documentsCandidate)) return documentsCandidate;
+      const appDataCandidate = path.join(appDataPath, "Dolphin Emulator");
+      if (existsSync(appDataCandidate)) return appDataCandidate;
+      // Even if neither dir exists yet, prefer the Documents convention so
+      // Dolphin picks up our file the next time it launches.
+      return documentsCandidate;
+    }
+  }
 }
 
 /** Try to extract a 6-char ASCII GameID from a Wii/GC ROM. Returns null

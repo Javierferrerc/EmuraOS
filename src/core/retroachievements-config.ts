@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import {
   parseIni,
   serializeIni,
@@ -45,23 +46,43 @@ export function isRaInjectable(emulatorId: string): boolean {
 // ── Path resolution ────────────────────────────────────────────────
 
 /** retroarch.cfg sits next to the executable (portable Windows layout),
- *  falling back to %APPDATA%/RetroArch/retroarch.cfg. */
+ *  falling back to the OS roaming layout: %APPDATA%/RetroArch (Windows),
+ *  ~/Library/Application Support/RetroArch (macOS), ~/.config/retroarch
+ *  (Linux — lowercase!) or the Flatpak sandbox variant. */
 export function resolveRetroArchCfgPath(
   executablePath: string | null,
   appDataPath: string
 ): string | null {
-  if (executablePath) {
+  if (executablePath && !executablePath.startsWith("flatpak:")) {
     const dir = path.dirname(executablePath);
     const portable = path.join(dir, "retroarch.cfg");
     if (existsSync(portable) || existsSync(path.join(dir, "config"))) {
       return portable;
     }
-    const roaming = path.join(appDataPath, "RetroArch", "retroarch.cfg");
-    if (existsSync(roaming)) return roaming;
+    const roaming = roamingRetroArchCfg(appDataPath);
+    if (roaming) return roaming;
     return portable; // RetroArch creates it portable on first run
   }
-  const roaming = path.join(appDataPath, "RetroArch", "retroarch.cfg");
-  return existsSync(roaming) ? roaming : null;
+  return roamingRetroArchCfg(appDataPath);
+}
+
+function roamingRetroArchCfg(appDataPath: string): string | null {
+  const dirName = process.platform === "linux" ? "retroarch" : "RetroArch";
+  const roaming = path.join(appDataPath, dirName, "retroarch.cfg");
+  if (existsSync(roaming)) return roaming;
+  if (process.platform === "linux") {
+    const flatpak = path.join(
+      os.homedir(),
+      ".var",
+      "app",
+      "org.libretro.RetroArch",
+      "config",
+      "retroarch",
+      "retroarch.cfg"
+    );
+    if (existsSync(flatpak)) return flatpak;
+  }
+  return null;
 }
 
 /** Dolphin.ini lives under the resolved User dir in Config/. Reuses the

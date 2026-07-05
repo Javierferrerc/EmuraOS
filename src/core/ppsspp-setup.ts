@@ -18,13 +18,11 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { toNativePath, pathsEqual } from "./platform.js";
 
+// memstickpath.txt content uses the native separators of the running OS.
 function normalizePath(p: string): string {
-  return path.resolve(p).replace(/\//g, "\\");
-}
-
-function pathsEqual(a: string, b: string): boolean {
-  return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase();
+  return toNativePath(p);
 }
 
 /**
