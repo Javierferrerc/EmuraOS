@@ -678,8 +678,15 @@ export function registerIpcHandlers(
 
     // Run one-shot per-emulator setup for detected emulators that need a
     // portable-mode marker so their config files land where we write them.
+    // Windows-only: the marker is a portable-layout convention; on POSIX
+    // PPSSPP uses ~/.config/ppsspp and Flatpak refs have no real emuDir.
     for (const detected of result.detected) {
-      if (detected.id === "ppsspp" && detected.executablePath) {
+      if (
+        detected.id === "ppsspp" &&
+        detected.executablePath &&
+        process.platform === "win32" &&
+        !isFlatpakRef(detected.executablePath)
+      ) {
         try {
           const setup = ensurePpssppPortable(detected.executablePath);
           if (setup.updated) {
@@ -694,10 +701,9 @@ export function registerIpcHandlers(
       }
     }
 
-    // Validate emulator readiness and auto-download missing cores
-    const emulatorDefs: EmulatorDefinition[] = JSON.parse(
-      readFileSync(getEmulatorsPath(), "utf-8")
-    );
+    // Validate emulator readiness and auto-download missing cores.
+    // Normalized defs — coreUrls/args may be per-platform records in v2.
+    const emulatorDefs = new EmulatorMapper(getEmulatorsPath()).getAll();
     const readiness = new EmulatorReadiness();
     const readinessReport = await readiness.validateAndFix(
       result.detected,

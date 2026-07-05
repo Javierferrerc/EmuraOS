@@ -7,9 +7,22 @@ on:
 permissions:
   contents: write
 
+# Phase 28 — one job per OS. Each job builds its own distributables and
+# uploads them (plus its electron-updater metadata file) to the SAME GitHub
+# release: latest.yml (win), latest-mac.yml, latest-linux.yml.
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            installer: npx electron-builder --prepackaged out/emuraos-win32-x64 --win nsis --publish never
+          - os: macos-latest
+            installer: npx electron-builder --prepackaged out/emuraos-darwin-arm64 --mac --publish never
+          - os: ubuntu-latest
+            installer: npx electron-builder --prepackaged out/emuraos-linux-x64 --linux --publish never
+    runs-on: ${{ matrix.os }}
     env:
       GDRIVE_API_KEY: ${{ secrets.GDRIVE_API_KEY }}
       GDRIVE_ROOT_FOLDER_ID: ${{ secrets.GDRIVE_ROOT_FOLDER_ID }}
@@ -32,11 +45,14 @@ jobs:
       - name: Run tests (exclude flaky GDrive download tests)
         run: npx vitest run --exclude tests/core/emulator-downloader.test.ts
 
+      - name: Typecheck Electron main/preload
+        run: npm run typecheck:electron
+
       - name: Build ZIP distributable (Electron Forge)
         run: npm run make
 
-      - name: Build NSIS installer
-        run: npx electron-builder --prepackaged out/emuraos-win32-x64 --win nsis --publish never
+      - name: Build installer (electron-builder)
+        run: ${{ matrix.installer }}
 
       - name: Upload assets to release
         env:
@@ -44,15 +60,17 @@ jobs:
         shell: bash
         run: |
           tag="${{ github.event.release.tag_name }}"
-          # Upload ZIP
-          for f in out/make/zip/win32/x64/*.zip; do
+          # Forge ZIPs (path varies per OS/arch)
+          for f in out/make/zip/*/*/*.zip; do
             [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
           done
-          # Upload NSIS installer + electron-updater metadata.
-          # latest.yml and the .blockmap MUST be on the release: electron-updater
-          # reads latest.yml to detect new versions and the .blockmap to download
-          # only the changed bytes (differential update). Without them the
-          # in-app auto-updater can't find or apply updates.
-          for f in out/installers/*.exe out/installers/latest.yml out/installers/*.blockmap; do
+          # Installers + electron-updater metadata. The latest*.yml and
+          # .blockmap files MUST be on the release: electron-updater reads
+          # latest.yml / latest-mac.yml / latest-linux.yml to detect new
+          # versions and the .blockmap to download only the changed bytes.
+          for f in out/installers/*.exe out/installers/*.dmg \
+                   out/installers/*.AppImage out/installers/*.deb \
+                   out/installers/*.zip \
+                   out/installers/latest*.yml out/installers/*.blockmap; do
             [ -f "$f" ] && gh release upload "$tag" "$f" --clobber
           done

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI (tsc)
+        run: npm run build
+
+      - name: Typecheck Electron main/preload
+        run: npm run typecheck:electron
+
+      - name: Run tests (exclude flaky GDrive download tests)
+        run: npx vitest run --exclude tests/core/emulator-downloader.test.ts
+
+      # Phase 28 guard: OS-specific env vars must flow through
+      # src/core/platform.ts, never be read directly — a direct read is an
+      # empty string on macOS/Linux and breaks silently.
+      - name: Guard — no direct APPDATA/USERPROFILE reads
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          hits=$(grep -rnE 'process\.env\.(APPDATA|USERPROFILE)' src \
+            --include='*.ts' --include='*.tsx' \
+            | grep -v 'src/core/platform.ts' || true)
+          if [ -n "$hits" ]; then
+            echo "Direct APPDATA/USERPROFILE reads found (use src/core/platform.ts):"
+            echo "$hits"
+            exit 1
+          fi

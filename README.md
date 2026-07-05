@@ -2,6 +2,24 @@
 
 Open-source retro gaming frontend — detect ROMs, map emulators, launch games from the command line.
 
+## Platform Support
+
+| Capability | Windows | macOS | Linux |
+|---|---|---|---|
+| Library, scanning, metadata, covers | ✅ | ✅ | ✅ |
+| Launch games + session tracking | ✅ | ✅ | ✅ |
+| Embedded emulator (game renders inside the launcher) | ✅ | ❌¹ | ❌¹ |
+| Emulator detection | `C:\` defaults + managed installs | `/Applications`, Homebrew | `PATH`, Flatpak, managed installs |
+| One-click emulator download | Google Drive (curated) | Official release zips | Flathub (`flatpak install --user`) |
+| Installer | NSIS `.exe` | `.dmg` (unsigned²) | `.AppImage` + `.deb` |
+| In-app auto-update | ✅ install | notify-only² | ✅ AppImage / notify `.deb` |
+
+¹ Window embedding uses the Win32 API; macOS forbids cross-process reparenting and Wayland has no equivalent. On macOS/Linux the emulator opens as its own window while the launcher keeps full session tracking.
+
+² Until an Apple Developer ID certificate is provisioned, macOS builds are unsigned: right-click → Open on first launch, and updates notify with a link to the releases page instead of self-installing.
+
+Emulators without a native macOS/Linux build (Project64, Kega Fusion, DeSmuME) are covered by RetroArch cores on those platforms. On POSIX, Citra resolves to the Azahar fork and Ryujinx to the Ryubing fork.
+
 ## Features
 
 - **ROM Scanner** — Automatically detects ROMs organized by system folder
