@@ -123,9 +123,15 @@ describe("platform", () => {
 
   describe("toNativePath", () => {
     it("uses backslashes only on Windows", () => {
-      expect(toNativePath("C:/games/roms", "win32")).toBe("C:\\games\\roms");
-      // On POSIX the path is resolved as-is (forward slashes preserved).
-      expect(toNativePath("/games/roms", "linux")).toBe(path.resolve("/games/roms"));
+      // path.resolve() uses the HOST's path semantics, so a Windows-style
+      // input is only meaningful on a Windows host.
+      if (process.platform === "win32") {
+        expect(toNativePath("C:/games/roms", "win32")).toBe("C:\\games\\roms");
+      }
+      // Regardless of host, a POSIX target never introduces backslashes.
+      expect(toNativePath("/games/roms", "linux")).toBe(
+        path.resolve("/games/roms")
+      );
     });
   });
 

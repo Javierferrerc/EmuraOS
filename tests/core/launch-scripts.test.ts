@@ -12,6 +12,7 @@ import { resolve, join } from "node:path";
 import {
   runPreLaunchScript,
   runPostLaunchScript,
+  resolveInterpreter,
   type LaunchScriptEnv,
 } from "../../src/core/launch-scripts.js";
 
@@ -95,26 +96,36 @@ describe("launch-scripts", () => {
       expect(opts.env.EMURA_EXIT_CODE).toBeUndefined();
     });
 
-    it("picks the right interpreter per extension", async () => {
-      const cases: Array<[string, string, (args: string[]) => boolean]> = [
-        ["hook.ps1", "powershell.exe", (a) => a.includes("-File")],
-        ["hook.bat", "cmd.exe", (a) => a[0] === "/c"],
-        ["hook.cmd", "cmd.exe", (a) => a[0] === "/c"],
-        ["hook.sh", "sh", (a) => a.length === 1],
-      ];
-      for (const [name, exe, argsCheck] of cases) {
-        spawnMock.mockReset();
-        const child = makeFakeChild();
-        spawnMock.mockImplementation(() => child);
-        const script = makeScript(name);
-        const promise = runPreLaunchScript(script, ENV);
-        await Promise.resolve();
-        child.emit("exit", 0);
-        await promise;
-        const [calledExe, calledArgs] = spawnMock.mock.calls[0];
-        expect(calledExe).toBe(exe);
-        expect(argsCheck(calledArgs as string[])).toBe(true);
-      }
+    it("picks the right interpreter per extension and platform", () => {
+      // Windows semantics
+      expect(resolveInterpreter("hook.ps1", "win32")?.exe).toBe(
+        "powershell.exe"
+      );
+      expect(
+        resolveInterpreter("hook.ps1", "win32")?.args.includes("-File")
+      ).toBe(true);
+      expect(resolveInterpreter("hook.bat", "win32")?.exe).toBe("cmd.exe");
+      expect(resolveInterpreter("hook.cmd", "win32")?.args[0]).toBe("/c");
+      expect(resolveInterpreter("hook.sh", "win32")?.exe).toBe("sh");
+
+      // POSIX semantics (Phase 28): pwsh for .ps1, .bat/.cmd not runnable
+      expect(resolveInterpreter("hook.ps1", "linux")?.exe).toBe("pwsh");
+      expect(resolveInterpreter("hook.bat", "linux")).toBeNull();
+      expect(resolveInterpreter("hook.cmd", "darwin")).toBeNull();
+      expect(resolveInterpreter("hook.sh", "darwin")?.exe).toBe("sh");
+    });
+
+    it("spawns via the interpreter for the running platform", async () => {
+      const child = makeFakeChild();
+      spawnMock.mockImplementation(() => child);
+      const script = makeScript("hook.sh");
+      const promise = runPreLaunchScript(script, ENV);
+      await Promise.resolve();
+      child.emit("exit", 0);
+      await promise;
+      const [calledExe, calledArgs] = spawnMock.mock.calls[0];
+      expect(calledExe).toBe("sh");
+      expect((calledArgs as string[]).length).toBe(1);
     });
 
     it("executes an extension-less / exe path directly", async () => {
