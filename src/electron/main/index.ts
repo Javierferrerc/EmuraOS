@@ -17,6 +17,16 @@ const __dirname = path.dirname(__filename);
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+// Keep the renderer — and with it the Supabase Realtime presence socket — alive
+// when EMURA is fully covered by a fullscreen emulator. `backgroundThrottling:
+// false` (see webPreferences) handles blurred/background windows, but Chromium's
+// native window-occlusion detection FREEZES a fully-occluded window on its own,
+// independently of that flag — which is exactly what a fullscreen game does, so
+// the account would drop to "offline" for friends mid-session. Disabling it keeps
+// presence flowing during gameplay. No-op on macOS/Linux (the feature is Windows-
+// only). Must run before app "ready", hence module scope.
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+
 let mainWindow: BrowserWindow | null = null;
 
 // Mirrors ipc-handlers' getProjectRoot so the window can read the config before
