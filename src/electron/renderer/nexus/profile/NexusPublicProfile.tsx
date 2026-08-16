@@ -13,6 +13,7 @@ import {
 import { useSocial } from "../../social/SocialContext";
 import type { Profile, ProfileScreenshot } from "../../social/socialTypes";
 import { initialsOf } from "./nexusProfileData";
+import { PlayingNow } from "./PlayingNow";
 import { BackIcon, ClockIcon, GridIcon, SparkIcon, CloseIcon, GamepadIcon, CheckIcon } from "../NexusIcons";
 import "./nexus-public-profile.css";
 
@@ -83,6 +84,8 @@ export function NexusPublicProfile({
     profile?.username && profile?.user_tag ? `${profile.username}#${profile.user_tag}` : null;
   const stats = profile?.stats ?? {};
   const pinned = profile?.pinned ?? [];
+  // Live game session (from the global presence lobby), if this user is playing.
+  const livePresence = social.presence.get(userId);
 
   // Relationship with the viewer, to pick the right friend-action button.
   const edge = social.friends.find((f) => f.profile.id === userId);
@@ -287,7 +290,16 @@ export function NexusPublicProfile({
                 <div className="pp-id-main">
                   <h1 className="pp-name">{name}</h1>
                   {handle && <div className="pp-handle">{handle}</div>}
-                  {profile?.status ? <p className="pp-status">{profile.status}</p> : null}
+                  {livePresence?.playing ? (
+                    <p className="pp-playing">
+                      <PlayingNow
+                        title={livePresence.playing_title || livePresence.playing}
+                        since={livePresence.playing_since}
+                      />
+                    </p>
+                  ) : profile?.status ? (
+                    <p className="pp-status">{profile.status}</p>
+                  ) : null}
                 </div>
               </div>
             </div>

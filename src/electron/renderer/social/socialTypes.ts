@@ -85,5 +85,11 @@ export interface PresenceState {
   status: Presence;
   /** Stable game identity the user is playing, or null. */
   playing: string | null;
+  /** Human-readable title of the game in progress. Broadcast by the player
+   *  because a viewer can't resolve `playing` (they may not own the ROM). */
+  playing_title?: string | null;
+  /** Epoch ms when the current game session started, for a live "00:23:45"
+   *  timer on the viewer side. Stable across away/online toggles. */
+  playing_since?: number | null;
   since: string;
 }

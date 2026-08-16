@@ -10,7 +10,8 @@ import { createPortal } from "react-dom";
 import { useSocial } from "../../social/SocialContext";
 import type { FriendEdge, Profile } from "../../social/socialTypes";
 import { initialsOf } from "./nexusProfileData";
-import { CheckIcon, CloseIcon, PlayIcon, EyeIcon, EyeOffIcon } from "../NexusIcons";
+import { CheckIcon, CloseIcon, EyeIcon, EyeOffIcon } from "../NexusIcons";
+import { PlayingNow } from "./PlayingNow";
 import { NexusRegisterModal } from "./NexusRegisterModal";
 
 export function NexusFriends({
@@ -326,6 +327,8 @@ function FriendsBody({ onViewProfile }: { onViewProfile?: (userId: string) => vo
                       online
                       away={pres?.status === "away"}
                       playing={pres?.playing ?? null}
+                      playingTitle={pres?.playing_title ?? null}
+                      playingSince={pres?.playing_since ?? null}
                       onOpen={onViewProfile ? () => onViewProfile(f.profile.id) : undefined}
                     >
                       <button
@@ -686,6 +689,8 @@ function FriendRow({
   online,
   away,
   playing,
+  playingTitle,
+  playingSince,
   compact,
   subOverride,
   onOpen,
@@ -696,6 +701,9 @@ function FriendRow({
   /** Present but idle → amber dot + "Ausente". */
   away?: boolean;
   playing?: string | null;
+  /** Human title + session start (epoch ms) of the game in progress. */
+  playingTitle?: string | null;
+  playingSince?: number | null;
   /** Tighter row for the requests panel (smaller avatar, no presence dot). */
   compact?: boolean;
   /** Force the subtitle text (used for outgoing requests). */
@@ -741,9 +749,7 @@ function FriendRow({
           {subOverride ? (
             subOverride
           ) : playing ? (
-            <>
-              <PlayIcon size={11} /> <span className="playing">{playing}</span>
-            </>
+            <PlayingNow title={playingTitle || playing} since={playingSince} />
           ) : away ? (
             "Ausente"
           ) : online ? (

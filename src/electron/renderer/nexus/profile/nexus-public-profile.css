@@ -235,6 +235,20 @@
   max-width: 60ch;
 }
 
+/* Live "▶ Jugando X 00:23:45" line under the name (from presence). */
+.nexus-root .pp-playing {
+  margin: 8px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #4ade80;
+}
+.nexus-root .pp-playing .playing {
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ── stats ── */
 .nexus-root .pp-stats {
   display: flex;
