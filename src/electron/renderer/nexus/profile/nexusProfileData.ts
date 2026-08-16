@@ -158,6 +158,28 @@ export function saveProfileEdit(edit: NexusProfileEdit, profileId?: string | nul
   }
 }
 
+/**
+ * Mirror an avatar/banner into a profile's own local edit layer (keyed by id)
+ * WITHOUT disturbing its other fields. Used by the profile selector when a photo
+ * is chosen there, so the in-app profile (which reads this same layer) stays in
+ * sync — one image, every surface. Only the keys present in `patch` are touched.
+ */
+export function mergeProfileImage(
+  profileId: string,
+  fallbackName: string,
+  patch: { avatarUrl?: string | null; bannerUrl?: string | null }
+): void {
+  const cur = loadProfileEdit(fallbackName, profileId);
+  saveProfileEdit(
+    {
+      ...cur,
+      avatarUrl: "avatarUrl" in patch ? patch.avatarUrl ?? null : cur.avatarUrl ?? null,
+      bannerUrl: "bannerUrl" in patch ? patch.bannerUrl ?? null : cur.bannerUrl ?? null,
+    },
+    profileId
+  );
+}
+
 /** Window event dispatched whenever the local profile edit is saved. */
 export const PROFILE_UPDATED_EVENT = "nx-profile-updated";
 
