@@ -137,7 +137,7 @@ export function Layout({ inputDisabled }: { inputDisabled?: boolean }) {
     return systemsWithRoms;
   }, [systemsWithRoms, config?.systemSortOrder, config?.customSystemOrder, recentlyPlayed]);
 
-  const theme = config?.theme ?? "dark";
+  const theme = config?.theme ?? "nexus";
 
   const customSystemColors = config?.customSystemColors;
   const sliderItems = useMemo(

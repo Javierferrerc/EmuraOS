@@ -326,7 +326,7 @@ export function GameCard({ rom, isFocused, gridIndex }: GameCardProps) {
   }, []);
 
   const displayName = metadata?.title || rom.fileName.replace(/\.[^.]+$/, "");
-  const theme = config?.theme ?? "dark";
+  const theme = config?.theme ?? "nexus";
   const customHex = config?.customSystemColors?.[rom.systemId];
   const colorMap = theme === "light" ? SYSTEM_COLORS_LIGHT : SYSTEM_COLORS;
   let systemLight: string, systemDark: string;
