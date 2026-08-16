@@ -31,7 +31,6 @@ import { NexusSidebar } from "./NexusSidebar";
 import { NexusSystemRail } from "./NexusSystemRail";
 import { NexusHome } from "./NexusHome";
 import { NexusProfile } from "./profile/NexusProfile";
-import { SocialProvider } from "../social/SocialContext";
 import { NexusErrorBoundary } from "./NexusErrorBoundary";
 import { NexusGameDetail } from "./detail/NexusGameDetail";
 import type { GameDetailFocusHandle } from "./detail/useGameDetailFocus";
@@ -468,7 +467,6 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
 
   return (
     <NexusErrorBoundary>
-    <SocialProvider>
     <div className={`nexus-root${hasBg ? " has-bg" : ""}`}>
       <div className="nx-app">
         <div className="nx-ambient" />
@@ -629,7 +627,6 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
         )}
       </div>
     </div>
-    </SocialProvider>
     </NexusErrorBoundary>
   );
 }
