@@ -10,11 +10,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useSocial } from "../../social/SocialContext";
 import {
-  uploadProfileImage,
+  resolveProfileImageUrl,
   deleteMediaByUrl,
   uploadCoverDataUrl,
-  dataUrlToBlob,
-  type MediaBucket,
 } from "../../social/socialApi";
 import type { NexusGame } from "../nexusModel";
 import type { SgdbCandidate } from "../../../../core/types";
@@ -52,27 +50,6 @@ import {
   ImageIcon,
 } from "../NexusIcons";
 import "./nexus-profile.css";
-
-/**
- * Resolve a profile image value to a shareable cloud URL so other accounts can
- * see it:
- *  - data: URL (uploaded / dragged file) → upload to Storage, return public URL
- *  - http(s) URL (e.g. SteamGridDB) → keep as-is
- *  - null → null
- */
-async function resolveCloudImage(
-  bucket: MediaBucket,
-  value: string | null
-): Promise<string | null> {
-  if (!value) return null;
-  if (value.startsWith("data:")) {
-    const blob = dataUrlToBlob(value);
-    const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
-    const { url } = await uploadProfileImage(bucket, blob, ext);
-    return url;
-  }
-  return value;
-}
 
 interface NexusProfileProps {
   onBack: () => void;
@@ -124,13 +101,16 @@ export function NexusProfile({
   const [leaving, setLeaving] = useState(false); // animación de salida al cerrar sesión
   const [viewingUserId, setViewingUserId] = useState<string | null>(null); // ver perfil de otro
 
-  // Current (non-editing) identity, account-first.
+  // Current (non-editing) identity, account-first. Foto/portada are read
+  // cloud-first when signed in, so an image set on ANY surface (selector,
+  // another device, this editor) shows here too — Supabase `profiles` is the
+  // single source of truth; the local layer is the offline / signed-out fallback.
   const current: NexusProfileEdit = {
     name: signedIn ? accountName || fallbackName : local.name || fallbackName,
     status: signedIn ? accountStatus : local.status,
     pinned: local.pinned,
-    bannerUrl: local.bannerUrl ?? null,
-    avatarUrl: local.avatarUrl ?? null,
+    bannerUrl: (signedIn ? social.profile?.banner_url ?? null : null) ?? local.bannerUrl ?? null,
+    avatarUrl: (signedIn ? social.profile?.avatar_url ?? null : null) ?? local.avatarUrl ?? null,
   };
 
   // Account handle / code shown in the banner options menu (signed in only).
@@ -285,8 +265,8 @@ export function NexusProfile({
         const prevBanner = local.bannerUrl;
         try {
           [avatarUrl, bannerUrl] = await Promise.all([
-            resolveCloudImage("avatars", next.avatarUrl),
-            resolveCloudImage("banners", next.bannerUrl),
+            resolveProfileImageUrl("avatars", next.avatarUrl),
+            resolveProfileImageUrl("banners", next.bannerUrl),
           ]);
           await social.updateProfile({
             display_name: name,
@@ -356,11 +336,11 @@ export function NexusProfile({
         let avatarUrl = local.avatarUrl ?? null;
         let bannerUrl = local.bannerUrl ?? null;
         if (avatarUrl) {
-          avatarUrl = await resolveCloudImage("avatars", avatarUrl);
+          avatarUrl = await resolveProfileImageUrl("avatars", avatarUrl);
           patch.avatar_url = avatarUrl;
         }
         if (bannerUrl) {
-          bannerUrl = await resolveCloudImage("banners", bannerUrl);
+          bannerUrl = await resolveProfileImageUrl("banners", bannerUrl);
           patch.banner_url = bannerUrl;
         }
         await social.updateProfile(patch);

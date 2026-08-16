@@ -110,7 +110,7 @@ export function buildCommandPaletteActions(
   // navigate to the bare collection filter (legacy callers / tests).
   void setActiveFilter;
 
-  const currentTheme = config?.theme ?? "dark";
+  const currentTheme = config?.theme ?? "nexus";
   const currentViewMode = config?.libraryViewMode ?? "grid";
   const actions: CommandAction[] = [];
 
