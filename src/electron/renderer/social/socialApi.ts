@@ -96,6 +96,29 @@ export async function uploadProfileImage(
   return { path, url: publicMediaUrl(bucket, path) };
 }
 
+/**
+ * Resolve a profile image value to a shareable cloud URL so every surface
+ * (selector, in-app profile, others' views) can render it from ONE source:
+ *  - data: URL (uploaded / dragged file) → upload to Storage, return public URL
+ *  - http(s) URL (e.g. SteamGridDB) → keep as-is
+ *  - null → null
+ * Requires an active session (upload is owner-scoped). Shared by NexusProfile
+ * (in-app editor) and NexusProfileSelect (account create/login avatar).
+ */
+export async function resolveProfileImageUrl(
+  bucket: MediaBucket,
+  value: string | null
+): Promise<string | null> {
+  if (!value) return null;
+  if (value.startsWith("data:")) {
+    const blob = dataUrlToBlob(value);
+    const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg");
+    const { url } = await uploadProfileImage(bucket, blob, ext);
+    return url;
+  }
+  return value;
+}
+
 /** Read any user's PUBLIC profile (safe fields only; honors show_name/age). */
 export async function getPublicProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await db().rpc("get_public_profile", { p_user_id: userId });
@@ -659,14 +682,28 @@ export async function listActivity(limit = 40): Promise<ActivityItem[]> {
 
 // ── Presence (Realtime) ──────────────────────────────────────────────────
 /**
- * Join the shared presence channel and broadcast my state. The caller updates
+ * Join the shared presence channel and broadcast my state. `onSync` fires with
+ * the full list of present users whenever presence changes. The caller updates
  * `playing` when a game session starts/ends. Friend filtering is applied by the
  * consumer (only show presence of accepted friends); per-friend channel privacy
  * is a later refinement.
+ *
+ * IMPORTANT: the `sync` listener is registered BEFORE `subscribe()` — the order
+ * Supabase Realtime requires. Registering it afterwards (as this used to) can
+ * drop the INITIAL snapshot, so a friend who was already online never shows up
+ * and no later `sync` arrives to correct it.
  */
-export function joinPresence(state: PresenceState): RealtimeChannel {
+export function joinPresence(
+  state: PresenceState,
+  onSync: (states: PresenceState[]) => void
+): RealtimeChannel {
   const channel = db().channel("presence:lobby", {
     config: { presence: { key: state.user_id } },
+  });
+  channel.on("presence", { event: "sync" }, () => {
+    const raw = channel.presenceState<PresenceState>();
+    const flat = Object.values(raw).flat() as PresenceState[];
+    onSync(flat);
   });
   channel.subscribe(async (status) => {
     if (status === "SUBSCRIBED") await channel.track(state);
@@ -676,15 +713,6 @@ export function joinPresence(state: PresenceState): RealtimeChannel {
 
 export async function updatePresence(channel: RealtimeChannel, state: PresenceState): Promise<void> {
   await channel.track(state);
-}
-
-/** Subscribe to presence sync; returns the flattened list of present states. */
-export function onPresenceSync(channel: RealtimeChannel, cb: (states: PresenceState[]) => void): void {
-  channel.on("presence", { event: "sync" }, () => {
-    const raw = channel.presenceState<PresenceState>();
-    const flat = Object.values(raw).flat() as PresenceState[];
-    cb(flat);
-  });
 }
 
 export async function leavePresence(channel: RealtimeChannel): Promise<void> {

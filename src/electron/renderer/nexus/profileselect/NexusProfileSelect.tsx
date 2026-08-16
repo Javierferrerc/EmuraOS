@@ -23,8 +23,10 @@ import {
   signOut,
   restoreSession,
   forgetRememberedSession,
+  updateMyProfile,
+  resolveProfileImageUrl,
 } from "../../social/socialApi";
-import { loadProfileEdit } from "../profile/nexusProfileData";
+import { loadProfileEdit, mergeProfileImage } from "../profile/nexusProfileData";
 import { NexusRegisterModal } from "../profile/NexusRegisterModal";
 import { SocialProvider } from "../../social/SocialContext";
 import { makePsSound, type PsSoundKind } from "./psSound";
@@ -594,6 +596,41 @@ export function NexusProfileSelect({
     saveProfiles(profiles);
   }, [profiles]);
 
+  // When a photo is chosen for a profile in the selector, propagate it to the
+  // single source of truth so every surface shows it:
+  //  - account (signed in): upload any data: image to Supabase Storage + set
+  //    `profiles.avatar_url`, then mirror the cloud URL into the local layer and
+  //    the tile (drops the heavy data: URL).
+  //  - local profile: mirror into its own local edit layer so the in-app profile
+  //    (which reads that layer) shows the same avatar.
+  const persistProfileImage = useCallback(async (p: NexusProfileEntry) => {
+    const img = p.avatar;
+    if (!img) return;
+    const isData = img.startsWith("data:");
+    if (p.account && isSocialConfigured() && isData) {
+      try {
+        // Only touch the cloud when THIS account's session is the live one —
+        // otherwise updateMyProfile would overwrite whichever account is signed
+        // in (e.g. editing an account tile while another is active).
+        const me = await getMyProfile();
+        if (me && me.id === p.id) {
+          const cloud = await resolveProfileImageUrl("avatars", img);
+          if (cloud) {
+            await updateMyProfile({ avatar_url: cloud });
+            mergeProfileImage(p.id, p.name, { avatarUrl: cloud });
+            setProfiles((list) => list.map((x) => (x.id === p.id ? { ...x, avatar: cloud } : x)));
+            return;
+          }
+        }
+      } catch (e) {
+        // Non-fatal: keep the local image on the tile and mirror it below so at
+        // least the in-app profile matches; the next cloud sync can retry.
+        console.warn("[selector] avatar cloud sync failed:", e);
+      }
+    }
+    mergeProfileImage(p.id, p.name, { avatarUrl: img });
+  }, []);
+
   // Reflect a signed-in EMURA account in the selector. The Supabase session
   // persists across launches, so if the user was already signed in, surface
   // their account as a profile (name from the account, avatar from the local
@@ -612,11 +649,14 @@ export function NexusProfileSelect({
         // This account's OWN edit layer (keyed by its id) — not the global/active
         // one, which would copy one profile's avatar onto every tile.
         const edit = loadProfileEdit(name, prof.id);
+        // Cloud-first: Supabase `profiles.avatar_url` is the source of truth for
+        // an account, so a photo set in the in-app profile (or on another device)
+        // shows on this tile. Fall back to the local layer when the cloud has none.
         const accountEntry: NexusProfileEntry = {
           id: prof.id,
           name,
           hue: hueFromString(prof.id),
-          avatar: cspSafeAvatar(edit.avatarUrl),
+          avatar: cspSafeAvatar(prof.avatar_url ?? edit.avatarUrl),
           online: true,
           level: 1,
           xp: 0.05,
@@ -896,6 +936,9 @@ export function NexusProfileSelect({
             setAdding(false);
             // Highlight the new/updated profile once it's in the list.
             setFocusId(p.id);
+            // Propagate the chosen photo to the cloud (accounts) + local layer so
+            // it shows in the in-app profile and survives reconcile.
+            void persistProfileImage(p);
           }}
           onCreateAccount={() => {
             setAdding(false);
@@ -955,6 +998,8 @@ export function NexusProfileSelect({
           onUpdate={(p) => {
             setProfiles((list) => list.map((x) => (x.id === p.id ? p : x)));
             setEditTarget(null);
+            // Same propagation on edit: keep cloud + local + tile in sync.
+            void persistProfileImage(p);
           }}
           onDelete={() => {
             const target = editTarget;

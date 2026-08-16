@@ -191,8 +191,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         playing,
         since: new Date().toISOString(),
       };
-      channel = api.joinPresence(state);
-      api.onPresenceSync(channel, (states) => {
+      channel = api.joinPresence(state, (states) => {
         setPresence(new Map(states.map((s) => [s.user_id, s])));
       });
       channelRef.current = channel;
