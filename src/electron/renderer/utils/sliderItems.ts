@@ -122,7 +122,7 @@ export const SHORT_LABELS: Record<string, string> = {
 
 export function buildSliderItems(
   systemsWithRoms: SystemDefinition[],
-  theme: NonNullable<AppConfig["theme"]> = "dark",
+  theme: NonNullable<AppConfig["theme"]> = "nexus",
   customColors?: Record<string, string>
 ): SliderItem[] {
   const palette = theme === "light" ? SYSTEM_COLORS_LIGHT : SYSTEM_COLORS;
