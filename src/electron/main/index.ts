@@ -57,6 +57,12 @@ function createWindow(): void {
       // Let the EMURA boot chime (WebAudio) play on startup without a prior
       // user gesture — Chromium otherwise blocks audio until first interaction.
       autoplayPolicy: "no-user-gesture-required",
+      // Keep the renderer running at full speed when the window loses focus / is
+      // hidden / is covered by an emulator. With the default (true), Chromium
+      // throttles background timers and the Supabase Realtime WebSocket heartbeat,
+      // so the account drops to "offline" for friends the moment EMURA isn't the
+      // foreground window. Presence must survive Alt-Tab, the menu, and gameplay.
+      backgroundThrottling: false,
     },
   });
 

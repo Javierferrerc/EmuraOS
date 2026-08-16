@@ -109,6 +109,15 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     () => (app.isGameRunning ? gameRefOf(app.currentGame?.rom?.fileName) : null),
     [app.isGameRunning, app.currentGame]
   );
+  // Human title + session start (epoch ms) broadcast alongside `playing`, so a
+  // friend can render "Jugando Pokémon Rojo 00:23:45" without owning the ROM.
+  const playingTitle = useMemo(() => {
+    if (!app.isGameRunning || !app.currentGame) return null;
+    const { systemId, fileName } = app.currentGame.rom;
+    const meta = app.getMetadataForRom?.(systemId, fileName);
+    return meta?.title?.trim() || fileName.replace(/\.[^.]+$/, "");
+  }, [app.isGameRunning, app.currentGame, app.getMetadataForRom]);
+  const playingSince = app.isGameRunning ? app.currentGame?.sessionStartedAt ?? null : null;
 
   const loadFriends = useCallback(async () => {
     try {
@@ -238,12 +247,17 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     const u = userRef.current;
     if (!channel || !u) return;
     void api.updatePresence(channel, {
+      // A running game counts as activity: input goes to the emulator, not the
+      // EMURA window, so the idle timer would otherwise flip us to "away" mid-
+      // session. Stay "online" while `playing` is set.
       user_id: u.id,
-      status: away ? "away" : "online",
+      status: away && !playing ? "away" : "online",
       playing,
+      playing_title: playingTitle,
+      playing_since: playingSince,
       since: new Date().toISOString(),
     });
-  }, [playing, away]);
+  }, [playing, playingTitle, playingSince, away]);
 
   // ── Actions ──────────────────────────────────────────────────────
   const signUpEmail = useCallback(async (email: string, password: string) => {
