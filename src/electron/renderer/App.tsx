@@ -26,6 +26,7 @@ import { StatusBar } from "./components/StatusBar";
 import { NexusShell } from "./nexus/NexusShell";
 import { NexusSettings } from "./nexus/settings/NexusSettings";
 import { NexusSession } from "./nexus/session/NexusSession";
+import { SocialProvider } from "./social/SocialContext";
 import { FirstRunWizard } from "./components/settings/wizard/FirstRunWizard";
 import { AddRomWizard } from "./components/settings/wizard/AddRomWizard";
 import { NEW_SETTINGS_ENABLED } from "./components/settings/feature-flags";
@@ -466,6 +467,18 @@ export default function App() {
   ) : (
     <div className="h-full" />
   );
+
+  // Keep the social layer (auth + live presence) mounted ACROSS view changes.
+  // NexusSession replaces NexusShell on /game (and NexusSettings on /settings),
+  // and SocialProvider used to live INSIDE NexusShell — so launching a game
+  // unmounted the provider, ran its cleanup (leavePresence → untrack), and
+  // dropped the account from the presence lobby ("offline", no "jugando").
+  // Hoisted here (outside the keyed fade wrapper) it spans library ↔ game ↔
+  // settings, so presence — including the now-playing broadcast — survives a
+  // game session. Only in the NEXUS theme, and only once a profile is active.
+  if (isNexus && activeProfile) {
+    page = <SocialProvider>{page}</SocialProvider>;
+  }
 
   return (
     <div className="flex h-screen flex-col">
