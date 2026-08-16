@@ -26,7 +26,7 @@ export const generalSection: SettingsSection = {
             // { value: "synthwave", label: "Neon Synthwave" },
             { value: "nexus", label: "Nexus" },
           ],
-          get: (ctx) => ctx.config?.theme ?? "dark",
+          get: (ctx) => ctx.config?.theme ?? "nexus",
           set: async (value, ctx) => {
             await ctx.updateConfig({
               theme: value as

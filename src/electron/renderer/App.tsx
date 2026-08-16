@@ -178,7 +178,7 @@ export default function App() {
 
   // Apply theme to <html> so CSS [data-theme] selectors work globally
   useEffect(() => {
-    const theme = app.config?.theme ?? "dark";
+    const theme = app.config?.theme ?? "nexus";
     if (theme === "dark") {
       document.documentElement.removeAttribute("data-theme");
     } else {
