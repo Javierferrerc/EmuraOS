@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { isWindows } from "./platform.js";
 
 /**
  * Pre/post launch wrapper script runner.
@@ -38,20 +39,26 @@ function buildEnv(env: LaunchScriptEnv): NodeJS.ProcessEnv {
   return base;
 }
 
-/** Pick an interpreter + args for the given script path. Powershell for
- *  .ps1, cmd for .bat/.cmd, sh for .sh; otherwise execute directly (the
- *  user might point us at an exe that takes the env vars). */
-function resolveInterpreter(
-  scriptPath: string
-): { exe: string; args: string[] } {
+/** Pick an interpreter + args for the given script path, per OS.
+ *  - .ps1 → powershell.exe on Windows, pwsh (PowerShell Core) elsewhere
+ *  - .bat/.cmd → cmd.exe on Windows only (null elsewhere — not runnable)
+ *  - .sh → sh everywhere (Git Bash provides it on Windows)
+ *  - anything else executes directly (the user may point us at a binary).
+ *  Returns null when the script type cannot run on this OS; callers log
+ *  and skip instead of spawning something that would fail confusingly. */
+export function resolveInterpreter(
+  scriptPath: string,
+  platform: NodeJS.Platform = process.platform
+): { exe: string; args: string[] } | null {
   const ext = path.extname(scriptPath).toLowerCase();
   if (ext === ".ps1") {
     return {
-      exe: "powershell.exe",
+      exe: isWindows(platform) ? "powershell.exe" : "pwsh",
       args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
     };
   }
   if (ext === ".bat" || ext === ".cmd") {
+    if (!isWindows(platform)) return null;
     return { exe: "cmd.exe", args: ["/c", scriptPath] };
   }
   if (ext === ".sh") {
@@ -77,7 +84,15 @@ export async function runPreLaunchScript(
     );
     return;
   }
-  const { exe, args } = resolveInterpreter(scriptPath);
+  const interpreter = resolveInterpreter(scriptPath);
+  if (!interpreter) {
+    console.warn(
+      "[launch-scripts] pre-launch script type not runnable on this OS:",
+      scriptPath
+    );
+    return;
+  }
+  const { exe, args } = interpreter;
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -140,13 +155,26 @@ export function runPostLaunchScript(
     );
     return;
   }
-  const { exe, args } = resolveInterpreter(scriptPath);
+  const interpreter = resolveInterpreter(scriptPath);
+  if (!interpreter) {
+    console.warn(
+      "[launch-scripts] post-launch script type not runnable on this OS:",
+      scriptPath
+    );
+    return;
+  }
+  const { exe, args } = interpreter;
   try {
     const child = spawn(exe, args, {
       env: buildEnv(env),
       detached: true,
       stdio: "ignore",
       shell: false,
+    });
+    // Async spawn failures (ENOENT/EACCES) must be consumed or they crash
+    // the process as an uncaughtException.
+    child.on("error", (err) => {
+      console.warn("[launch-scripts] post-launch script error:", err);
     });
     child.unref();
   } catch (err) {

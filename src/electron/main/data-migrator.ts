@@ -81,6 +81,10 @@ export function migrateDataIfNeeded(oldRoot: string, newRoot: string): void {
 
 function isRelativePath(p: string | undefined): boolean {
   if (!p) return true; // undefined / empty → treated as default relative
+  // A Windows drive path (D:\Games) is absolute even when this code runs on
+  // POSIX, where path.isAbsolute() would say otherwise — a migrated config
+  // may have been written on Windows.
+  if (/^[A-Za-z]:[\\/]/.test(p)) return false;
   return p.startsWith("./") || p.startsWith(".\\") || p === "." || !path.isAbsolute(p);
 }
 

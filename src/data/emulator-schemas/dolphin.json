@@ -1,7 +1,11 @@
 {
   "configFile": "Dolphin.ini",
   "configFormat": "ini",
-  "configLocations": ["{appdata}/Dolphin Emulator/Config/Dolphin.ini"],
+  "configLocations": {
+    "win32": ["{emuDir}/User/Config/Dolphin.ini", "{appdata}/Dolphin Emulator/Config/Dolphin.ini"],
+    "darwin": ["{appdata}/Dolphin/Config/Dolphin.ini"],
+    "linux": ["{appdata}/dolphin-emu/Dolphin.ini", "{home}/.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/Dolphin.ini"]
+  },
   "categories": [
     {
       "id": "general",

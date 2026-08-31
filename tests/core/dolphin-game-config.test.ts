@@ -126,14 +126,30 @@ describe("dolphin-game-config", () => {
       expect(result).toBe(path.join(installDir, "User"));
     });
 
-    it("falls back to Documents convention when nothing exists", () => {
+    it("falls back to Documents convention when nothing exists (Windows)", () => {
       const docs = path.join(TEST_ROOT, "docs");
       const result = resolveDolphinUserDir(
         null,
         path.join(TEST_ROOT, "appdata"),
-        docs
+        docs,
+        "win32"
       );
       expect(result).toBe(path.join(docs, "Dolphin Emulator"));
+    });
+
+    it("resolves the platform convention on macOS and Linux", () => {
+      const appdata = path.join(TEST_ROOT, "appdata");
+      const docs = path.join(TEST_ROOT, "docs");
+
+      // macOS keeps everything under Application Support/Dolphin.
+      expect(resolveDolphinUserDir(null, appdata, docs, "darwin")).toBe(
+        path.join(appdata, "Dolphin")
+      );
+
+      // Linux uses the XDG data dir (never Documents). The exact base
+      // comes from the real environment, so just assert the suffix.
+      const linux = resolveDolphinUserDir(null, appdata, docs, "linux");
+      expect(linux).toMatch(/dolphin-emu$/);
     });
   });
 });

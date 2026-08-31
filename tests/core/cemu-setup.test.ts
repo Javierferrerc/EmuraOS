@@ -15,6 +15,7 @@ import {
   writeCemuKeys,
   isValidKeyLine,
 } from "../../src/core/cemu-setup.js";
+import { appDataDir, toNativePath } from "../../src/core/platform.js";
 
 const TEST_DIR = resolve(import.meta.dirname, "__test_cemu__");
 const CEMU_EXE = join(TEST_DIR, "Cemu.exe");
@@ -24,6 +25,7 @@ const WIIU_FOLDER = join(TEST_DIR, "roms", "wiiu");
 
 const FAKE_APPDATA = join(TEST_DIR, "__appdata__");
 let originalAppdata: string | undefined;
+let originalXdgConfig: string | undefined;
 
 describe("cemu-setup", () => {
   beforeEach(() => {
@@ -35,9 +37,12 @@ describe("cemu-setup", () => {
     // Create portable.txt marker so Cemu is treated as portable mode
     // (config lives next to the exe, not in %APPDATA%/Cemu).
     writeFileSync(join(TEST_DIR, "portable.txt"), "", "utf-8");
-    // Isolate APPDATA so we don't hit the real Cemu install on the dev machine
+    // Isolate the roaming dir so we don't hit a real Cemu install on the
+    // dev machine (APPDATA on Windows, XDG_CONFIG_HOME on Linux).
     originalAppdata = process.env.APPDATA;
+    originalXdgConfig = process.env.XDG_CONFIG_HOME;
     process.env.APPDATA = FAKE_APPDATA;
+    process.env.XDG_CONFIG_HOME = FAKE_APPDATA;
   });
 
   afterEach(() => {
@@ -45,6 +50,11 @@ describe("cemu-setup", () => {
       process.env.APPDATA = originalAppdata;
     } else {
       delete process.env.APPDATA;
+    }
+    if (originalXdgConfig !== undefined) {
+      process.env.XDG_CONFIG_HOME = originalXdgConfig;
+    } else {
+      delete process.env.XDG_CONFIG_HOME;
     }
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
@@ -58,7 +68,8 @@ describe("cemu-setup", () => {
     const content = readFileSync(SETTINGS_PATH, "utf-8");
     expect(content).toContain("<GamePaths>");
     expect(content).toContain("<Entry>");
-    expect(content).toContain(resolve(WIIU_FOLDER).replace(/\//g, "\\"));
+    // Paths are written with the native separators of the running OS.
+    expect(content).toContain(toNativePath(WIIU_FOLDER));
     expect(content).toContain("</GamePaths>");
   });
 
@@ -90,7 +101,7 @@ describe("cemu-setup", () => {
     expect(result.updated).toBe(true);
     const content = readFileSync(SETTINGS_PATH, "utf-8");
     expect(content).toContain("D:\\OtherGames");
-    expect(content).toContain(resolve(WIIU_FOLDER).replace(/\//g, "\\"));
+    expect(content).toContain(toNativePath(WIIU_FOLDER));
     expect(content).toContain("<graphic_api>Vulkan</graphic_api>");
     const entries = content.match(/<Entry>/g) ?? [];
     expect(entries).toHaveLength(2);
@@ -113,14 +124,16 @@ describe("cemu-setup", () => {
     expect(content).toContain("<fullscreen>false</fullscreen>");
   });
 
-  it("case-insensitive path comparison for Windows", () => {
+  it("path comparison matches the OS case-sensitivity", () => {
     ensureCemuGamePath(CEMU_EXE, WIIU_FOLDER);
 
-    // Call again with different casing
+    // Call again with different casing. On Windows paths compare
+    // case-insensitively (no duplicate); on POSIX a different casing is a
+    // genuinely different path, so a new entry IS added.
     const upper = WIIU_FOLDER.toUpperCase();
     const result = ensureCemuGamePath(CEMU_EXE, upper);
 
-    expect(result.updated).toBe(false);
+    expect(result.updated).toBe(process.platform !== "win32");
   });
 
   it("findCemuSettingsPath returns portable path when portable.txt exists", () => {
@@ -134,12 +147,12 @@ describe("cemu-setup", () => {
     expect(path).toBe(SETTINGS_PATH);
   });
 
-  it("findCemuSettingsPath falls back to %APPDATA%/Cemu when no portable marker exists", () => {
+  it("findCemuSettingsPath falls back to the OS roaming dir when no portable marker exists", () => {
     // Remove the portable.txt marker added by beforeEach so we hit
-    // the appdata branch.
+    // the roaming branch (%APPDATA% / XDG_CONFIG_HOME / App Support).
     rmSync(join(TEST_DIR, "portable.txt"), { force: true });
     const settingsPath = findCemuSettingsPath(CEMU_EXE);
-    expect(settingsPath).toBe(join(FAKE_APPDATA, "Cemu", "settings.xml"));
+    expect(settingsPath).toBe(join(appDataDir(), "Cemu", "settings.xml"));
   });
 
   // ── keys.txt tests ──────────────────────────────────────────────

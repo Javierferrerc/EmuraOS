@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { ResolvedEmulator, LaunchResult, DiscoveredRom } from "./types.js";
 import type { EmulatorMapper } from "./emulator-mapper.js";
+import { isFlatpakRef, flatpakAppId } from "./emulator-mapper.js";
 
 // Sentinels swapped in for {executable}/{romPath} BEFORE tokenizing, then
 // swapped back to the real values AFTER. This guarantees a rom path (the least
@@ -96,6 +97,13 @@ export class GameLauncher {
     );
 
     const [exe, ...args] = tokens;
+
+    // Flatpak installs resolve to a `flatpak:<appId>` sentinel instead of a
+    // filesystem path — rewrite into `flatpak run <appId> …` for spawning.
+    if (isFlatpakRef(exe)) {
+      return { exe: "flatpak", args: ["run", flatpakAppId(exe), ...args] };
+    }
+
     return { exe, args };
   }
 
@@ -133,6 +141,13 @@ export class GameLauncher {
         detached: true,
         stdio: "ignore",
         shell: false,
+      });
+
+      // spawn() reports ENOENT/EACCES asynchronously; without a listener
+      // that "error" event becomes an uncaughtException and kills the
+      // whole process (bites on POSIX when the executable bit is missing).
+      child.on("error", (err) => {
+        console.warn(`[launcher] emulator process error: ${err.message}`);
       });
 
       child.unref();

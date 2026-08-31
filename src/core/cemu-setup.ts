@@ -18,6 +18,7 @@ import {
   mkdirSync,
 } from "node:fs";
 import path from "node:path";
+import { appDataDir, toNativePath, pathsEqual } from "./platform.js";
 
 function escapeXml(value: string): string {
   return value
@@ -33,13 +34,11 @@ function unescapeXml(value: string): string {
     .replace(/&amp;/g, "&");
 }
 
+// Paths written into settings.xml use the native separators of the running
+// OS (Cemu on Windows expects backslashes; on macOS/Linux, POSIX paths).
+// Equality is case-insensitive only on Windows — see platform.pathsEqual.
 function normalizePath(p: string): string {
-  return path.resolve(p).replace(/\//g, "\\");
-}
-
-function pathsEqual(a: string, b: string): boolean {
-  // Windows paths are case-insensitive
-  return normalizePath(a).toLowerCase() === normalizePath(b).toLowerCase();
+  return toNativePath(p);
 }
 
 /**
@@ -60,11 +59,9 @@ export function getCemuConfigDir(cemuExecutablePath: string): string {
   if (existsSync(portableMarker)) return emuDir;
   if (existsSync(portableSettings)) return emuDir;
 
-  if (process.env.APPDATA) {
-    return path.join(process.env.APPDATA, "Cemu");
-  }
-  // No appdata env var (unlikely on Windows) — fall back to portable
-  return emuDir;
+  // Installed mode: %APPDATA%/Cemu on Windows, ~/Library/Application
+  // Support/Cemu on macOS, $XDG_CONFIG_HOME/Cemu on Linux.
+  return path.join(appDataDir(), "Cemu");
 }
 
 /**

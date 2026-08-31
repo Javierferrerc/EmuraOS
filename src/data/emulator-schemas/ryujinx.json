@@ -1,7 +1,11 @@
 {
   "configFile": "Config.json",
   "configFormat": "json",
-  "configLocations": ["{appdata}/Ryujinx/Config.json"],
+  "configLocations": {
+    "win32": ["{appdata}/Ryujinx/Config.json"],
+    "darwin": ["{appdata}/Ryujinx/Config.json"],
+    "linux": ["{appdata}/Ryujinx/Config.json", "{home}/.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/Config.json"]
+  },
   "categories": [
     {
       "id": "general",

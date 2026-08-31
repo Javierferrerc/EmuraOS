@@ -19,7 +19,11 @@ describe("EmulatorMapper", () => {
 
   it("should load emulators from JSON", () => {
     const all = mapper.getAll();
-    expect(all.length).toBe(16);
+    // Phase 28: Project64, DeSmuME and Kega Fusion have no POSIX build, so
+    // the mapper drops them outside Windows (their systems fall back to
+    // RetroArch cores).
+    const expected = process.platform === "win32" ? 16 : 13;
+    expect(all.length).toBe(expected);
   });
 
   it("should get emulator by id", () => {

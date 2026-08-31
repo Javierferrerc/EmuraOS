@@ -21,7 +21,12 @@ import { pipeline } from "node:stream/promises";
 import { ConfigManager, SECRET_MASK } from "../../core/config-manager.js";
 import { SystemsRegistry } from "../../core/systems-registry.js";
 import { RomScanner } from "../../core/rom-scanner.js";
-import { EmulatorMapper } from "../../core/emulator-mapper.js";
+import {
+  EmulatorMapper,
+  isFlatpakRef,
+  flatpakAppId,
+} from "../../core/emulator-mapper.js";
+import { normalizePathForCompare } from "../../core/platform.js";
 import { GameLauncher } from "../../core/game-launcher.js";
 import { EmulatorDetector } from "../../core/emulator-detector.js";
 import { EmulatorReadiness } from "../../core/emulator-readiness.js";
@@ -80,6 +85,7 @@ import {
   ensureThumbnail,
 } from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
+import { acquireEmulator } from "../../core/emulator-acquisition.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
 import type {
@@ -180,10 +186,10 @@ function managedImageRoots(): string[] {
 const userPickedFiles = new Set<string>();
 function rememberPickedFile(filePath: string): void {
   if (userPickedFiles.size > 500) userPickedFiles.clear();
-  userPickedFiles.add(path.resolve(filePath).toLowerCase());
+  userPickedFiles.add(normalizePathForCompare(filePath));
 }
 function wasPickedByUser(resolvedPath: string): boolean {
-  return userPickedFiles.has(resolvedPath.toLowerCase());
+  return userPickedFiles.has(normalizePathForCompare(resolvedPath));
 }
 
 // Active profile whose per-profile activity store (favorites / collections /
@@ -209,6 +215,15 @@ function runPerEmulatorSetup(
   executablePath: string,
   romsPath: string
 ): void {
+  // Flatpak installs keep their config inside the app sandbox and manage
+  // portable-mode markers themselves — nothing to place next to a binary
+  // that doesn't exist on our side of the sandbox.
+  if (isFlatpakRef(executablePath)) return;
+
+  // The PPSSPP portable-mode marker (memstickpath.txt) is a Windows-layout
+  // convention; on macOS/Linux PPSSPP always uses ~/.config/ppsspp.
+  const portableSetupSupported = process.platform === "win32";
+
   if (emulatorId === "cemu" && systemId === "wiiu") {
     try {
       const registry = new SystemsRegistry(getSystemsPath());
@@ -230,7 +245,7 @@ function runPerEmulatorSetup(
     }
   }
 
-  if (emulatorId === "ppsspp") {
+  if (emulatorId === "ppsspp" && portableSetupSupported) {
     try {
       const result = ensurePpssppPortable(executablePath);
       if (result.updated) {
@@ -663,8 +678,15 @@ export function registerIpcHandlers(
 
     // Run one-shot per-emulator setup for detected emulators that need a
     // portable-mode marker so their config files land where we write them.
+    // Windows-only: the marker is a portable-layout convention; on POSIX
+    // PPSSPP uses ~/.config/ppsspp and Flatpak refs have no real emuDir.
     for (const detected of result.detected) {
-      if (detected.id === "ppsspp" && detected.executablePath) {
+      if (
+        detected.id === "ppsspp" &&
+        detected.executablePath &&
+        process.platform === "win32" &&
+        !isFlatpakRef(detected.executablePath)
+      ) {
         try {
           const setup = ensurePpssppPortable(detected.executablePath);
           if (setup.updated) {
@@ -679,10 +701,9 @@ export function registerIpcHandlers(
       }
     }
 
-    // Validate emulator readiness and auto-download missing cores
-    const emulatorDefs: EmulatorDefinition[] = JSON.parse(
-      readFileSync(getEmulatorsPath(), "utf-8")
-    );
+    // Validate emulator readiness and auto-download missing cores.
+    // Normalized defs — coreUrls/args may be per-platform records in v2.
+    const emulatorDefs = new EmulatorMapper(getEmulatorsPath()).getAll();
     const readiness = new EmulatorReadiness();
     const readinessReport = await readiness.validateAndFix(
       result.detected,
@@ -696,9 +717,9 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle("get-emulator-defs", () => {
-    return JSON.parse(
-      readFileSync(getEmulatorsPath(), "utf-8")
-    ) as EmulatorDefinition[];
+    // Normalized for the running platform (emulators.json v2 may carry
+    // per-platform records) — the renderer always sees flat values.
+    return new EmulatorMapper(getEmulatorsPath()).getAll();
   });
 
   ipcMain.handle(
@@ -708,10 +729,29 @@ export function registerIpcHandlers(
       if (cachedDriveListing && !refresh) {
         return cachedDriveListing;
       }
+
+      const emulatorDefs = new EmulatorMapper(getEmulatorsPath()).getAll();
+
+      // Outside Windows there is no Drive catalog — downloadability comes
+      // from each definition's per-platform acquisition (flatpak/https).
+      // Reuse the same mapping shape the renderer already keys off.
+      if (process.platform !== "win32") {
+        const mapping: Record<string, DriveEmulatorMapping> = {};
+        for (const def of emulatorDefs) {
+          if (def.acquisition && def.acquisition.provider !== "gdrive") {
+            mapping[def.id.toLowerCase()] = {
+              emulatorId: def.id,
+              folderId: def.acquisition.provider,
+              fileCount: 0,
+              totalBytes: 0,
+            };
+          }
+        }
+        cachedDriveListing = mapping;
+        return mapping;
+      }
+
       try {
-        const emulatorDefs: EmulatorDefinition[] = JSON.parse(
-          readFileSync(getEmulatorsPath(), "utf-8")
-        );
         const downloader = new EmulatorDownloader(getProjectRoot());
         cachedDriveListing = await downloader.listAvailable(emulatorDefs);
         return cachedDriveListing;
@@ -732,11 +772,22 @@ export function registerIpcHandlers(
       const controller = new AbortController();
       activeDownloads.set(validatedId, controller);
       const configManager = new ConfigManager(getProjectRoot());
-      const downloader = new EmulatorDownloader(getProjectRoot());
+      const def = new EmulatorMapper(getEmulatorsPath()).getById(validatedId);
+      if (!def) {
+        activeDownloads.delete(validatedId);
+        return {
+          success: false,
+          installPath: "",
+          error: `Unknown emulator "${validatedId}" on this platform`,
+        };
+      }
       try {
-        return await downloader.download(
-          validatedId,
+        // Routes by the definition's per-platform acquisition: gdrive on
+        // Windows (unchanged), flatpak/https zip on Linux/macOS.
+        return await acquireEmulator(
+          def,
           configManager.getEmulatorsPath(),
+          getProjectRoot(),
           (progress) => {
             event.sender.send("emulator-download-progress", progress);
           },
@@ -1409,8 +1460,8 @@ export function registerIpcHandlers(
       const isAllowed =
         isPathUnderAllowedRoots(resolved, allowedRoots) ||
         (Boolean(configuredBg) &&
-          resolved.toLowerCase() ===
-            path.resolve(configuredBg as string).toLowerCase());
+          normalizePathForCompare(resolved) ===
+            normalizePathForCompare(configuredBg as string));
       if (!isAllowed) {
         logSecurityEvent({
           type: "PATH_TRAVERSAL_BLOCKED",
@@ -2259,18 +2310,29 @@ export function registerIpcHandlers(
     "launch-emulator-gui",
     (_event: IpcMainInvokeEvent, executablePath: unknown) => {
       const validated = ExecutablePathSchema.parse(executablePath);
-      if (!existsSync(validated)) {
+      const isFlatpak = isFlatpakRef(validated);
+      if (!isFlatpak && !existsSync(validated)) {
         throw new Error(`Executable not found: ${validated}`);
       }
 
       // Allowlist: only launch executables that resolve to a known, installed
       // emulator. This removes the "spawn any program on disk" primitive that a
-      // compromised renderer could otherwise abuse.
-      const target = path.resolve(validated).toLowerCase();
+      // compromised renderer could otherwise abuse. Path comparison is
+      // case-insensitive only on Windows (normalizePathForCompare) — on a
+      // case-sensitive FS two paths differing in case are different files.
+      const normalizeRef = (ref: string) =>
+        isFlatpakRef(ref) ? ref : normalizePathForCompare(ref);
+      const target = normalizeRef(validated);
       const mapper = new EmulatorMapper(getEmulatorsPath());
+      // NOTE: resolveAllInstalled expects the emulators INSTALL dir (from
+      // config), not the emulators.json path — passing the JSON path here
+      // used to silently exclude managed installs from the allowlist.
+      const emulatorsInstallDir = new ConfigManager(
+        getProjectRoot()
+      ).getEmulatorsPath();
       const allowed = mapper
-        .resolveAllInstalled(getEmulatorsPath())
-        .map((r) => path.resolve(r.executablePath).toLowerCase());
+        .resolveAllInstalled(emulatorsInstallDir)
+        .map((r) => normalizeRef(r.executablePath));
 
       if (!allowed.includes(target)) {
         logSecurityEvent({
@@ -2282,10 +2344,18 @@ export function registerIpcHandlers(
         throw new Error("Executable is not an allowlisted emulator");
       }
 
-      const child = spawn(validated, [], {
+      const spawnSpec = isFlatpak
+        ? { exe: "flatpak", args: ["run", flatpakAppId(validated)] }
+        : { exe: validated, args: [] as string[] };
+      const child = spawn(spawnSpec.exe, spawnSpec.args, {
         detached: true,
         stdio: "ignore",
         shell: false,
+      });
+      // Consume async spawn failures (ENOENT/EACCES) — an unhandled
+      // "error" event would crash the main process.
+      child.on("error", (err) => {
+        console.warn("[launch-emulator-gui] process error:", err);
       });
       child.unref();
       return { pid: child.pid ?? null };
@@ -2846,6 +2916,24 @@ export function registerIpcHandlers(
       chrome: process.versions.chrome,
       platform: process.platform,
       arch: process.arch,
+    };
+  });
+
+  // ── Phase 28: platform capabilities ──────────────────────────────
+  // The renderer gates OS-dependent UI (embedded-session settings, F10/F11
+  // hotkey hints) on capabilities, not on platform names, so a future
+  // capability change is a one-line edit here.
+  ipcMain.handle("get-platform-capabilities", () => {
+    const isWin = process.platform === "win32";
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      /** Win32 window embedding (game renders inside the launcher). */
+      canEmbedEmulator: isWin,
+      /** GetAsyncKeyState-based F10/F11 polling during a session. */
+      canPollSessionHotkeys: isWin,
+      /** How launch-game-embedded behaves here. */
+      sessionMode: isWin ? "embedded" : "monitored",
     };
   });
 

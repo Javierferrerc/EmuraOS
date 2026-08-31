@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { DetectedEmulator, DetectionResult } from "./types.js";
 import type { EmulatorMapper } from "./emulator-mapper.js";
+import { FLATPAK_PREFIX, isFlatpakInstalled } from "./emulator-mapper.js";
+import { isLinux } from "./platform.js";
 
 export class EmulatorDetector {
   private mapper: EmulatorMapper;
@@ -62,6 +64,25 @@ export class EmulatorDetector {
           found = true;
           break;
         }
+      }
+
+      // Linux: Flatpak installs live outside our roots — mirror the
+      // mapper's sentinel resolution so detection and launch agree.
+      if (
+        !found &&
+        isLinux() &&
+        emu.acquisition?.provider === "flatpak" &&
+        emu.acquisition.appId &&
+        isFlatpakInstalled(emu.acquisition.appId)
+      ) {
+        detected.push({
+          id: emu.id,
+          name: emu.name,
+          executablePath: FLATPAK_PREFIX + emu.acquisition.appId,
+          systems: emu.systems,
+          source: "flatpak",
+        });
+        found = true;
       }
 
       if (!found) {

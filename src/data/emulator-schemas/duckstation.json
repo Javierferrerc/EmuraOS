@@ -1,7 +1,11 @@
 {
   "configFile": "settings.ini",
   "configFormat": "ini",
-  "configLocations": ["{emuDir}/settings.ini", "{docs}/DuckStation/settings.ini"],
+  "configLocations": {
+    "win32": ["{emuDir}/settings.ini", "{docs}/DuckStation/settings.ini"],
+    "darwin": ["{appdata}/DuckStation/settings.ini"],
+    "linux": ["{appdata}/duckstation/settings.ini", "{home}/.var/app/org.duckstation.DuckStation/config/duckstation/settings.ini"]
+  },
   "categories": [
     {
       "id": "general",

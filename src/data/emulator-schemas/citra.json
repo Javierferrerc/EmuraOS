@@ -1,7 +1,11 @@
 {
   "configFile": "qt-config.ini",
   "configFormat": "ini",
-  "configLocations": ["{appdata}/Citra/config/qt-config.ini"],
+  "configLocations": {
+    "win32": ["{appdata}/Citra/config/qt-config.ini"],
+    "darwin": ["{appdata}/Azahar/config/qt-config.ini", "{appdata}/Citra/config/qt-config.ini"],
+    "linux": ["{appdata}/azahar-emu/qt-config.ini", "{home}/.var/app/org.azahar_emu.Azahar/config/azahar-emu/qt-config.ini", "{appdata}/citra-emu/qt-config.ini"]
+  },
   "categories": [
     {
       "id": "general",

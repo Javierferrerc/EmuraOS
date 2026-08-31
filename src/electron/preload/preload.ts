@@ -339,6 +339,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("export-diagnostic-bundle"),
   resetConfig: () => ipcRenderer.invoke("reset-config"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getPlatformCapabilities: () =>
+    ipcRenderer.invoke("get-platform-capabilities"),
   openAppConfigFile: () => ipcRenderer.invoke("open-app-config-file"),
   openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
   resolveConfigPaths: () =>

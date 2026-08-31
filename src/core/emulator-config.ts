@@ -16,6 +16,16 @@ import {
   parseYaml,
   serializeYaml,
 } from "./config-parsers.js";
+import { forPlatform, resolveConfigTokens } from "./platform.js";
+
+/** configLocations may be a plain array (legacy — applies everywhere) or a
+ *  per-platform record. An empty result means the emulator has no known
+ *  config location on this OS. */
+function locationsForThisPlatform(
+  configLocations: EmulatorConfigSchema["configLocations"]
+): string[] {
+  return forPlatform(configLocations) ?? [];
+}
 
 export class EmulatorConfigManager {
   private schemasDir: string;
@@ -49,19 +59,11 @@ export class EmulatorConfigManager {
     executablePath?: string
   ): string | null {
     const schema = this.getSchema(emulatorId);
-    const appdata = process.env.APPDATA || "";
-    const docs =
-      process.env.USERPROFILE
-        ? path.join(process.env.USERPROFILE, "Documents")
-        : "";
     const emuDir = executablePath ? path.dirname(executablePath) : "";
+    const locations = locationsForThisPlatform(schema.configLocations);
 
-    for (const locationTemplate of schema.configLocations) {
-      const resolved = locationTemplate
-        .replace(/\{emuDir\}/g, emuDir)
-        .replace(/\{appdata\}/g, appdata)
-        .replace(/\{docs\}/g, docs);
-
+    for (const locationTemplate of locations) {
+      const resolved = resolveConfigTokens(locationTemplate, { emuDir });
       if (resolved && existsSync(resolved)) {
         return resolved;
       }
@@ -69,11 +71,8 @@ export class EmulatorConfigManager {
 
     // Return the first template expanded (even if it doesn't exist yet)
     // so the UI can show where the file would be
-    if (schema.configLocations.length > 0) {
-      const first = schema.configLocations[0]
-        .replace(/\{emuDir\}/g, emuDir)
-        .replace(/\{appdata\}/g, appdata)
-        .replace(/\{docs\}/g, docs);
+    if (locations.length > 0) {
+      const first = resolveConfigTokens(locations[0], { emuDir });
       if (first && !first.includes("{")) return first;
     }
 

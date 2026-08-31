@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { resolve, dirname, basename, sep } from "node:path";
+import { resolve, dirname, basename, join, sep } from "node:path";
 import { inflateRawSync } from "node:zlib";
+import os from "node:os";
 import type {
   DetectedEmulator,
   EmulatorDefinition,
@@ -8,6 +9,32 @@ import type {
   ReadinessReport,
   EmulatorReadinessResult,
 } from "./types.js";
+import { isFlatpakRef } from "./emulator-mapper.js";
+import {
+  appDataDir,
+  getPlatform,
+  libretroBuildbotBase,
+} from "./platform.js";
+
+/** Where downloaded libretro cores are installed:
+ *  - Windows: next to the executable (`<emuDir>/cores/...`, portable layout)
+ *  - macOS:   ~/Library/Application Support/RetroArch/cores
+ *  - Linux:   ~/.config/retroarch/cores
+ *  On POSIX the args reference bare core filenames, which RetroArch
+ *  resolves against its configured cores directory. */
+export function coresInstallDir(
+  executablePath: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  switch (getPlatform(platform)) {
+    case "win32":
+      return dirname(executablePath);
+    case "darwin":
+      return join(appDataDir(platform), "RetroArch", "cores");
+    case "linux":
+      return join(appDataDir(platform), "retroarch", "cores");
+  }
+}
 
 export class EmulatorReadiness {
   /**
@@ -37,6 +64,19 @@ export class EmulatorReadiness {
         continue;
       }
 
+      // Flatpak installs manage their cores inside the sandbox via
+      // RetroArch's own core downloader — nothing for us to place on disk.
+      if (isFlatpakRef(emu.executablePath)) {
+        results.push({
+          emulatorId: emu.id,
+          isReady: true,
+          issues: [],
+          fixed: [],
+          errors: [],
+        });
+        continue;
+      }
+
       const result = await this.validateEmulator(
         emu,
         def,
@@ -56,30 +96,36 @@ export class EmulatorReadiness {
     onProgress?: (progress: CoreDownloadProgress) => void
   ): Promise<EmulatorReadinessResult> {
     const coreUrls = def.coreUrls!;
-    const emuDir = dirname(emu.executablePath);
+    const coresBase = coresInstallDir(emu.executablePath);
     const issues: string[] = [];
     const fixed: string[] = [];
     const errors: string[] = [];
 
-    // Deduplicate: multiple systems may share the same core DLL
+    // Deduplicate: multiple systems may share the same core file
     const uniqueCores = Object.entries(coreUrls);
     const total = uniqueCores.length;
     let current = 0;
 
-    for (const [corePath, url] of uniqueCores) {
+    for (const [corePath, rawUrl] of uniqueCores) {
       current++;
-      const absoluteCorePath = resolve(emuDir, corePath);
+      // {buildbot} expands to the platform/arch-specific libretro buildbot
+      // base URL, so one JSON entry serves macOS arm64/x86_64 and Linux.
+      const url = rawUrl.replace("{buildbot}", libretroBuildbotBase());
+      const absoluteCorePath = resolve(coresBase, corePath);
       // Defense-in-depth: corePath comes from packaged emulators.json (trusted),
-      // but never let a tampered entry write the downloaded DLL outside emuDir.
-      const emuDirResolved = resolve(emuDir);
+      // but never let a tampered entry write the downloaded core outside the
+      // cores directory.
+      const coresBaseResolved = resolve(coresBase);
       if (
-        absoluteCorePath !== emuDirResolved &&
-        !absoluteCorePath.startsWith(emuDirResolved + sep)
+        absoluteCorePath !== coresBaseResolved &&
+        !absoluteCorePath.startsWith(coresBaseResolved + sep)
       ) {
         errors.push(`${corePath}: unsafe core path rejected`);
         continue;
       }
-      const coreName = basename(corePath, ".dll").replace("_libretro", "");
+      const coreName = basename(corePath)
+        .replace(/\.(dll|dylib|so)$/i, "")
+        .replace("_libretro", "");
 
       if (existsSync(absoluteCorePath)) {
         onProgress?.({

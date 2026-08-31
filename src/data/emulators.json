@@ -2,242 +2,457 @@
   {
     "id": "retroarch",
     "name": "RetroArch",
-    "executable": "retroarch.exe",
-    "defaultPaths": [
-      "C:\\RetroArch-Win64",
-      "C:\\RetroArch",
-      "C:\\Program Files\\RetroArch",
-      "C:\\Program Files (x86)\\RetroArch"
-    ],
+    "executable": {
+      "win32": "retroarch.exe",
+      "darwin": "RetroArch.app/Contents/MacOS/RetroArch",
+      "linux": "retroarch"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\RetroArch-Win64",
+        "C:\\RetroArch",
+        "C:\\Program Files\\RetroArch",
+        "C:\\Program Files (x86)\\RetroArch"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["nes", "snes", "n64", "gb", "gbc", "gba", "megadrive", "mastersystem", "psx"],
     "launchTemplate": "\"{executable}\" -L \"{args}\" \"{romPath}\"",
     "args": {
-      "nes": "cores\\fceumm_libretro.dll",
-      "snes": "cores\\snes9x_libretro.dll",
-      "n64": "cores\\mupen64plus_next_libretro.dll",
-      "gb": "cores\\gambatte_libretro.dll",
-      "gbc": "cores\\gambatte_libretro.dll",
-      "gba": "cores\\mgba_libretro.dll",
-      "megadrive": "cores\\genesis_plus_gx_libretro.dll",
-      "mastersystem": "cores\\genesis_plus_gx_libretro.dll",
-      "psx": "cores\\mednafen_psx_hw_libretro.dll"
+      "win32": {
+        "nes": "cores\\fceumm_libretro.dll",
+        "snes": "cores\\snes9x_libretro.dll",
+        "n64": "cores\\mupen64plus_next_libretro.dll",
+        "gb": "cores\\gambatte_libretro.dll",
+        "gbc": "cores\\gambatte_libretro.dll",
+        "gba": "cores\\mgba_libretro.dll",
+        "megadrive": "cores\\genesis_plus_gx_libretro.dll",
+        "mastersystem": "cores\\genesis_plus_gx_libretro.dll",
+        "psx": "cores\\mednafen_psx_hw_libretro.dll"
+      },
+      "darwin": {
+        "nes": "fceumm_libretro.dylib",
+        "snes": "snes9x_libretro.dylib",
+        "n64": "mupen64plus_next_libretro.dylib",
+        "gb": "gambatte_libretro.dylib",
+        "gbc": "gambatte_libretro.dylib",
+        "gba": "mgba_libretro.dylib",
+        "megadrive": "genesis_plus_gx_libretro.dylib",
+        "mastersystem": "genesis_plus_gx_libretro.dylib",
+        "psx": "mednafen_psx_hw_libretro.dylib"
+      },
+      "linux": {
+        "nes": "fceumm_libretro.so",
+        "snes": "snes9x_libretro.so",
+        "n64": "mupen64plus_next_libretro.so",
+        "gb": "gambatte_libretro.so",
+        "gbc": "gambatte_libretro.so",
+        "gba": "mgba_libretro.so",
+        "megadrive": "genesis_plus_gx_libretro.so",
+        "mastersystem": "genesis_plus_gx_libretro.so",
+        "psx": "mednafen_psx_hw_libretro.so"
+      }
     },
     "defaultArgs": "",
     "coreUrls": {
-      "cores\\fceumm_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/fceumm_libretro.dll.zip",
-      "cores\\snes9x_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/snes9x_libretro.dll.zip",
-      "cores\\mupen64plus_next_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mupen64plus_next_libretro.dll.zip",
-      "cores\\gambatte_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/gambatte_libretro.dll.zip",
-      "cores\\mgba_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mgba_libretro.dll.zip",
-      "cores\\genesis_plus_gx_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/genesis_plus_gx_libretro.dll.zip",
-      "cores\\mednafen_psx_hw_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mednafen_psx_hw_libretro.dll.zip"
+      "win32": {
+        "cores\\fceumm_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/fceumm_libretro.dll.zip",
+        "cores\\snes9x_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/snes9x_libretro.dll.zip",
+        "cores\\mupen64plus_next_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mupen64plus_next_libretro.dll.zip",
+        "cores\\gambatte_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/gambatte_libretro.dll.zip",
+        "cores\\mgba_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mgba_libretro.dll.zip",
+        "cores\\genesis_plus_gx_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/genesis_plus_gx_libretro.dll.zip",
+        "cores\\mednafen_psx_hw_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mednafen_psx_hw_libretro.dll.zip"
+      },
+      "darwin": {
+        "fceumm_libretro.dylib": "{buildbot}/fceumm_libretro.dylib.zip",
+        "snes9x_libretro.dylib": "{buildbot}/snes9x_libretro.dylib.zip",
+        "mupen64plus_next_libretro.dylib": "{buildbot}/mupen64plus_next_libretro.dylib.zip",
+        "gambatte_libretro.dylib": "{buildbot}/gambatte_libretro.dylib.zip",
+        "mgba_libretro.dylib": "{buildbot}/mgba_libretro.dylib.zip",
+        "genesis_plus_gx_libretro.dylib": "{buildbot}/genesis_plus_gx_libretro.dylib.zip",
+        "mednafen_psx_hw_libretro.dylib": "{buildbot}/mednafen_psx_hw_libretro.dylib.zip"
+      },
+      "linux": {
+        "fceumm_libretro.so": "{buildbot}/fceumm_libretro.so.zip",
+        "snes9x_libretro.so": "{buildbot}/snes9x_libretro.so.zip",
+        "mupen64plus_next_libretro.so": "{buildbot}/mupen64plus_next_libretro.so.zip",
+        "gambatte_libretro.so": "{buildbot}/gambatte_libretro.so.zip",
+        "mgba_libretro.so": "{buildbot}/mgba_libretro.so.zip",
+        "genesis_plus_gx_libretro.so": "{buildbot}/genesis_plus_gx_libretro.so.zip",
+        "mednafen_psx_hw_libretro.so": "{buildbot}/mednafen_psx_hw_libretro.so.zip"
+      }
+    },
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.libretro.RetroArch" }
     }
   },
   {
     "id": "snes9x",
     "name": "Snes9x",
-    "executable": "snes9x-x64.exe",
-    "defaultPaths": [
-      "C:\\Snes9x",
-      "C:\\Program Files\\Snes9x",
-      "C:\\Program Files (x86)\\Snes9x"
-    ],
+    "executable": {
+      "win32": "snes9x-x64.exe",
+      "darwin": "Snes9x.app/Contents/MacOS/Snes9x",
+      "linux": "snes9x-gtk"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Snes9x",
+        "C:\\Program Files\\Snes9x",
+        "C:\\Program Files (x86)\\Snes9x"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["snes"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "com.snes9x.Snes9x" }
+    }
   },
   {
     "id": "project64",
     "name": "Project64",
-    "executable": "Project64.exe",
-    "defaultPaths": [
-      "C:\\Program Files (x86)\\Project64 3.0",
-      "C:\\Program Files (x86)\\Project64",
-      "C:\\Program Files\\Project64"
-    ],
+    "executable": { "win32": "Project64.exe" },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files (x86)\\Project64 3.0",
+        "C:\\Program Files (x86)\\Project64",
+        "C:\\Program Files\\Project64"
+      ]
+    },
     "systems": ["n64"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" }
+    }
   },
   {
     "id": "mgba",
     "name": "mGBA",
-    "executable": "mGBA.exe",
-    "defaultPaths": [
-      "C:\\mGBA",
-      "C:\\Program Files\\mGBA",
-      "C:\\Program Files (x86)\\mGBA"
-    ],
+    "executable": {
+      "win32": "mGBA.exe",
+      "darwin": "mGBA.app/Contents/MacOS/mGBA",
+      "linux": "mgba-qt"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\mGBA",
+        "C:\\Program Files\\mGBA",
+        "C:\\Program Files (x86)\\mGBA"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["gb", "gbc", "gba"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "io.mgba.mGBA" }
+    }
   },
   {
     "id": "desmume",
     "name": "DeSmuME",
-    "executable": "DeSmuME_0.9.13_x64.exe",
-    "defaultPaths": [
-      "C:\\DeSmuME",
-      "C:\\Program Files\\DeSmuME",
-      "C:\\Program Files (x86)\\DeSmuME"
-    ],
+    "executable": { "win32": "DeSmuME_0.9.13_x64.exe" },
+    "defaultPaths": {
+      "win32": [
+        "C:\\DeSmuME",
+        "C:\\Program Files\\DeSmuME",
+        "C:\\Program Files (x86)\\DeSmuME"
+      ]
+    },
     "systems": ["nds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" }
+    }
   },
   {
     "id": "melonds",
     "name": "melonDS",
-    "executable": "melonDS.exe",
-    "defaultPaths": [
-      "C:\\melonDS",
-      "C:\\Program Files\\melonDS",
-      "C:\\Program Files (x86)\\melonDS"
-    ],
+    "executable": {
+      "win32": "melonDS.exe",
+      "darwin": "melonDS.app/Contents/MacOS/melonDS",
+      "linux": "melonDS"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\melonDS",
+        "C:\\Program Files\\melonDS",
+        "C:\\Program Files (x86)\\melonDS"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["nds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "net.kuribo64.melonDS" }
+    }
   },
   {
     "id": "dolphin",
     "name": "Dolphin",
-    "executable": "Dolphin.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\Dolphin-x64",
-      "C:\\Program Files\\Dolphin",
-      "C:\\Dolphin-x64"
-    ],
+    "executable": {
+      "win32": "Dolphin.exe",
+      "darwin": "Dolphin.app/Contents/MacOS/Dolphin",
+      "linux": "dolphin-emu"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\Dolphin-x64",
+        "C:\\Program Files\\Dolphin",
+        "C:\\Dolphin-x64"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["gamecube", "wii"],
     "launchTemplate": "\"{executable}\" -b --exec=\"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.DolphinEmu.dolphin-emu" }
+    }
   },
   {
     "id": "pcsx2",
     "name": "PCSX2",
-    "executable": "pcsx2-qt.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\PCSX2",
-      "C:\\Program Files (x86)\\PCSX2",
-      "C:\\PCSX2"
-    ],
+    "executable": {
+      "win32": "pcsx2-qt.exe",
+      "darwin": "PCSX2.app/Contents/MacOS/PCSX2",
+      "linux": "pcsx2-qt"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\PCSX2",
+        "C:\\Program Files (x86)\\PCSX2",
+        "C:\\PCSX2"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["ps2"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "net.pcsx2.PCSX2" }
+    }
   },
   {
     "id": "duckstation",
     "name": "DuckStation",
-    "executable": "duckstation-qt-x64-ReleaseLTCG.exe",
-    "defaultPaths": [
-      "C:\\DuckStation",
-      "C:\\Program Files\\DuckStation",
-      "C:\\Program Files (x86)\\DuckStation"
-    ],
+    "executable": {
+      "win32": "duckstation-qt-x64-ReleaseLTCG.exe",
+      "darwin": "DuckStation.app/Contents/MacOS/DuckStation",
+      "linux": "duckstation-qt"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\DuckStation",
+        "C:\\Program Files\\DuckStation",
+        "C:\\Program Files (x86)\\DuckStation"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["psx"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.duckstation.DuckStation" }
+    }
   },
   {
     "id": "ppsspp",
     "name": "PPSSPP",
-    "executable": "PPSSPPWindows64.exe",
-    "defaultPaths": [
-      "C:\\PPSSPP",
-      "C:\\Program Files\\PPSSPP",
-      "C:\\Program Files (x86)\\PPSSPP"
-    ],
+    "executable": {
+      "win32": "PPSSPPWindows64.exe",
+      "darwin": "PPSSPP.app/Contents/MacOS/PPSSPP",
+      "linux": "ppsspp"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\PPSSPP",
+        "C:\\Program Files\\PPSSPP",
+        "C:\\Program Files (x86)\\PPSSPP"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["psp"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.ppsspp.PPSSPP" }
+    }
   },
   {
     "id": "flycast",
     "name": "Flycast",
-    "executable": "flycast.exe",
-    "defaultPaths": [
-      "C:\\Flycast",
-      "C:\\Program Files\\Flycast",
-      "C:\\Program Files (x86)\\Flycast"
-    ],
+    "executable": {
+      "win32": "flycast.exe",
+      "darwin": "Flycast.app/Contents/MacOS/Flycast",
+      "linux": "flycast"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Flycast",
+        "C:\\Program Files\\Flycast",
+        "C:\\Program Files (x86)\\Flycast"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["dreamcast"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.flycast.Flycast" }
+    }
   },
   {
     "id": "kega-fusion",
     "name": "Kega Fusion",
-    "executable": "Fusion.exe",
-    "defaultPaths": [
-      "C:\\Kega Fusion",
-      "C:\\Program Files\\Kega Fusion",
-      "C:\\Program Files (x86)\\Kega Fusion"
-    ],
+    "executable": { "win32": "Fusion.exe" },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Kega Fusion",
+        "C:\\Program Files\\Kega Fusion",
+        "C:\\Program Files (x86)\\Kega Fusion"
+      ]
+    },
     "systems": ["megadrive", "mastersystem"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" }
+    }
   },
   {
     "id": "citra",
     "name": "Citra",
-    "executable": "citra-qt.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\Citra",
-      "C:\\Program Files (x86)\\Citra",
-      "C:\\Citra"
-    ],
+    "executable": {
+      "win32": "citra-qt.exe",
+      "darwin": "Azahar.app/Contents/MacOS/azahar",
+      "linux": "azahar"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\Citra",
+        "C:\\Program Files (x86)\\Citra",
+        "C:\\Citra"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["3ds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "org.azahar_emu.Azahar" }
+    }
   },
   {
     "id": "ryujinx",
     "name": "Ryujinx",
-    "executable": "Ryujinx.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\Ryujinx",
-      "C:\\Ryujinx"
-    ],
+    "executable": {
+      "win32": "Ryujinx.exe",
+      "darwin": "Ryujinx.app/Contents/MacOS/Ryujinx",
+      "linux": "Ryujinx"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\Ryujinx",
+        "C:\\Ryujinx"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["switch"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "io.github.ryubing.Ryujinx" }
+    }
   },
   {
     "id": "cemu",
     "name": "Cemu",
-    "executable": "Cemu.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\Cemu",
-      "C:\\Cemu"
-    ],
+    "executable": {
+      "win32": "Cemu.exe",
+      "darwin": "Cemu.app/Contents/MacOS/Cemu",
+      "linux": "Cemu"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\Cemu",
+        "C:\\Cemu"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["wiiu"],
     "launchTemplate": "\"{executable}\" -g \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "info.cemu.Cemu" }
+    }
   },
   {
     "id": "rpcs3",
     "name": "RPCS3",
-    "executable": "rpcs3.exe",
-    "defaultPaths": [
-      "C:\\Program Files\\RPCS3",
-      "C:\\RPCS3"
-    ],
+    "executable": {
+      "win32": "rpcs3.exe",
+      "darwin": "RPCS3.app/Contents/MacOS/rpcs3",
+      "linux": "rpcs3"
+    },
+    "defaultPaths": {
+      "win32": [
+        "C:\\Program Files\\RPCS3",
+        "C:\\RPCS3"
+      ],
+      "darwin": ["/Applications", "~/Applications"],
+      "linux": ["/usr/bin", "/usr/local/bin", "~/.local/bin"]
+    },
     "systems": ["ps3"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "win32": { "provider": "gdrive" },
+      "linux": { "provider": "flatpak", "appId": "net.rpcs3.RPCS3" }
+    }
   }
 ]
