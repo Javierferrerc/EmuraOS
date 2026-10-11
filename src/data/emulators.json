@@ -45,7 +45,11 @@
     "systems": ["snes"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/snes9xgit/snes9x/releases/download/1.63/snes9x-1.63-win32-x64.zip"
+    }
   },
   {
     "id": "project64",
@@ -87,7 +91,11 @@
     "systems": ["nds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/TASEmulators/desmume/releases/download/release_0_9_13/desmume-0.9.13-win64.zip"
+    }
   },
   {
     "id": "melonds",
@@ -101,7 +109,11 @@
     "systems": ["nds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/melonDS-emu/melonDS/releases/download/1.1/melonDS-1.1-windows-x86_64.zip"
+    }
   },
   {
     "id": "dolphin",
@@ -143,7 +155,11 @@
     "systems": ["psx"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/stenzek/duckstation/releases/download/latest/duckstation-windows-x64-release.zip"
+    }
   },
   {
     "id": "ppsspp",
@@ -157,7 +173,11 @@
     "systems": ["psp"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/hrydgard/ppsspp/releases/download/v1.20.4/PPSSPP-v1.20.4-Windows-x64.zip"
+    }
   },
   {
     "id": "flycast",
@@ -171,7 +191,11 @@
     "systems": ["dreamcast"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-win64-2.7.zip"
+    }
   },
   {
     "id": "kega-fusion",
@@ -225,7 +249,11 @@
     "systems": ["wiiu"],
     "launchTemplate": "\"{executable}\" -g \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-windows-x64.zip"
+    }
   },
   {
     "id": "rpcs3",

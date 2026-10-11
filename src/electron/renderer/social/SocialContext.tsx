@@ -87,6 +87,20 @@ function gameRefOf(fileName: string | null | undefined): string | null {
   return fileName.replace(/\.[^.]+$/, "");
 }
 
+// Presence heartbeat: each client refreshes its entry on this cadence, and
+// viewers drop a friend whose last heartbeat is older than STALE (crash /
+// force-quit / frozen socket) instead of waiting on Supabase's server-side
+// leave timeout — fixes "sigue online/jugando tras cerrar la app".
+const PRESENCE_HEARTBEAT_MS = 25_000;
+const PRESENCE_STALE_MS = 75_000;
+const PRESENCE_PRUNE_MS = 15_000;
+
+/** Keep only presence entries seen within STALE. Entries without a heartbeat
+ *  (older clients) are kept for backward compatibility. */
+function freshPresence(states: PresenceState[], now: number): PresenceState[] {
+  return states.filter((s) => s.heartbeat == null || now - s.heartbeat < PRESENCE_STALE_MS);
+}
+
 export function SocialProvider({ children }: { children: ReactNode }) {
   const app = useApp();
   const configured = isSocialConfigured();
@@ -103,6 +117,9 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const userRef = useRef<User | null>(null);
   userRef.current = user;
+  // Always-current presence sender, reassigned every render so the heartbeat
+  // interval re-broadcasts with the latest playing/away instead of stale values.
+  const sendPresenceRef = useRef<() => void>(() => {});
 
   // Current "now playing" gameRef from the real game session.
   const playing = useMemo(
@@ -193,21 +210,38 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     let channel: RealtimeChannel | null = null;
+    // Best-effort clean leave when the window/app closes. React's unmount
+    // cleanup does NOT run when the renderer is destroyed on app quit, so
+    // without this a friend would linger (last state, e.g. "jugando") until the
+    // staleness prune catches it. untrack() sends the presence leave over the
+    // socket before it closes; the prune remains the guaranteed backstop.
+    const leaveOnExit = () => {
+      try {
+        void channelRef.current?.untrack();
+      } catch {
+        /* window is tearing down */
+      }
+    };
+    window.addEventListener("pagehide", leaveOnExit);
+    window.addEventListener("beforeunload", leaveOnExit);
     try {
       const state: PresenceState = {
         user_id: user.id,
         status: "online",
         playing,
+        heartbeat: Date.now(),
         since: new Date().toISOString(),
       };
       channel = api.joinPresence(state, (states) => {
-        setPresence(new Map(states.map((s) => [s.user_id, s])));
+        setPresence(new Map(freshPresence(states, Date.now()).map((s) => [s.user_id, s])));
       });
       channelRef.current = channel;
     } catch (e) {
       console.warn("[social] presence join failed:", e);
     }
     return () => {
+      window.removeEventListener("pagehide", leaveOnExit);
+      window.removeEventListener("beforeunload", leaveOnExit);
       channelRef.current = null;
       if (channel) void api.leavePresence(channel);
     };
@@ -241,8 +275,9 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  // Push "now playing" / away updates onto the existing presence channel.
-  useEffect(() => {
+  // Build + push the current presence state. Reassigned every render so the
+  // heartbeat interval always broadcasts fresh playing/away.
+  sendPresenceRef.current = () => {
     const channel = channelRef.current;
     const u = userRef.current;
     if (!channel || !u) return;
@@ -255,9 +290,42 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       playing,
       playing_title: playingTitle,
       playing_since: playingSince,
+      heartbeat: Date.now(),
       since: new Date().toISOString(),
     });
+  };
+
+  // Broadcast immediately whenever the now-playing / away state changes.
+  useEffect(() => {
+    sendPresenceRef.current();
   }, [playing, playingTitle, playingSince, away]);
+
+  // Heartbeat + staleness prune: refresh our own presence on a cadence, and drop
+  // friends whose heartbeat went stale (crash / force-quit / frozen socket)
+  // without waiting on Supabase's server-side leave — the fix for a friend who
+  // stays "online / jugando" after closing the game or the app.
+  useEffect(() => {
+    if (!user) return;
+    const beat = window.setInterval(() => sendPresenceRef.current(), PRESENCE_HEARTBEAT_MS);
+    const prune = window.setInterval(() => {
+      const now = Date.now();
+      setPresence((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        for (const [id, s] of prev) {
+          if (s.heartbeat != null && now - s.heartbeat >= PRESENCE_STALE_MS) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, PRESENCE_PRUNE_MS);
+    return () => {
+      window.clearInterval(beat);
+      window.clearInterval(prune);
+    };
+  }, [user]);
 
   // ── Actions ──────────────────────────────────────────────────────
   const signUpEmail = useCallback(async (email: string, password: string) => {

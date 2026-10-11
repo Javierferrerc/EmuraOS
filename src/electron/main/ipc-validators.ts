@@ -117,6 +117,10 @@ export const AppConfigPartialSchema = z
     backgroundOpacity: z.number().min(0).max(100).optional(),
     cardClickAction: z.enum(["launch", "detail"]).optional(),
     libraryViewMode: z.enum(["grid", "list", "compact"]).optional(),
+    // Style of the system rail in the NEXUS library (Apariencia -> Sistemas).
+    // Missing here meant the `.strict()` schema THREW on save, so picking a
+    // selector style silently failed to persist.
+    librarySelectorStyle: z.enum(["chips", "two", "breadcrumb", "seg"]).optional(),
     libraryFilters: z
       .object({
         genre: z.string().max(100).optional(),

@@ -80,6 +80,7 @@ import {
   ensureThumbnail,
 } from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
+import { acquireEmulator } from "../../core/emulator-acquisition.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
 import type {
@@ -708,16 +709,39 @@ export function registerIpcHandlers(
       if (cachedDriveListing && !refresh) {
         return cachedDriveListing;
       }
+
+      const emulatorDefs: EmulatorDefinition[] = JSON.parse(
+        readFileSync(getEmulatorsPath(), "utf-8")
+      );
+
+      // Emulators acquired from an official https release are always
+      // downloadable — no Drive catalog (nor API key) involved. Reuse the
+      // mapping shape the renderer already keys off.
+      const httpsMapping: Record<string, DriveEmulatorMapping> = {};
+      for (const def of emulatorDefs) {
+        if (def.acquisition?.provider === "https") {
+          httpsMapping[def.id.toLowerCase()] = {
+            emulatorId: def.id,
+            folderId: "https",
+            fileCount: 0,
+            totalBytes: 0,
+          };
+        }
+      }
+
       try {
-        const emulatorDefs: EmulatorDefinition[] = JSON.parse(
-          readFileSync(getEmulatorsPath(), "utf-8")
-        );
         const downloader = new EmulatorDownloader(getProjectRoot());
-        cachedDriveListing = await downloader.listAvailable(emulatorDefs);
+        const driveMapping = await downloader.listAvailable(
+          emulatorDefs.filter((d) => d.acquisition?.provider !== "https")
+        );
+        cachedDriveListing = { ...driveMapping, ...httpsMapping };
         return cachedDriveListing;
       } catch (err) {
+        // Drive being unreachable/unconfigured must not hide the emulators
+        // that don't need it. Left uncached so the Drive part is retried on
+        // the next call.
         console.warn("[drive] list failed:", err);
-        return {};
+        return httpsMapping;
       }
     }
   );
@@ -732,11 +756,25 @@ export function registerIpcHandlers(
       const controller = new AbortController();
       activeDownloads.set(validatedId, controller);
       const configManager = new ConfigManager(getProjectRoot());
-      const downloader = new EmulatorDownloader(getProjectRoot());
+      const emulatorDefs: EmulatorDefinition[] = JSON.parse(
+        readFileSync(getEmulatorsPath(), "utf-8")
+      );
+      const def = emulatorDefs.find((d) => d.id === validatedId);
+      if (!def) {
+        activeDownloads.delete(validatedId);
+        return {
+          success: false,
+          installPath: "",
+          error: `Unknown emulator "${validatedId}"`,
+        };
+      }
       try {
-        return await downloader.download(
-          validatedId,
+        // Routes by the definition's acquisition: official https release
+        // zip when declared, curated Drive build otherwise.
+        return await acquireEmulator(
+          def,
           configManager.getEmulatorsPath(),
+          getProjectRoot(),
           (progress) => {
             event.sender.send("emulator-download-progress", progress);
           },
