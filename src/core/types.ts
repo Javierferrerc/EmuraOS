@@ -156,6 +156,21 @@ export interface EmulatorDefinition {
   args: Record<string, string>;
   defaultArgs: string;
   coreUrls?: Record<string, string>;
+  acquisition?: EmulatorAcquisition;
+}
+
+/**
+ * How the in-app Download button obtains this emulator. Absent → "gdrive"
+ * (curated Drive build). "https" downloads the official release zip from an
+ * allowlisted host and extracts it under {emulatorsPath}/{id}/. "flatpak"
+ * installs from Flathub (Linux; carried for parity with Phase 28).
+ */
+export interface EmulatorAcquisition {
+  provider: "gdrive" | "https" | "flatpak";
+  /** https: pinned official release zip URL */
+  url?: string;
+  /** flatpak: Flathub application id */
+  appId?: string;
 }
 
 export interface ResolvedEmulator {

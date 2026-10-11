@@ -99,6 +99,13 @@
   border: 3px solid transparent;
   background-clip: content-box;
 }
+/* Drop the up/down arrow buttons — just the track + thumb reads cleaner. */
+.nexus-root .pf-scroll::-webkit-scrollbar-button,
+.nexus-root .sb-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .nexus-root .pf-wrap {
   max-width: 1080px;
   margin: 0 auto;
@@ -2131,3 +2138,171 @@
 .nexus-root .nps-del { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(8, 10, 15, 0.7); color: #ff97a6; opacity: 0; transition: opacity .14s, background .14s; }
 .nexus-root .nps-item:hover .nps-del { opacity: 1; }
 .nexus-root .nps-del:hover { background: color-mix(in oklab, var(--bad) 30%, rgba(8,10,15,.7)); }
+
+/* ══════════════════════════════════════════════════════════════
+ * Two-column body + Discord-style social sidebar
+ * (relocates the old Amigos/Actividad tabs into a persistent panel).
+ * ══════════════════════════════════════════════════════════════ */
+.nexus-root .pf-body { flex: 1; min-height: 0; display: flex; }
+.nexus-root .pf-col { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.nexus-root .pf-body .pf-scroll { flex: 1; min-width: 0; }
+/* Inside the two-column body, content + topbar share the same 880px centering
+ * so "Biblioteca" stays flush with the cover's left edge (no fixed offsets). */
+.nexus-root .pf-body .pf-wrap { max-width: 880px; }
+.nexus-root .pf-col .pf-topbar { max-width: 880px; }
+
+.nexus-root .pf-social {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.018);
+}
+@media (max-width: 1120px) { .nexus-root .pf-social { width: 280px; } }
+@media (max-width: 900px) { .nexus-root .pf-social { display: none; } }
+
+/* Signed-out variant hosts the existing sign-in / register panel. */
+.nexus-root .pf-social-auth { overflow-y: auto; }
+.nexus-root .sb-authwrap { padding: 16px 14px; }
+
+.nexus-root .sb-top { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; flex-shrink: 0; }
+.nexus-root .sb-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line); color: var(--text-faint); }
+.nexus-root .sb-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font-size: 13px; font-family: inherit; }
+.nexus-root .sb-search input::placeholder { color: var(--text-faint); }
+.nexus-root .sb-addbtn { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text-dim); transition: all 0.14s; }
+.nexus-root .sb-addbtn:hover { color: var(--text); background: var(--panel-2); }
+.nexus-root .sb-addbtn.on { color: #fff; background: var(--accent); border-color: transparent; }
+
+.nexus-root .sb-add { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 7px; flex-shrink: 0; }
+.nexus-root .sb-add-field { display: flex; gap: 7px; }
+.nexus-root .sb-add-field input { flex: 1; min-width: 0; height: 36px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, 0.3); color: var(--text); font-size: 12.5px; font-family: "Space Grotesk", "Sora", monospace; outline: none; }
+.nexus-root .sb-add-field button { height: 36px; padding: 0 14px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 700; }
+.nexus-root .sb-add-field button:disabled { opacity: 0.6; }
+.nexus-root .sb-add-msg { font-size: 11.5px; color: var(--good, #4ade80); }
+.nexus-root .sb-hint { font-size: 11.5px; color: var(--text-faint); }
+.nexus-root .sb-hint.pad { padding: 6px 14px 10px; }
+.nexus-root .sb-hint b { color: var(--text-dim); font-family: "Space Grotesk", "Sora", monospace; }
+
+.nexus-root .sb-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 26px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+.nexus-root .sb-scroll::-webkit-scrollbar { width: 8px; }
+.nexus-root .sb-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+
+.nexus-root .sb-sec { padding: 8px 0 4px; }
+.nexus-root .sb-sec-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 14px 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); }
+.nexus-root .sb-sec-head.btn { background: none; border: 0; cursor: pointer; text-align: left; transition: color 0.14s; }
+.nexus-root .sb-sec-head.btn:hover { color: var(--text-dim); }
+.nexus-root .sb-sec-head .n { color: var(--text-faint); font-weight: 600; letter-spacing: 0; }
+.nexus-root .sb-chev { margin-left: auto; display: inline-grid; place-items: center; transition: transform 0.18s var(--ease); }
+.nexus-root .sb-chev.open { transform: rotate(90deg); }
+
+/* friend rows */
+.nexus-root .sb-list { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; }
+.nexus-root .sb-fr { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 8px; background: none; border: 0; text-align: left; cursor: pointer; transition: background 0.12s; }
+.nexus-root .sb-fr:hover { background: rgba(255, 255, 255, 0.06); }
+.nexus-root .sb-fr.off { opacity: 0.45; }
+.nexus-root .sb-fr.off:hover { opacity: 0.75; }
+.nexus-root .sb-fr-ava { position: relative; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; overflow: hidden; }
+.nexus-root .sb-fr-ava img { width: 100%; height: 100%; object-fit: cover; }
+.nexus-root .sb-fr-pres { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid var(--bg-2); }
+.nexus-root .sb-fr-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nexus-root .sb-fr-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nexus-root .sb-fr-sub { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nexus-root .sb-fr-sub .playing { color: var(--accent); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+
+/* requests */
+.nexus-root .sb-req { display: flex; align-items: center; gap: 10px; padding: 7px 14px; }
+.nexus-root .sb-req-acts { display: flex; gap: 5px; flex-shrink: 0; }
+.nexus-root .sb-mini { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text-dim); transition: all 0.14s; }
+.nexus-root .sb-mini.ok:hover { color: #0b1f12; background: var(--good, #4ade80); border-color: transparent; }
+.nexus-root .sb-mini.no:hover { color: #fff; background: var(--bad, #f43f5e); border-color: transparent; }
+
+/* ══════════════════════════════════════════════════════════════
+ * Friend preview popover + compare overlay.
+ * Portaled to <body> (above everything), so they carry their own token
+ * scope + font instead of relying on the `.nexus-root` ancestry.
+ * ══════════════════════════════════════════════════════════════ */
+.nexus-social-pop {
+  --bg-2: #0a0c11;
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-2: rgba(255, 255, 255, 0.07);
+  --panel-3: rgba(255, 255, 255, 0.1);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --text: #eef1f7;
+  --text-dim: rgba(238, 241, 247, 0.64);
+  --text-faint: rgba(238, 241, 247, 0.4);
+  --accent: #3b82f6;
+  --good: #4ade80;
+  --bad: #f43f5e;
+  --ease: cubic-bezier(0.4, 0.8, 0.3, 1);
+  color: var(--text);
+  font-family: "Sora", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.nexus-social-pop * { box-sizing: border-box; }
+.nexus-social-pop button { font-family: inherit; color: inherit; cursor: pointer; }
+
+/* action buttons (re-declared here — .pf-act-btn is scoped to .nexus-root) */
+.nexus-social-pop .pf-act-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); transition: all 0.15s; }
+.nexus-social-pop .pf-act-btn:hover { background: var(--panel-3); }
+.nexus-social-pop .pf-act-btn.primary { background: var(--accent); border-color: transparent; color: #fff; box-shadow: 0 6px 18px color-mix(in oklab, var(--accent) 35%, transparent); }
+.nexus-social-pop .pf-act-btn.primary:hover { filter: brightness(1.08); }
+
+/* ── popover card ── */
+.nexus-social-pop .fr-pop-back { position: fixed; inset: 0; z-index: 1090; }
+.nexus-social-pop .fr-pop { position: fixed; z-index: 1091; width: 300px; border-radius: 18px; border: 1px solid var(--line-2); background: rgba(16, 19, 26, 0.96); backdrop-filter: blur(22px); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); overflow: hidden; animation: nspPopIn 0.16s var(--ease); }
+@keyframes nspPopIn { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
+.nexus-social-pop .fr-pop-cover { height: 76px; position: relative; overflow: hidden; }
+.nexus-social-pop .fr-pop-cover img { width: 100%; height: 100%; object-fit: cover; }
+.nexus-social-pop .fr-pop-cover-fill { width: 100%; height: 100%; background: linear-gradient(135deg, var(--accent), #a855f7); }
+.nexus-social-pop .fr-pop-top { padding: 0 18px 16px; margin-top: -34px; position: relative; }
+.nexus-social-pop .fr-pop-ava { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 800; color: #fff; border: 3px solid rgba(16, 19, 26, 0.96); position: relative; overflow: hidden; }
+.nexus-social-pop .fr-pop-ava img { width: 100%; height: 100%; object-fit: cover; }
+.nexus-social-pop .fr-pop-name { font-size: 17px; font-weight: 800; margin-top: 9px; }
+.nexus-social-pop .fr-pop-handle { font-size: 12.5px; color: var(--text-dim); }
+.nexus-social-pop .fr-pop-pres { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; margin-top: 9px; padding: 5px 11px; border-radius: 999px; background: var(--panel-2); }
+.nexus-social-pop .fr-pop-pres .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.nexus-social-pop .fr-pop-pres .playing { color: var(--accent); font-weight: 700; }
+.nexus-social-pop .fr-pop-stats { display: flex; gap: 18px; padding: 14px 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-top: 14px; }
+.nexus-social-pop .fr-pop-stat { display: flex; flex-direction: column; }
+.nexus-social-pop .fr-pop-stat b { font-size: 16px; font-weight: 800; }
+.nexus-social-pop .fr-pop-stat b small { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.nexus-social-pop .fr-pop-stat span { font-size: 11px; color: var(--text-faint); }
+.nexus-social-pop .fr-pop-acts { display: flex; gap: 8px; padding: 14px 18px; }
+.nexus-social-pop .fr-pop-acts .pf-act-btn { flex: 1; height: 36px; font-size: 13px; }
+
+/* ── compare overlay ── */
+.nexus-social-pop.cmp { position: fixed; inset: 0; z-index: 1092; background: rgba(4, 5, 8, 0.72); backdrop-filter: blur(12px); display: flex; justify-content: center; padding: 7vh 24px 24px; animation: nspPopFade 0.2s var(--ease); }
+@keyframes nspPopFade { from { opacity: 0; } }
+.nexus-social-pop .cmp-panel { width: 100%; max-width: 720px; border-radius: 22px; border: 1px solid var(--line-2); background: linear-gradient(180deg, var(--bg-2), #07080b); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); overflow: hidden; display: flex; flex-direction: column; max-height: 86vh; }
+.nexus-social-pop .cmp-head { display: flex; align-items: center; gap: 18px; padding: 22px 26px; border-bottom: 1px solid var(--line); }
+.nexus-social-pop .cmp-vs { display: flex; align-items: center; gap: 14px; flex: 1; }
+.nexus-social-pop .cmp-who { display: flex; align-items: center; gap: 11px; }
+.nexus-social-pop .cmp-who .a { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; font-weight: 800; color: #fff; overflow: hidden; flex-shrink: 0; }
+.nexus-social-pop .cmp-who .a img { width: 100%; height: 100%; object-fit: cover; }
+.nexus-social-pop .cmp-who-name { font-size: 15px; font-weight: 700; }
+.nexus-social-pop .cmp-who-lvl { font-size: 12px; color: var(--text-faint); }
+.nexus-social-pop .cmp-vs-badge { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; color: var(--text-faint); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); }
+.nexus-social-pop .cmp-close { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text-dim); }
+.nexus-social-pop .cmp-close:hover { color: var(--text); }
+.nexus-social-pop .cmp-body { padding: 18px 26px 26px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.nexus-social-pop .cmp-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.nexus-social-pop .cmp-row:last-child { border-bottom: 0; }
+.nexus-social-pop .cmp-val { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.nexus-social-pop .cmp-val.me { text-align: right; }
+.nexus-social-pop .cmp-val.them { text-align: left; }
+.nexus-social-pop .cmp-val.win { color: var(--good); }
+.nexus-social-pop .cmp-lbl { font-size: 11.5px; color: var(--text-faint); font-weight: 600; text-align: center; white-space: nowrap; }
+.nexus-social-pop .cmp-bar { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; height: 6px; margin-top: -6px; }
+.nexus-social-pop .cmp-bar .b { height: 100%; border-radius: 999px; background: var(--panel-2); overflow: hidden; position: relative; }
+.nexus-social-pop .cmp-bar .b.me i { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.nexus-social-pop .cmp-bar .b.them i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: #a855f7; }
+.nexus-social-pop .cmp-shared { margin-top: 8px; }
+.nexus-social-pop .cmp-shared h4 { margin: 16px 0 10px; font-size: 13px; font-weight: 700; }
+.nexus-social-pop .cmp-shared-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.nexus-social-pop .cmp-pin { width: 92px; display: flex; flex-direction: column; gap: 6px; }
+.nexus-social-pop .cmp-pin-art { width: 92px; height: 122px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); display: grid; place-items: center; color: var(--text-faint); overflow: hidden; }
+.nexus-social-pop .cmp-pin-art img { width: 100%; height: 100%; object-fit: cover; }
+.nexus-social-pop .cmp-pin span { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

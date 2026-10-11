@@ -18,7 +18,7 @@ import type { NexusGame } from "../nexusModel";
 import type { SgdbCandidate } from "../../../../core/types";
 import { NexusCover } from "../NexusCover";
 import { NexusGameCard } from "../NexusGameCard";
-import { NexusFriends } from "./NexusFriends";
+import { NexusFriendsSidebar } from "./NexusFriendsSidebar";
 import { NexusPublicProfile } from "./NexusPublicProfile";
 import { NexusProfileShots } from "./NexusProfileShots";
 import {
@@ -42,7 +42,6 @@ import {
   GridIcon,
   HeartIcon,
   LibraryIcon,
-  SparkIcon,
   UploadIcon,
   PaletteIcon,
   CameraIcon,
@@ -61,8 +60,6 @@ interface NexusProfileProps {
   onLaunch: (game: NexusGame) => void;
   onToggleFavorite: (game: NexusGame) => void;
 }
-
-type Tab = "resumen" | "amigos" | "actividad";
 
 export function NexusProfile({
   onBack,
@@ -93,7 +90,6 @@ export function NexusProfile({
   // Surfaced when a cloud image upload / profile sync fails, so failures stop
   // being silent (e.g. Storage RLS blocking the upload).
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("resumen");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -372,15 +368,20 @@ export function NexusProfile({
 
   return (
     <div className={"profile" + (leaving ? " pf-leaving" : "")}>
-      <div className="pf-topbar">
-        <button className="pf-back" onClick={onBack}>
-          <BackIcon size={17} /> Biblioteca
-        </button>
-        <div className="pf-topbar-spacer" />
-      </div>
+      <div className="pf-body">
+        <div className="pf-col">
+          {/* Topbar lives inside the content column so "Biblioteca" stays
+              aligned with the cover's left edge (same 880px centering) once
+              the social sidebar narrows the column. */}
+          <div className="pf-topbar">
+            <button className="pf-back" onClick={onBack}>
+              <BackIcon size={17} /> Biblioteca
+            </button>
+            <div className="pf-topbar-spacer" />
+          </div>
 
-      <div className="pf-scroll">
-        <div className="pf-wrap">
+          <div className="pf-scroll">
+            <div className="pf-wrap">
           {/* ── Showcase header ──────────────────────────────── */}
           <div className="pf-head showcase">
             <div className="pf-cover">
@@ -522,30 +523,8 @@ export function NexusProfile({
             </div>
           </div>
 
-          {/* ── Tabs ─────────────────────────────────────────── */}
-          <div className="pf-tabs">
-            <button
-              className={`pf-tab${tab === "resumen" ? " active" : ""}`}
-              onClick={() => setTab("resumen")}
-            >
-              Resumen
-            </button>
-            <button
-              className={`pf-tab${tab === "amigos" ? " active" : ""}`}
-              onClick={() => setTab("amigos")}
-            >
-              Amigos
-            </button>
-            <button
-              className={`pf-tab${tab === "actividad" ? " active" : ""}`}
-              onClick={() => setTab("actividad")}
-            >
-              Actividad
-            </button>
-          </div>
-
-          {tab === "resumen" && (
-            <>
+          {/* Resumen content (stats · fijados · capturas) renders directly —
+              the Amigos/Actividad tabs moved to the social sidebar. */}
               <div className="pf-section">
                 <div className="pf-stats">
                   <StatCard icon={<ClockIcon size={18} />} label="Tiempo jugado">
@@ -637,28 +616,14 @@ export function NexusProfile({
                   <NexusProfileShots userId={social.user.id} />
                 </div>
               )}
-            </>
-          )}
-
-          {tab === "amigos" && (
-            <div className="pf-section">
-              <NexusFriends onViewProfile={(id) => setViewingUserId(id)} />
             </div>
-          )}
-
-          {tab === "actividad" && (
-            <div className="pf-section">
-              <div className="pf-empty">
-                <SparkIcon size={28} />
-                <div className="pf-empty-title">Actividad · Próximamente</div>
-                <div className="pf-empty-sub">
-                  El feed de actividad de amigos llega en la siguiente fase (tras presencia y
-                  amigos).
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
+
+        <NexusFriendsSidebar
+          onOpenFriend={(id) => setViewingUserId(id)}
+          me={{ stats, name, avatarUrl: current.avatarUrl ?? null }}
+        />
       </div>
 
       {pickerOpen && (

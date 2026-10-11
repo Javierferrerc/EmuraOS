@@ -17,6 +17,9 @@ export const rutasSection: SettingsSection = {
           get: (ctx) => ctx.config?.romsPath ?? "./roms",
           set: async (value, ctx) => {
             await ctx.updateConfig({ romsPath: value });
+            // Re-scan immediately so the library reflects the new folder
+            // without requiring an app restart.
+            await ctx.refreshScan();
           },
           hint: (ctx) => ctx.resolvedPaths?.romsPath,
           openable: true,
@@ -29,6 +32,9 @@ export const rutasSection: SettingsSection = {
           get: (ctx) => ctx.config?.emulatorsPath ?? "./emulators",
           set: async (value, ctx) => {
             await ctx.updateConfig({ emulatorsPath: value });
+            // Re-detect emulators immediately so status reflects the new
+            // folder without requiring an app restart.
+            await ctx.detectEmulators();
           },
           hint: (ctx) => ctx.resolvedPaths?.emulatorsPath,
           openable: true,
