@@ -25,6 +25,7 @@ import {
   buildProfileStats,
   loadProfileEdit,
   saveProfileEdit,
+  PROFILE_UPDATED_EVENT,
   initialsOf,
   MAX_PINNED,
   type NexusProfileEdit,
@@ -86,6 +87,14 @@ export function NexusProfile({
   const [local, setLocal] = useState<NexusProfileEdit>(() => loadProfileEdit(fallbackName));
   const [draft, setDraft] = useState<NexusProfileEdit>(local);
   const [editing, setEditing] = useState(false);
+  // The cloud library sync can update the pinned games (pinned on another
+  // machine) while this page is open — re-read the local layer when it does.
+  useEffect(() => {
+    if (editing) return;
+    const reload = () => setLocal(loadProfileEdit(fallbackName));
+    window.addEventListener(PROFILE_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, reload);
+  }, [editing, fallbackName]);
   const [savingProfile, setSavingProfile] = useState(false);
   // Surfaced when a cloud image upload / profile sync fails, so failures stop
   // being silent (e.g. Storage RLS blocking the upload).
@@ -182,8 +191,9 @@ export function NexusProfile({
       const games = keys.map((k) => gamesByKey.get(k)).filter((g): g is NexusGame => !!g);
       return Promise.all(
         games.map(async (g) => {
-          let cover_url: string | null = null;
-          if (g.coverPath) {
+          // A game from another machine already carries its cloud cover.
+          let cover_url: string | null = g.coverUrl ?? null;
+          if (!cover_url && g.coverPath) {
             try {
               const dataUrl = await window.electronAPI.readThumbnailDataUrl(
                 g.rom.systemId,
@@ -206,6 +216,9 @@ export function NexusProfile({
       name: draft.name.trim() || fallbackName,
       status: draft.status.trim(),
       pinned: draft.pinned.slice(0, MAX_PINNED),
+      // Timestamp pin changes so the cloud sync knows this is the newest list.
+      pinnedAt:
+        draft.pinned.join("|") !== local.pinned.join("|") ? new Date().toISOString() : local.pinnedAt,
       bannerUrl: draft.bannerUrl ?? null,
       avatarUrl: draft.avatarUrl ?? null,
     };
@@ -236,7 +249,7 @@ export function NexusProfile({
       }
     }
     setEditing(false);
-  }, [draft, fallbackName, signedIn, social, buildPinnedPayload, stats]);
+  }, [draft, local.pinned, local.pinnedAt, fallbackName, signedIn, social, buildPinnedPayload, stats]);
   // Save handler for the "Editar perfil" modal (name + status only; pins are
   // managed separately on the page). Mirrors saveEdit's persistence logic.
   const saveInfo = useCallback(
@@ -296,6 +309,7 @@ export function NexusProfile({
         name,
         status,
         pinned: local.pinned,
+        pinnedAt: local.pinnedAt,
         bannerUrl,
         avatarUrl,
       };
@@ -304,7 +318,7 @@ export function NexusProfile({
       // Keep the modal open on a cloud failure so the error is visible.
       if (cloudOk) setInfoOpen(false);
     },
-    [local.pinned, local.avatarUrl, local.bannerUrl, fallbackName, signedIn, social]
+    [local.pinned, local.pinnedAt, local.avatarUrl, local.bannerUrl, fallbackName, signedIn, social]
   );
 
   // Proactive cloud sync: when signed in, push this profile's shareable data

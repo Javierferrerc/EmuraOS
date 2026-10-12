@@ -24,6 +24,8 @@ import type {
   ReadinessReport,
   Collection,
   PlayRecord,
+  CloudLibraryCache,
+  UserLibraryFile,
   EmulatorDefinition,
   DriveEmulatorMapping,
   EmulatorDownloadProgress,
@@ -97,6 +99,9 @@ interface AppState {
   collections: Collection[];
   recentlyPlayed: string[];
   playHistory: Record<string, PlayRecord>;
+  /** Cloud-synced view of the account's library on OTHER machines (games that
+   *  aren't on this one), or null before the first sync / signed out. */
+  cloudLibrary: CloudLibraryCache | null;
   isFullscreen: boolean;
   gamepadConnected: boolean;
   isDetectingEmulators: boolean;
@@ -162,6 +167,8 @@ interface AppActions {
   /** Re-read the per-profile activity store (favorites / collections / recents /
    *  play history) — call after switching the active profile. */
   reloadUserLibrary: () => Promise<void>;
+  /** Push an already-loaded activity store into state (e.g. after a cloud sync). */
+  applyUserLibrary: (lib: UserLibraryFile) => void;
   updateConfig: (partial: Partial<AppConfig>) => Promise<void>;
   detectEmulators: () => Promise<void>;
   launchGame: (rom: DiscoveredRom, emulatorId?: string) => Promise<void>;
@@ -335,6 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [playHistory, setPlayHistory] = useState<Record<string, PlayRecord>>(
     {}
   );
+  const [cloudLibrary, setCloudLibrary] = useState<CloudLibraryCache | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gamepadConnected, setGamepadConnected] = useState(false);
   const [isDetectingEmulators, setIsDetectingEmulators] = useState(false);
@@ -514,6 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCollections(userLib.collections);
         setRecentlyPlayed(userLib.recentlyPlayed);
         setPlayHistory(userLib.playHistory);
+        setCloudLibrary(userLib.cloud ?? null);
         setRomAddedDates(addedDates);
         setGameOverrides(overrides);
         setRaStatus(raSt);
@@ -556,13 +565,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     init();
   }, []);
 
-  const reloadUserLibrary = useCallback(async () => {
-    const userLib = await window.electronAPI.getUserLibrary();
+  const applyUserLibrary = useCallback((userLib: UserLibraryFile) => {
     setFavorites(new Set(userLib.favorites));
     setCollections(userLib.collections);
     setRecentlyPlayed(userLib.recentlyPlayed);
     setPlayHistory(userLib.playHistory);
+    setCloudLibrary(userLib.cloud ?? null);
   }, []);
+
+  const reloadUserLibrary = useCallback(async () => {
+    applyUserLibrary(await window.electronAPI.getUserLibrary());
+  }, [applyUserLibrary]);
 
   const refreshScan = useCallback(async () => {
     setIsScanning(true);
@@ -1645,6 +1658,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     stopGame,
     refreshScan,
     reloadUserLibrary,
+    applyUserLibrary,
+    cloudLibrary,
     updateConfig,
     detectEmulators,
     launchGame,

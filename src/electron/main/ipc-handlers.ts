@@ -32,6 +32,8 @@ import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
 import sharp from "sharp";
 import { SteamGridDb, verifySteamGridDbKey } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
+import { sanitizeCloudDoc } from "../../core/library-sync.js";
+import { randomUUID } from "node:crypto";
 import { EmulatorConfigManager } from "../../core/emulator-config.js";
 import {
   ensureCemuGamePath,
@@ -201,6 +203,37 @@ let activeProfileId: string | null = null;
 function getLib(): UserLibrary {
   return new UserLibrary(getProjectRoot(), activeProfileId);
 }
+
+/** Stable id for THIS machine's slice of the cloud library doc. Generated
+ *  once and kept next to the config (never derived from hardware ids). */
+function getDeviceId(): string {
+  const file = path.join(getProjectRoot(), "config", "device.json");
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf-8")) as { id?: unknown };
+    if (typeof parsed.id === "string" && /^[A-Za-z0-9-]{8,64}$/.test(parsed.id)) return parsed.id;
+  } catch {
+    /* missing / corrupt → regenerate */
+  }
+  const id = randomUUID();
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify({ id }), "utf-8");
+  return id;
+}
+
+const SyncKeySchema = z.string().min(3).max(600).regex(/^[a-z0-9-]+:.+$/s);
+const LibrarySyncSchema = z.object({
+  remote: z.unknown(),
+  localLibKeys: z.array(SyncKeySchema).max(20000),
+  localGames: z.record(
+    SyncKeySchema,
+    z.object({
+      t: z.string().max(300),
+      s: z.string().max(100).optional(),
+      c: z.string().url().startsWith("https://").max(1000).optional(),
+    })
+  ),
+  localPinned: z.object({ keys: z.array(SyncKeySchema).max(12), at: z.string().max(40) }),
+});
 
 /**
  * Run emulator-specific first-launch setup (e.g. write ROM folder into
@@ -1629,6 +1662,30 @@ export function registerIpcHandlers(
   // renderer when a profile is chosen / switched, before reloading the library.
   ipcMain.handle("library:set-active-profile", (_event: IpcMainInvokeEvent, id: unknown) => {
     activeProfileId = typeof id === "string" && id.trim() ? id.trim() : null;
+    return true;
+  });
+
+  // Cloud sync: merge the active profile's activity store with the account's
+  // cloud doc (fetched by the renderer, which owns the Supabase session) and
+  // return the merged doc to upload + the merged pinned list.
+  ipcMain.handle("library:sync-merge", (_event: IpcMainInvokeEvent, payload: unknown) => {
+    const p = LibrarySyncSchema.parse(payload);
+    const result = getLib().applySync({
+      remote: p.remote == null ? null : sanitizeCloudDoc(p.remote),
+      deviceId: getDeviceId(),
+      deviceName: os.hostname().slice(0, 100),
+      localLibKeys: p.localLibKeys,
+      localGames: p.localGames,
+      localPinned: p.localPinned,
+      now: new Date().toISOString(),
+    });
+    return { doc: result.doc, pinned: result.pinned, docChanged: result.docChanged, library: result.local };
+  });
+
+  // A game known from another device (cloudKey) now exists here under a
+  // different file name (localKey): link them so its data follows the ROM.
+  ipcMain.handle("library:link-key", (_event: IpcMainInvokeEvent, cloudKey: unknown, localKey: unknown) => {
+    getLib().linkKey(SyncKeySchema.parse(cloudKey), SyncKeySchema.parse(localKey));
     return true;
   });
 

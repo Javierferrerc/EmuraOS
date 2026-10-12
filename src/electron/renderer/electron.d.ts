@@ -15,6 +15,9 @@ import type {
   CoreDownloadProgress,
   ReadinessReport,
   UserLibraryFile,
+  CloudLibraryDoc,
+  CloudGameEntry,
+  CloudPinned,
   Collection,
   SmartCollectionFilter,
   EmulatorConfigData,
@@ -133,6 +136,15 @@ export interface ElectronAPI {
   getUserLibrary(): Promise<UserLibraryFile>;
   /** Point the per-profile activity store at the given profile (null = default). */
   setActiveProfile(id: string | null): Promise<boolean>;
+  /** Merge the active profile's store with its cloud doc (see library-sync.ts). */
+  syncLibraryMerge(payload: {
+    remote: CloudLibraryDoc | null;
+    localLibKeys: string[];
+    localGames: Record<string, CloudGameEntry>;
+    localPinned: CloudPinned;
+  }): Promise<{ doc: CloudLibraryDoc; pinned: CloudPinned; docChanged: boolean; library: UserLibraryFile }>;
+  /** Link a game known from another device to the ROM that has it here. */
+  linkLibraryKey(cloudKey: string, localKey: string): Promise<boolean>;
   toggleFavorite(systemId: string, fileName: string): Promise<boolean>;
   getCollections(): Promise<Collection[]>;
   createCollection(name: string): Promise<Collection>;

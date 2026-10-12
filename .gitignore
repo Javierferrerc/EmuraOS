@@ -172,6 +172,7 @@ config/gdrive-config.json
 # User library (favorites, recently played, play history) — base + per-profile
 config/user-library.json
 config/user-library.*.json
+config/device.json
 
 # Stray Windows 'nul' redirect artifacts
 nul

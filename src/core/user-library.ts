@@ -12,6 +12,7 @@ import type {
   RetroArchGameConfig,
 } from "./types.js";
 import { canonicalEmulatorId } from "./emulator-mapper.js";
+import { mergeLibrarySync, remapLocalKeys, type MergeInput, type MergeResult } from "./library-sync.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,14 +99,13 @@ export class UserLibrary {
     const key = UserLibrary.makeKey(systemId, fileName);
     const data = this.load();
     const idx = data.favorites.indexOf(key);
-    if (idx >= 0) {
-      data.favorites.splice(idx, 1);
-      this.save(data);
-      return false;
-    }
-    data.favorites.push(key);
+    const on = idx < 0;
+    if (on) data.favorites.push(key);
+    else data.favorites.splice(idx, 1);
+    // Timestamped so a cloud sync resolves add/remove across devices (LWW).
+    data.favoriteTimes = { ...(data.favoriteTimes ?? {}), [key]: { on, at: new Date().toISOString() } };
     this.save(data);
-    return true;
+    return on;
   }
 
   // --- Collections ---
@@ -181,6 +181,8 @@ export class UserLibrary {
   deleteCollection(id: string): void {
     const data = this.load();
     data.collections = data.collections.filter((c) => c.id !== id);
+    // Tombstone so a cloud sync can't bring it back from another device.
+    data.collectionTombstones = { ...(data.collectionTombstones ?? {}), [id]: new Date().toISOString() };
     this.save(data);
   }
 
@@ -261,6 +263,13 @@ export class UserLibrary {
     record.playCount += 1;
     data.playHistory[key] = record;
 
+    // This device's own contribution (uploaded by the cloud sync). Before the
+    // first sync `ownPlay` is absent and gets seeded from playHistory instead.
+    if (data.ownPlay) {
+      const own = data.ownPlay[key] ?? { lastPlayed: "", playCount: 0 };
+      data.ownPlay[key] = { ...own, lastPlayed: record.lastPlayed, playCount: own.playCount + 1 };
+    }
+
     this.save(data);
   }
 
@@ -276,6 +285,10 @@ export class UserLibrary {
     if (record) {
       record.totalPlayTime = (record.totalPlayTime ?? 0) + seconds;
       data.playHistory[key] = record;
+      if (data.ownPlay) {
+        const own = data.ownPlay[key] ?? { lastPlayed: record.lastPlayed, playCount: 0 };
+        data.ownPlay[key] = { ...own, totalPlayTime: (own.totalPlayTime ?? 0) + seconds };
+      }
       this.save(data);
     }
   }
@@ -458,8 +471,14 @@ export class UserLibrary {
    */
   resetPlayHistory(): void {
     const data = this.load();
+    // Reset tombstones make the reset reach every synced device too.
+    const now = new Date().toISOString();
+    const resets = { ...(data.playResets ?? {}) };
+    for (const key of Object.keys(data.playHistory)) resets[key] = now;
+    data.playResets = resets;
     data.recentlyPlayed = [];
     data.playHistory = {};
+    if (data.ownPlay) data.ownPlay = {};
     this.save(data);
   }
 
@@ -471,6 +490,8 @@ export class UserLibrary {
     let changed = false;
     if (data.playHistory[key]) {
       delete data.playHistory[key];
+      if (data.ownPlay) delete data.ownPlay[key];
+      data.playResets = { ...(data.playResets ?? {}), [key]: new Date().toISOString() };
       changed = true;
     }
     const filtered = data.recentlyPlayed.filter((k) => k !== key);
@@ -479,5 +500,32 @@ export class UserLibrary {
       changed = true;
     }
     if (changed) this.save(data);
+  }
+
+  // --- Cloud sync ---
+
+  /** Merge this profile's store with its cloud copy, persist the result and
+   *  return what to upload. See library-sync.ts for the conflict rules. */
+  applySync(input: Omit<MergeInput, "local">): MergeResult {
+    const result = mergeLibrarySync({ ...input, local: this.load() });
+    this.save(result.local);
+    return result;
+  }
+
+  /** Record that `cloudKey` (a game as named on another device) is the ROM
+   *  `localKey` on this machine, and move any data kept under the cloud name. */
+  linkKey(cloudKey: string, localKey: string): void {
+    if (cloudKey === localKey) return;
+    const data = this.load();
+    const aliases = { ...(data.keyAliases ?? {}) };
+    // Re-point aliases that already targeted the old key.
+    for (const [k, v] of Object.entries(aliases)) if (v === cloudKey) aliases[k] = localKey;
+    aliases[cloudKey] = localKey;
+    const next = remapLocalKeys(data, { [cloudKey]: localKey });
+    next.keyAliases = aliases;
+    if (next.cloud) {
+      next.cloud = { ...next.cloud, remoteLib: next.cloud.remoteLib.filter((k) => k !== cloudKey) };
+    }
+    this.save(next);
   }
 }

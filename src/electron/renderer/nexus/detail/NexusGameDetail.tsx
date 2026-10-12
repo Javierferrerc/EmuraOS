@@ -68,6 +68,11 @@ interface NexusGameDetailProps {
   onToggleFavorite: () => void;
   /** Opens settings/emulator config (the "Cambiar" core action). */
   onChangeEmulator: () => void;
+  /** For a game whose ROM isn't on this machine (`game.missing`): pick the
+   *  ROM file to add it. Replaces "Jugar" while the ROM is missing. */
+  onAddRom?: () => void;
+  /** True while that ROM is being copied into the library. */
+  addingRom?: boolean;
   /** Lets the shell's unified gamepad layer drive the ficha's spatial focus. */
   focusHandleRef: MutableRefObject<GameDetailFocusHandle | null>;
 }
@@ -154,6 +159,12 @@ function useGameStills(game: NexusGame): string[] {
   const [stills, setStills] = useState<string[]>([]);
   useEffect(() => {
     let cancelled = false;
+    // ROM not on this machine: no local hero/metadata to read (and don't
+    // scrape for a file that isn't here) — use the cloud cover if any.
+    if (game.missing) {
+      setStills(game.coverUrl ? [game.coverUrl] : []);
+      return;
+    }
     setStills([]);
     void (async () => {
       const urls: string[] = [];
@@ -180,7 +191,7 @@ function useGameStills(game: NexusGame): string[] {
     return () => {
       cancelled = true;
     };
-  }, [game.key, game.rom.systemId, game.rom.fileName]);
+  }, [game.key, game.rom.systemId, game.rom.fileName, game.missing, game.coverUrl]);
   return stills;
 }
 
@@ -193,6 +204,8 @@ function Actions({
   onToggleFavorite,
   onPlay,
   onOptions,
+  onAddRom,
+  addingRom,
 }: {
   game: NexusGame;
   fav: boolean;
@@ -201,20 +214,39 @@ function Actions({
   onToggleFavorite: () => void;
   onPlay: (mode: PlayMode) => void;
   onOptions: () => void;
+  onAddRom?: () => void;
+  addingRom?: boolean;
 }) {
   const playing = hasPlayed(game);
   const lastWhen = relativeTime(game.play?.lastPlayed).toLowerCase();
   const hours = formatHours(game.play?.totalPlayTime);
+  const missing = !!game.missing;
   return (
     <div className="gd-actions">
-      <button className="gd-play foc-ring" data-foc onClick={() => onPlay("play")}>
-        <PlayIcon size={20} />
-        <span className="gd-play-main">
-          <span>{playing ? "Continuar" : "Jugar"}</span>
-          {playing && game.play?.lastPlayed && <span className="gd-play-sub">desde {lastWhen}</span>}
-        </span>
-      </button>
-      {playing && (
+      {missing ? (
+        <button
+          className="gd-play missing foc-ring"
+          data-foc
+          disabled={addingRom}
+          onClick={onAddRom}
+          title={`Falta la ROM en este equipo (${game.rom.fileName}). Pulsa para añadirla.`}
+        >
+          <UploadIcon size={20} />
+          <span className="gd-play-main">
+            <span>{addingRom ? "Añadiendo…" : "No está en este equipo"}</span>
+            <span className="gd-play-sub">{addingRom ? "Copiando la ROM" : "Añadir ROM para jugar"}</span>
+          </span>
+        </button>
+      ) : (
+        <button className="gd-play foc-ring" data-foc onClick={() => onPlay("play")}>
+          <PlayIcon size={20} />
+          <span className="gd-play-main">
+            <span>{playing ? "Continuar" : "Jugar"}</span>
+            {playing && game.play?.lastPlayed && <span className="gd-play-sub">desde {lastWhen}</span>}
+          </span>
+        </button>
+      )}
+      {playing && !missing && (
         <button className="gd-secondary foc-ring" data-foc onClick={() => onPlay("resume")}>
           <ClockIcon size={17} />
           <span>
@@ -222,14 +254,16 @@ function Actions({
           </span>
         </button>
       )}
-      {playing && (
+      {playing && !missing && (
         <button className="gd-secondary foc-ring" data-foc onClick={() => onPlay("new")}>
           <RefreshIcon size={16} /> Nueva partida
         </button>
       )}
-      <button className="gd-secondary foc-ring" data-foc onClick={onOptions}>
-        <SettingsIcon size={16} /> Opciones
-      </button>
+      {!missing && (
+        <button className="gd-secondary foc-ring" data-foc onClick={onOptions}>
+          <SettingsIcon size={16} /> Opciones
+        </button>
+      )}
       <button
         className={"gd-iconbtn foc-ring" + (fav ? " on" : "")}
         data-foc
@@ -524,6 +558,8 @@ export function NexusGameDetail({
   onPlay,
   onToggleFavorite,
   onChangeEmulator,
+  onAddRom,
+  addingRom,
   focusHandleRef,
 }: NexusGameDetailProps) {
   const hue = useMemo(() => oklchHueFromHex(game.tint), [game.tint]);
@@ -535,7 +571,7 @@ export function NexusGameDetail({
   const [coreRefresh, setCoreRefresh] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  useGameDetailFocus(rootRef, focusHandleRef, [game.key, density, showCompat, sectionOrder]);
+  useGameDetailFocus(rootRef, focusHandleRef, [game.key, game.missing, density, showCompat, sectionOrder]);
 
   // Reset scroll on game change; Esc closes the ficha.
   useEffect(() => {
@@ -563,6 +599,8 @@ export function NexusGameDetail({
       onToggleFavorite={onToggleFavorite}
       onPlay={onPlay}
       onOptions={() => setOptionsOpen(true)}
+      onAddRom={onAddRom}
+      addingRom={addingRom}
     />
   );
 
