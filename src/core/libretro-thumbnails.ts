@@ -271,6 +271,37 @@ export class LibretroThumbnails {
     }
   }
 
+  /**
+   * Resolve the URL of the best libretro boxart for a ROM WITHOUT writing
+   * anything to disk — used by the import preview, where nothing may persist
+   * until the user confirms. Same lookup order as fetchCover: direct filename
+   * candidates first (cheap HEAD probes), then the fuzzy-matched tree listing.
+   */
+  async findCoverUrl(
+    systemId: string,
+    romFileName: string
+  ): Promise<string | null> {
+    if (!this.systemMap[systemId]) return null;
+
+    const baseName = basename(
+      romFileName,
+      romFileName.substring(romFileName.lastIndexOf("."))
+    );
+    const title = this.extractTitle(romFileName);
+    const candidates = [`${baseName}.png`];
+    if (title !== baseName) candidates.push(`${title}.png`);
+    for (const candidate of candidates) {
+      const url = this.buildDownloadUrl(systemId, candidate);
+      if (!url) continue;
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) return url;
+    }
+
+    const thumbnails = await this.fetchThumbnailList(systemId);
+    const match = this.findBestMatch(romFileName, thumbnails);
+    return match ? this.buildDownloadUrl(systemId, match) : null;
+  }
+
   async fetchCover(
     systemId: string,
     romFileName: string

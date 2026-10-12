@@ -39,6 +39,7 @@ import { NexusLaunchSequence } from "./launch/NexusLaunchSequence";
 import { NexusSessionSummary } from "./session/NexusSessionSummary";
 import { NexusImportGames, type ImportItem } from "./import/NexusImportGames";
 import { NexusRomGuide } from "./import/NexusRomGuide";
+import { NexusSgdbKeyModal } from "./import/NexusSgdbKeyModal";
 import type { DiscoveredRom } from "../../../core/types";
 import "./nexus.css";
 
@@ -52,6 +53,10 @@ const LS_PLATFORM = "nx.platform";
 const LS_LAYOUT = "nx.layout";
 const LS_NAV = "nx.nav";
 const LS_ROM_GUIDE = "nx.romGuideSeen";
+const LS_SGDB_PROMPT_OFF = "nx.sgdbPromptOff";
+// "Ahora no" snoozes the SteamGridDB prompt for the rest of this app session
+// (module scope survives NexusShell remounts, e.g. switching profiles).
+let sgdbPromptSnoozed = false;
 
 type NexusNav = "rail" | "sidebar";
 
@@ -179,6 +184,50 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
     if (!seen) setShowRomGuide(true);
   }, [config?.firstRunCompleted, scanResult?.totalRoms, importOpen]);
 
+  // SteamGridDB key onboarding: prompt users without a key (config or .env)
+  // once onboarding is done, unless they opted out or snoozed it this session.
+  const [showSgdbPrompt, setShowSgdbPrompt] = useState(false);
+  useEffect(() => {
+    if (!config?.firstRunCompleted || config.steamGridDbApiKey || sgdbPromptSnoozed) return;
+    try {
+      if (localStorage.getItem(LS_SGDB_PROMPT_OFF) === "1") return;
+    } catch {
+      /* ignore */
+    }
+    let cancelled = false;
+    void window.electronAPI
+      .hasSteamGridDbKey()
+      .then((has) => {
+        if (!cancelled && !has) setShowSgdbPrompt(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.firstRunCompleted, config?.steamGridDbApiKey]);
+
+  const dismissSgdbPrompt = useCallback(({ dontShow }: { dontShow: boolean }) => {
+    sgdbPromptSnoozed = true;
+    if (dontShow) {
+      try {
+        localStorage.setItem(LS_SGDB_PROMPT_OFF, "1");
+      } catch {
+        /* non-fatal */
+      }
+    }
+    setShowSgdbPrompt(false);
+  }, []);
+
+  const saveSgdbKey = useCallback(
+    async (key: string) => {
+      sgdbPromptSnoozed = true;
+      await app.updateConfig({ steamGridDbApiKey: key });
+      // Let the "Guardada" confirmation register before closing.
+      window.setTimeout(() => setShowSgdbPrompt(false), 900);
+    },
+    [app]
+  );
+
   const handleImportConfirm = useCallback(
     async (selected: ImportItem[]) => {
       const chosen = selected.filter((it) => it.system);
@@ -202,12 +251,14 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
 
       // 3. Download the covers chosen during review (+ a hero for the ficha).
       for (const it of chosen) {
-        if (it.coverFull) {
-          try {
+        try {
+          if (it.coverSource === "libretro") {
+            await window.electronAPI.fetchCoverFromLibretro(it.system as string, it.file);
+          } else if (it.coverFull) {
             await window.electronAPI.applySteamGridDbCandidate(it.system as string, it.file, it.coverFull);
-          } catch (err) {
-            console.warn("[import] applyCover failed:", err);
           }
+        } catch (err) {
+          console.warn("[import] applyCover failed:", err);
         }
       }
 
@@ -609,6 +660,11 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
               openImport();
             }}
           />
+        )}
+
+        {/* Never stacked on another onboarding modal, the importer or a game. */}
+        {showSgdbPrompt && !showRomGuide && !importOpen && !app.currentGame && (
+          <NexusSgdbKeyModal onSave={saveSgdbKey} onDismiss={dismissSgdbPrompt} />
         )}
 
         {importOpen && (

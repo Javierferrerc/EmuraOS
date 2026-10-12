@@ -8,17 +8,17 @@ import {
 } from "node:fs";
 import { resolve, join } from "node:path";
 import {
-  applyCitraGamepadProfile,
-  readCitraGamepadStatus,
-  CITRA_GAMEPAD_PROFILES,
+  applyAzaharGamepadProfile,
+  readAzaharGamepadStatus,
+  AZAHAR_GAMEPAD_PROFILES,
   PS_DUALSHOCK_PROFILE,
-} from "../../src/core/citra-gamepad.js";
+} from "../../src/core/azahar-gamepad.js";
 
-const TEST_DIR = resolve(import.meta.dirname, "__test_citra_gamepad__");
+const TEST_DIR = resolve(import.meta.dirname, "__test_azahar_gamepad__");
 const CONFIG_PATH = join(TEST_DIR, "qt-config.ini");
 
 /**
- * A minimal qt-config.ini snippet mirroring what Citra writes right
+ * A minimal qt-config.ini snippet mirroring what Azahar writes right
  * after first launch — has a `[Controls]` section but none of the
  * gamepad bindings have been customized (everything marked default).
  */
@@ -46,9 +46,9 @@ const FRESH_CONTROLS_SECTION = [
 
 /**
  * Full `[Controls]` section after a successful "Auto-Assign" with a
- * DualShock 4 connected — matches the exact format Citra writes. We
+ * DualShock 4 connected — matches the exact format Azahar writes. We
  * use this to verify the apply logic is idempotent against the same
- * bytes Citra would produce, and to test the "already customized"
+ * bytes Azahar would produce, and to test the "already customized"
  * detection path.
  */
 const POST_AUTO_ASSIGN_PS: string = (() => {
@@ -127,7 +127,7 @@ const POST_AUTO_ASSIGN_PS: string = (() => {
   ].join("\n");
 })();
 
-describe("citra-gamepad", () => {
+describe("azahar-gamepad", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true });
   });
@@ -139,16 +139,16 @@ describe("citra-gamepad", () => {
   // ── Profile registry ──────────────────────────────────────────────
 
   it("exposes the ps-dualshock profile in the registry", () => {
-    expect(CITRA_GAMEPAD_PROFILES["ps-dualshock"]).toBe(PS_DUALSHOCK_PROFILE);
+    expect(AZAHAR_GAMEPAD_PROFILES["ps-dualshock"]).toBe(PS_DUALSHOCK_PROFILE);
     expect(PS_DUALSHOCK_PROFILE.guid).toBe(
       "03008fe54c050000c405000000016800"
     );
   });
 
-  // ── applyCitraGamepadProfile ──────────────────────────────────────
+  // ── applyAzaharGamepadProfile ──────────────────────────────────────
 
   it("returns error when the config file does not exist", () => {
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/not found/i);
   });
@@ -161,7 +161,7 @@ describe("citra-gamepad", () => {
       FRESH_CONTROLS_SECTION;
     writeFileSync(CONFIG_PATH, input, "utf-8");
 
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(true);
 
     const written = readFileSync(CONFIG_PATH, "utf-8");
@@ -222,7 +222,7 @@ describe("citra-gamepad", () => {
     ].join("\n");
     writeFileSync(CONFIG_PATH, stale, "utf-8");
 
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(true);
     // button_a changed (value differs), button_b changed, plus all inserted.
     expect(result.linesReplaced).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ describe("citra-gamepad", () => {
     const input = "[UI]\nfullscreen=false\n";
     writeFileSync(CONFIG_PATH, input, "utf-8");
 
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(true);
     expect(result.linesInserted).toBeGreaterThan(0);
 
@@ -259,11 +259,11 @@ describe("citra-gamepad", () => {
   it("is idempotent — second apply produces identical bytes", () => {
     writeFileSync(CONFIG_PATH, FRESH_CONTROLS_SECTION, "utf-8");
 
-    const first = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const first = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(first.success).toBe(true);
     const firstBytes = readFileSync(CONFIG_PATH, "utf-8");
 
-    const second = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const second = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(second.success).toBe(true);
     expect(second.linesReplaced).toBe(0);
     expect(second.linesInserted).toBe(0);
@@ -277,7 +277,7 @@ describe("citra-gamepad", () => {
     // Emulation → Configure → Controls → Auto-Assign. Applying our
     // profile on top of that should produce zero writes.
     writeFileSync(CONFIG_PATH, POST_AUTO_ASSIGN_PS, "utf-8");
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(true);
     expect(result.linesReplaced).toBe(0);
     expect(result.linesInserted).toBe(0);
@@ -290,7 +290,7 @@ describe("citra-gamepad", () => {
     const crlfInput = "[UI]\r\nfullscreen=false\r\n\r\n[Controls]\r\nprofile=0\r\n";
     writeFileSync(CONFIG_PATH, crlfInput, "utf-8");
 
-    const result = applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    const result = applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
     expect(result.success).toBe(true);
 
     const written = readFileSync(CONFIG_PATH, "utf-8");
@@ -315,7 +315,7 @@ describe("citra-gamepad", () => {
     ].join("\n");
     writeFileSync(CONFIG_PATH, input, "utf-8");
 
-    applyCitraGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
+    applyAzaharGamepadProfile(CONFIG_PATH, PS_DUALSHOCK_PROFILE);
 
     const written = readFileSync(CONFIG_PATH, "utf-8");
     expect(written).toContain("profiles\\1\\button_debug\\default=true");
@@ -330,10 +330,10 @@ describe("citra-gamepad", () => {
     );
   });
 
-  // ── readCitraGamepadStatus ────────────────────────────────────────
+  // ── readAzaharGamepadStatus ────────────────────────────────────────
 
   it("reports configExists=false when file is missing", () => {
-    const status = readCitraGamepadStatus(CONFIG_PATH);
+    const status = readAzaharGamepadStatus(CONFIG_PATH);
     expect(status.configExists).toBe(false);
     expect(status.hasControlsSection).toBe(false);
     expect(status.hasCustomGamepad).toBe(false);
@@ -342,7 +342,7 @@ describe("citra-gamepad", () => {
 
   it("reports hasControlsSection=false when no [Controls] exists", () => {
     writeFileSync(CONFIG_PATH, "[UI]\nfullscreen=false\n", "utf-8");
-    const status = readCitraGamepadStatus(CONFIG_PATH);
+    const status = readAzaharGamepadStatus(CONFIG_PATH);
     expect(status.configExists).toBe(true);
     expect(status.hasControlsSection).toBe(false);
     expect(status.hasCustomGamepad).toBe(false);
@@ -350,7 +350,7 @@ describe("citra-gamepad", () => {
 
   it("reports hasCustomGamepad=false for a fresh (keyboard-only) section", () => {
     writeFileSync(CONFIG_PATH, FRESH_CONTROLS_SECTION, "utf-8");
-    const status = readCitraGamepadStatus(CONFIG_PATH);
+    const status = readAzaharGamepadStatus(CONFIG_PATH);
     expect(status.configExists).toBe(true);
     expect(status.hasControlsSection).toBe(true);
     expect(status.hasCustomGamepad).toBe(false);
@@ -359,7 +359,7 @@ describe("citra-gamepad", () => {
 
   it("reports hasCustomGamepad=true and extracts the GUID after Auto-Assign", () => {
     writeFileSync(CONFIG_PATH, POST_AUTO_ASSIGN_PS, "utf-8");
-    const status = readCitraGamepadStatus(CONFIG_PATH);
+    const status = readAzaharGamepadStatus(CONFIG_PATH);
     expect(status.configExists).toBe(true);
     expect(status.hasControlsSection).toBe(true);
     expect(status.hasCustomGamepad).toBe(true);
@@ -368,7 +368,7 @@ describe("citra-gamepad", () => {
 
   it("ignores default=true bindings when detecting custom gamepad", () => {
     // Edge case: a binding value with engine:sdl but default=true should
-    // NOT count as custom — Citra ignores the value when default is true.
+    // NOT count as custom — Azahar ignores the value when default is true.
     const input = [
       "[Controls]",
       "profile\\default=true",
@@ -380,7 +380,7 @@ describe("citra-gamepad", () => {
     ].join("\n");
     writeFileSync(CONFIG_PATH, input, "utf-8");
 
-    const status = readCitraGamepadStatus(CONFIG_PATH);
+    const status = readAzaharGamepadStatus(CONFIG_PATH);
     expect(status.hasCustomGamepad).toBe(false);
     expect(status.currentGuid).toBe(null);
   });

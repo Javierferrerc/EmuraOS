@@ -170,6 +170,30 @@ describe("LibretroThumbnails", () => {
     expect(metadata!.coverPath).toBe(result);
   });
 
+  it("findCoverUrl resolves a direct hit with a HEAD probe and writes nothing", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true });
+    const url = await thumbs.findCoverUrl("nes", "Metroid (USA).nes");
+    expect(url).toContain("/Named_Boxarts/Metroid%20(USA).png");
+    expect(mockFetch).toHaveBeenCalledWith(expect.any(String), { method: "HEAD" });
+    expect(cache.coverExists("nes", "Metroid (USA).nes")).toBe(false);
+  });
+
+  it("findCoverUrl falls back to the fuzzy-matched listing", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false }) // HEAD full name
+      .mockResolvedValueOnce({ ok: false }) // HEAD title only
+      .mockResolvedValueOnce({ ok: true, json: async () => MOCK_MASTER_TREE })
+      .mockResolvedValueOnce({ ok: true, json: async () => MOCK_BOXARTS_TREE });
+    const url = await thumbs.findCoverUrl("nes", "Super Mario Bros. (World).nes");
+    expect(url).toContain(encodeURIComponent("Super Mario Bros. (1985-09-13)(Nintendo)(JP-US).png"));
+    expect(cache.coverExists("nes", "Super Mario Bros. (World).nes")).toBe(false);
+  });
+
+  it("findCoverUrl returns null for unmapped systems without fetching", async () => {
+    expect(await thumbs.findCoverUrl("unknown_system", "game.rom")).toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("returns null for unmapped system", async () => {
     const result = await thumbs.fetchCover(
       "unknown_system",

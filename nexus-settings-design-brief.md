@@ -266,7 +266,7 @@ Grupo único (filas `folder` con ruta absoluta resuelta como hint):
   - *Avanzado*: opciones extra del emulador.
 
 Emuladores típicos: RetroArch, Dolphin, DuckStation, PCSX2, PPSSPP, Cemu,
-Citra, Ryujinx… (la lista es dinámica). Diséñalo como **galería de tarjetas de
+Azahar, Ryujinx… (la lista es dinámica). Diséñalo como **galería de tarjetas de
 hardware** + panel de detalle con pestañas, en clave NEXUS.
 
 ---

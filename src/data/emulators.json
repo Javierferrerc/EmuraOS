@@ -31,6 +31,11 @@
       "cores\\mgba_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mgba_libretro.dll.zip",
       "cores\\genesis_plus_gx_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/genesis_plus_gx_libretro.dll.zip",
       "cores\\mednafen_psx_hw_libretro.dll": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/mednafen_psx_hw_libretro.dll.zip"
+    },
+    "acquisition": {
+      "provider": "https",
+      "url": "https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z",
+      "sha256": "b2139b1d0f9d4526dc6b5ce23cbb3efdc766096fa6f2c3df016818b486ac6372"
     }
   },
   {
@@ -47,7 +52,9 @@
     "args": {},
     "defaultArgs": "",
     "acquisition": {
-      "provider": "https",
+      "provider": "github",
+      "repo": "snes9xgit/snes9x",
+      "asset": "^snes9x-[\\d.]+-win32-x64\\.zip$",
       "url": "https://github.com/snes9xgit/snes9x/releases/download/1.63/snes9x-1.63-win32-x64.zip"
     }
   },
@@ -63,7 +70,13 @@
     "systems": ["n64"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://www.pj64-emu.com/file/project64-3-0-1-5664-2df3434/",
+      "archive": "zip",
+      "sha256": "f8be471f105e844e32589d21f3c1ee466d5ff4d93b8b7aff69e1badf511faf7f"
+    }
   },
   {
     "id": "mgba",
@@ -77,7 +90,13 @@
     "systems": ["gb", "gbc", "gba"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "github",
+      "repo": "mgba-emu/mgba",
+      "asset": "^mGBA-[\\d.]+-win64\\.7z$",
+      "url": "https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-win64.7z"
+    }
   },
   {
     "id": "desmume",
@@ -111,7 +130,9 @@
     "args": {},
     "defaultArgs": "",
     "acquisition": {
-      "provider": "https",
+      "provider": "github",
+      "repo": "melonDS-emu/melonDS",
+      "asset": "^melonDS-[\\d.]+-windows-x86_64\\.zip$",
       "url": "https://github.com/melonDS-emu/melonDS/releases/download/1.1/melonDS-1.1-windows-x86_64.zip"
     }
   },
@@ -127,7 +148,12 @@
     "systems": ["gamecube", "wii"],
     "launchTemplate": "\"{executable}\" -b --exec=\"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://dl.dolphin-emu.org/releases/2512/dolphin-2512-x64.7z",
+      "sha256": "315a78b30fd9723923634efd426b0ad68d4ec61a4ad579847507f91e2fa12f91"
+    }
   },
   {
     "id": "pcsx2",
@@ -141,7 +167,13 @@
     "systems": ["ps2"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "github",
+      "repo": "PCSX2/pcsx2",
+      "asset": "^pcsx2-v[\\d.]+-windows-x64-Qt\\.7z$",
+      "url": "https://github.com/PCSX2/pcsx2/releases/download/v2.8.2/pcsx2-v2.8.2-windows-x64-Qt.7z"
+    }
   },
   {
     "id": "duckstation",
@@ -175,7 +207,9 @@
     "args": {},
     "defaultArgs": "",
     "acquisition": {
-      "provider": "https",
+      "provider": "github",
+      "repo": "hrydgard/ppsspp",
+      "asset": "^PPSSPP-v[\\d.]+-Windows-x64\\.zip$",
       "url": "https://github.com/hrydgard/ppsspp/releases/download/v1.20.4/PPSSPP-v1.20.4-Windows-x64.zip"
     }
   },
@@ -193,7 +227,9 @@
     "args": {},
     "defaultArgs": "",
     "acquisition": {
-      "provider": "https",
+      "provider": "github",
+      "repo": "flyinghead/flycast",
+      "asset": "^flycast-win64-[\\d.]+\\.zip$",
       "url": "https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-win64-2.7.zip"
     }
   },
@@ -209,13 +245,21 @@
     "systems": ["megadrive", "mastersystem"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "https",
+      "url": "https://www.carpeludum.com/wp-content/files/Fusion364.zip",
+      "sha256": "6365101eb417c5c2a5e6609573f354b7b7ea86632cbfd968676a1eec070e0ca3"
+    }
   },
   {
-    "id": "citra",
-    "name": "Citra",
-    "executable": "citra-qt.exe",
+    "id": "azahar",
+    "name": "Azahar",
+    "executable": "azahar.exe",
+    "altExecutables": ["citra-qt.exe"],
     "defaultPaths": [
+      "C:\\Program Files\\Azahar",
+      "C:\\Azahar",
       "C:\\Program Files\\Citra",
       "C:\\Program Files (x86)\\Citra",
       "C:\\Citra"
@@ -223,7 +267,13 @@
     "systems": ["3ds"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "github",
+      "repo": "azahar-emu/azahar",
+      "asset": "^azahar-windows-msvc-[\\d.]+\\.zip$",
+      "url": "https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar-windows-msvc-2126.2.zip"
+    }
   },
   {
     "id": "ryujinx",
@@ -236,7 +286,11 @@
     "systems": ["switch"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "manual",
+      "pageUrl": "https://ryujinx.app/"
+    }
   },
   {
     "id": "cemu",
@@ -251,7 +305,9 @@
     "args": {},
     "defaultArgs": "",
     "acquisition": {
-      "provider": "https",
+      "provider": "github",
+      "repo": "cemu-project/Cemu",
+      "asset": "^cemu-[\\d.]+-windows-x64\\.zip$",
       "url": "https://github.com/cemu-project/Cemu/releases/download/v2.6/cemu-2.6-windows-x64.zip"
     }
   },
@@ -266,6 +322,12 @@
     "systems": ["ps3"],
     "launchTemplate": "\"{executable}\" \"{romPath}\"",
     "args": {},
-    "defaultArgs": ""
+    "defaultArgs": "",
+    "acquisition": {
+      "provider": "github",
+      "repo": "RPCS3/rpcs3-binaries-win",
+      "asset": "^rpcs3-.+_win64_msvc\\.7z$",
+      "url": "https://github.com/RPCS3/rpcs3-binaries-win/releases/download/build-7b4de2f13dfe6da28129e2e5905dca79c87cfde8/rpcs3-v0.0.43-20281-7b4de2f1_win64_msvc.7z"
+    }
   }
 ]

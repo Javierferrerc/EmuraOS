@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("reset-custom-cover", systemId, romFileName),
   fetchCoverFromLibretro: (systemId: string, romFileName: string) =>
     ipcRenderer.invoke("fetch-cover-from-libretro", systemId, romFileName),
+  previewLibretroCover: (systemId: string, romFileName: string) =>
+    ipcRenderer.invoke("preview-libretro-cover", systemId, romFileName),
+  hasSteamGridDbKey: () => ipcRenderer.invoke("has-steamgriddb-key"),
+  verifySteamGridDbKey: (key: string) => ipcRenderer.invoke("verify-steamgriddb-key", key),
   listSteamGridDbCandidates: (systemId: string, romFileName: string) =>
     ipcRenderer.invoke("list-steamgriddb-candidates", systemId, romFileName),
   applySteamGridDbCandidate: (

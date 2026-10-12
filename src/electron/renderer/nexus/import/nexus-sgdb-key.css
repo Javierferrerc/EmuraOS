@@ -1,0 +1,48 @@
+/* nexus-sgdb-key.css — SteamGridDB key onboarding. Builds on the rg-* modal
+ * chrome from nexus-rom-guide.css (tokens, stage, head, foot, buttons); only
+ * the step list, the key field and the secondary button live here. */
+
+.rg-stage .sk-modal { width: min(600px, 96vw); }
+
+/* ── steps ───────────────────────────────────────────────── */
+.sk-steps { list-style: none; margin: 0; padding: 0; }
+.sk-steps li { display: flex; align-items: center; gap: 14px; padding: 13px 2px; }
+.sk-steps li + li { border-top: 1px solid var(--line); }
+.sk-num { width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%;
+  font-size: 12.5px; font-weight: 700; color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--accent) 55%, transparent); }
+.sk-step-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sk-step-txt b { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.sk-step-txt > span { font-size: 12.5px; color: var(--text-dim); }
+.sk-step-txt .mono { color: var(--text); }
+.rg-stage .sk-link { flex-shrink: 0; height: 34px; padding: 0 10px 0 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 700; color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent); transition: background .15s; }
+.rg-stage .sk-link:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+
+/* ── key field ───────────────────────────────────────────── */
+.sk-field { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.sk-field label { font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--text-faint); }
+.sk-input { display: flex; align-items: center; height: 48px; padding: 0 6px 0 16px; border-radius: 12px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line-2); transition: border-color .15s, box-shadow .15s; }
+.sk-input:focus-within { border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent); }
+.sk-input input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--text); font-size: 14.5px; letter-spacing: .02em; }
+.sk-input input::placeholder { color: var(--text-faint); font-family: 'Sora', system-ui, sans-serif; letter-spacing: 0; }
+.sk-input input:disabled { opacity: .7; }
+.rg-stage .sk-eye { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; color: var(--text-faint); transition: color .15s, background .15s; }
+.rg-stage .sk-eye:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.sk-field.err .sk-input { border-color: color-mix(in oklab, var(--bad) 70%, transparent); }
+.sk-field.ok .sk-input { border-color: color-mix(in oklab, var(--good) 70%, transparent); }
+.sk-msg { min-height: 17px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-faint); }
+.sk-field.err .sk-msg { color: color-mix(in oklab, var(--bad) 75%, var(--text-dim)); }
+.sk-field.ok .sk-msg { color: color-mix(in oklab, var(--good) 75%, var(--text-dim)); }
+
+/* ── foot: "Ahora no" + primary, both right-aligned ──────── */
+.sk-modal .rg-foot .rg-btn.primary { margin-left: 0; }
+.rg-stage .rg-btn.ghost { color: var(--text-dim); border: 1px solid var(--line-2); padding: 0 20px; }
+.rg-stage .rg-btn.ghost:hover { color: var(--text); background: rgba(255,255,255,.05); }
+.rg-stage .rg-btn:disabled { opacity: .5; cursor: default; filter: none; transform: none; }
+.sk-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+  animation: skSpin .8s linear infinite; }
+@keyframes skSpin { to { transform: rotate(360deg); } }

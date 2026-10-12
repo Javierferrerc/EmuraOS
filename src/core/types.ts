@@ -69,10 +69,13 @@ export interface AppConfig {
     | "synthwave"
     | "nexus";
   devMode?: boolean;
-  // One-shot flag: set to true after we auto-apply the Citra gamepad
+  // One-shot flag: set to true after we auto-apply the Azahar gamepad
   // profile on the first 3DS launch. Prevents re-patching qt-config.ini
   // on every subsequent launch and keeps the user in control if they
-  // later customize their bindings inside Citra.
+  // later customize their bindings inside Azahar.
+  azaharGamepadAutoConfigured?: boolean;
+  /** @deprecated Citra-era flag, superseded by azaharGamepadAutoConfigured.
+   *  Kept so configs written by older builds still validate. */
   citraGamepadAutoConfigured?: boolean;
   gameSortOrder?: "alpha-asc" | "alpha-desc" | "recent" | "added";
   systemSortOrder?: "default" | "recent" | "custom";
@@ -156,19 +159,35 @@ export interface EmulatorDefinition {
   args: Record<string, string>;
   defaultArgs: string;
   coreUrls?: Record<string, string>;
+  /** Other executable names that also count as this emulator (e.g. a legacy
+   *  `citra-qt.exe` install detected as Azahar). Checked after `executable`. */
+  altExecutables?: string[];
   acquisition?: EmulatorAcquisition;
 }
 
 /**
  * How the in-app Download button obtains this emulator. Absent → "gdrive"
- * (curated Drive build). "https" downloads the official release zip from an
- * allowlisted host and extracts it under {emulatorsPath}/{id}/. "flatpak"
- * installs from Flathub (Linux; carried for parity with Phase 28).
+ * (curated Drive build). "https" downloads a pinned official archive from an
+ * allowlisted host; "github" resolves the latest release asset through the
+ * GitHub API (falling back to `url`). Both extract under
+ * {emulatorsPath}/{id}/. "manual" has no direct download — the UI links to
+ * `pageUrl` and detection picks the install up. "flatpak" installs from
+ * Flathub (Linux; carried for parity with Phase 28).
  */
 export interface EmulatorAcquisition {
-  provider: "gdrive" | "https" | "flatpak";
-  /** https: pinned official release zip URL */
+  provider: "gdrive" | "https" | "github" | "manual" | "flatpak";
+  /** https: pinned official archive URL. github: fallback when the API fails. */
   url?: string;
+  /** Archive format; inferred from the URL extension when absent. */
+  archive?: "zip" | "7z";
+  /** https: expected SHA-256 (hex) of the archive; mismatch aborts install. */
+  sha256?: string;
+  /** github: "owner/repo" whose latest release is used. */
+  repo?: string;
+  /** github: regex (source) matching the Windows asset name. */
+  asset?: string;
+  /** manual: official download page opened in the browser. */
+  pageUrl?: string;
   /** flatpak: Flathub application id */
   appId?: string;
 }

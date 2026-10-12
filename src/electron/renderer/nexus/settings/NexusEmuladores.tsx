@@ -10,7 +10,7 @@
  * keeping all the real emulator-config plumbing.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SettingsContext } from "../../schemas/settings-schema-types";
 import { systemDisplayName } from "../nexusModel";
 import { SetIcon } from "./SetIcon";
@@ -20,12 +20,14 @@ import { ConfiguracionTab } from "../../components/settings/sections/emuladores/
 import { MandosTab } from "../../components/settings/sections/emuladores/tabs/MandosTab";
 import { DescargaTab } from "../../components/settings/sections/emuladores/tabs/DescargaTab";
 import { AvanzadoTab } from "../../components/settings/sections/emuladores/tabs/AvanzadoTab";
+import { QuickDownloadButton } from "./QuickDownloadButton";
 
-type Status = "installed" | "available" | "unavailable";
+type Status = "installed" | "available" | "manual" | "unavailable";
 
 const STATUS_LABEL: Record<Status, string> = {
   installed: "Instalado",
   available: "Descargable",
+  manual: "Instalación manual",
   unavailable: "No disponible",
 };
 
@@ -50,9 +52,21 @@ function systemsLabel(systems: string[]): string {
 export function NexusEmuladores({ ctx }: { ctx: SettingsContext }) {
   const [selected, setSelected] = useState<string | null>(null);
 
+  // Load the downloadable listing on first mount (like EmuladoresList) —
+  // otherwise every non-installed card reads "No disponible" until the user
+  // hits "Detectar emuladores".
+  useEffect(() => {
+    if (Object.keys(ctx.driveEmulators).length === 0 && !ctx.isLoadingDrive) {
+      ctx.refreshDriveEmulators(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const statusOf = (id: string): Status => {
     if (ctx.lastDetection?.detected.some((d) => d.id === id)) return "installed";
     if (ctx.driveEmulators[id.toLowerCase()]) return "available";
+    const def = ctx.emulatorDefs.find((d) => d.id === id);
+    if (def?.acquisition?.provider === "manual") return "manual";
     return "unavailable";
   };
 
@@ -94,12 +108,26 @@ export function NexusEmuladores({ ctx }: { ctx: SettingsContext }) {
         <div className="emu-grid">
           {sortedDefs.map((def) => {
             const status = statusOf(def.id);
+            const disabled = status === "unavailable";
+            const open = () => {
+              if (!disabled) setSelected(def.id);
+            };
+            // A div (not a <button>) so the quick-download button can live
+            // inside it — nested buttons are invalid HTML.
             return (
-              <button
+              <div
                 key={def.id}
-                className="emu-card"
-                disabled={status === "unavailable"}
-                onClick={() => setSelected(def.id)}
+                className={"emu-card" + (disabled ? " is-disabled" : "")}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                aria-disabled={disabled}
+                onClick={open}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    open();
+                  }
+                }}
               >
                 <div className="emu-card-top">
                   <div className="emu-logo">
@@ -109,11 +137,16 @@ export function NexusEmuladores({ ctx }: { ctx: SettingsContext }) {
                     <div className="emu-name">{def.name}</div>
                     <div className="emu-sys">{systemsLabel(def.systems)}</div>
                   </div>
+                  {status === "available" && (
+                    <div className="emu-card-qdl">
+                      <QuickDownloadButton ctx={ctx} emulatorId={def.id} />
+                    </div>
+                  )}
                 </div>
                 <span className={"emu-status " + status}>
                   <span className="dot" /> {STATUS_LABEL[status]}
                 </span>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -165,6 +198,7 @@ function EmuDetail({
           <h2>{def.name}</h2>
           <div className="emu-sys">{systemsLabel(def.systems)}</div>
         </div>
+        {status === "available" && <QuickDownloadButton ctx={ctx} emulatorId={def.id} size="lg" />}
         <div style={{ flex: 1 }} />
         <span className={"emu-status " + status}>
           <span className="dot" /> {STATUS_LABEL[status]}

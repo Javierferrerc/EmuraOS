@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resolve } from "node:path";
 import { mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
-import { SteamGridDb } from "../../src/core/steamgriddb.js";
+import { SteamGridDb, verifySteamGridDbKey } from "../../src/core/steamgriddb.js";
 import { MetadataCache } from "../../src/core/metadata-cache.js";
 import type { DiscoveredRom } from "../../src/core/types.js";
 
@@ -483,5 +483,32 @@ describe("SteamGridDb", () => {
     );
     // 1 search + 1 grids (both cached for second ROM).
     expect(apiCalls.length).toBe(2);
+  });
+});
+
+describe("verifySteamGridDbKey", () => {
+  const respond = (status: number) =>
+    (async () => ({ ok: status >= 200 && status < 300, status })) as unknown as typeof fetch;
+
+  it("reports a key accepted by the API as valid and sends it as a bearer token", async () => {
+    const spy = vi.fn(async () => ({ ok: true, status: 200 }));
+    expect(await verifySteamGridDbKey("abc123", spy as unknown as typeof fetch)).toBe("valid");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("/search/autocomplete/"), {
+      headers: { Authorization: "Bearer abc123" },
+    });
+  });
+
+  it("treats 401/403 as an invalid key", async () => {
+    expect(await verifySteamGridDbKey("bad", respond(401))).toBe("invalid");
+    expect(await verifySteamGridDbKey("bad", respond(403))).toBe("invalid");
+  });
+
+  it("never blames the key for outages or network errors", async () => {
+    expect(await verifySteamGridDbKey("k", respond(500))).toBe("network");
+    expect(await verifySteamGridDbKey("k", respond(429))).toBe("network");
+    const boom = (async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    expect(await verifySteamGridDbKey("k", boom)).toBe("network");
   });
 });

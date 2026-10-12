@@ -13,7 +13,7 @@ import duckstation from "../../../../assets/emulators/duckstation.svg";
 import ppsspp from "../../../../assets/emulators/ppsspp.svg";
 import flycast from "../../../../assets/emulators/flycast.svg";
 import kegaFusion from "../../../../assets/emulators/kega-fusion.svg";
-import citra from "../../../../assets/emulators/citra.svg";
+import azahar from "../../../../assets/emulators/azahar.svg";
 import ryujinx from "../../../../assets/emulators/ryujinx.svg";
 import cemu from "../../../../assets/emulators/cemu.svg";
 import rpcs3 from "../../../../assets/emulators/rpcs3.svg";
@@ -31,7 +31,7 @@ export const EMULATOR_ICONS: Record<string, string> = {
   ppsspp,
   flycast,
   "kega-fusion": kegaFusion,
-  citra,
+  azahar,
   ryujinx,
   cemu,
   rpcs3,
