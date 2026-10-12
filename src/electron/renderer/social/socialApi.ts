@@ -639,6 +639,55 @@ export async function uploadCoverDataUrl(key: string, dataUrl: string): Promise<
   return url;
 }
 
+/** Cloud cover URL already uploaded for a game key, or null. */
+export function getCachedCoverUrl(key: string): string | null {
+  return loadCoverCache()[key] ?? null;
+}
+
+// ── Library sync (private per-account doc, table `user_library`) ──────────
+// The doc itself is built/merged in the main process (core/library-sync.ts);
+// these only move it. `rev` gives optimistic concurrency: an update only lands
+// if nobody else wrote since we read, otherwise the caller re-reads + re-merges.
+
+export interface CloudLibraryRow {
+  data: unknown;
+  rev: number;
+}
+
+/** The signed-in account's synced library doc, or null if it has none yet. */
+export async function fetchCloudLibrary(): Promise<CloudLibraryRow | null> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  const { data, error } = await db()
+    .from("user_library")
+    .select("data, rev")
+    .eq("user_id", u.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { data: data.data, rev: Number(data.rev) || 0 } : null;
+}
+
+/** Write the doc if the row is still at `prevRev` (null = no row yet).
+ *  Returns false on a concurrent write so the caller can retry. */
+export async function pushCloudLibrary(doc: unknown, prevRev: number | null): Promise<boolean> {
+  const { data: u } = await db().auth.getUser();
+  if (!u.user) throw new Error("Not signed in.");
+  if (prevRev === null) {
+    const { error } = await db().from("user_library").insert({ user_id: u.user.id, data: doc, rev: 1 });
+    if (!error) return true;
+    if (error.code === "23505") return false; // another device created it first
+    throw error;
+  }
+  const { data, error } = await db()
+    .from("user_library")
+    .update({ data: doc, rev: prevRev + 1 })
+    .eq("user_id", u.user.id)
+    .eq("rev", prevRev)
+    .select("rev");
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** Best-effort delete of a Storage object from its public URL. No-op for
  *  non-Storage URLs (e.g. SteamGridDB) so callers can pass any image value. */
 export async function deleteMediaByUrl(url: string | null | undefined): Promise<void> {

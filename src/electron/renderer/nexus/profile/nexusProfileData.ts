@@ -95,6 +95,8 @@ export interface NexusProfileEdit {
   name: string;
   status: string;
   pinned: string[]; // game keys "systemId:fileName"
+  /** When `pinned` was last changed (ISO) — last-writer-wins in the cloud sync. */
+  pinnedAt?: string;
   /** Chosen banner image URL (SteamGridDB hero/grid), or null to use the
    * pinned game's cover as the banner. */
   bannerUrl?: string | null;
@@ -128,6 +130,7 @@ export function loadProfileEdit(fallbackName: string, profileId?: string | null)
         name: parsed.name || fallbackName,
         status: parsed.status ?? "",
         pinned: Array.isArray(parsed.pinned) ? parsed.pinned.slice(0, MAX_PINNED) : [],
+        pinnedAt: typeof parsed.pinnedAt === "string" ? parsed.pinnedAt : "",
         bannerUrl: typeof parsed.bannerUrl === "string" ? parsed.bannerUrl : null,
         avatarUrl: typeof parsed.avatarUrl === "string" ? parsed.avatarUrl : null,
       };
@@ -146,6 +149,7 @@ export function saveProfileEdit(edit: NexusProfileEdit, profileId?: string | nul
         name: edit.name,
         status: edit.status,
         pinned: edit.pinned,
+        pinnedAt: edit.pinnedAt ?? "",
         bannerUrl: edit.bannerUrl ?? null,
         avatarUrl: edit.avatarUrl ?? null,
       })

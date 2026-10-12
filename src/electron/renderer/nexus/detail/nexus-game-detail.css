@@ -302,6 +302,17 @@
   transform: translateY(-2px);
   filter: brightness(1.08);
 }
+/* ROM not on this machine: neutral (not tinted) button that adds it. */
+.nx-gd .gd-play.missing {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text, #e8ecf4);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+}
+.nx-gd .gd-play.missing:disabled {
+  opacity: 0.7;
+  transform: none;
+}
 .nx-gd .gd-play .gd-play-sub {
   font-size: 11px;
   font-weight: 600;

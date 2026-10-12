@@ -8,6 +8,8 @@
  */
 
 import type {
+  CloudLibraryCache,
+  Collection,
   DiscoveredRom,
   GameMetadata,
   PlayRecord,
@@ -43,6 +45,11 @@ export interface NexusGame {
   revision: string;
   /** Disc number for multi-disc releases, 0 when not applicable. */
   disc: number;
+  /** Known from the account's cloud library (another machine) but the ROM
+   *  isn't on this one — shown dimmed and can't be launched until added. */
+  missing?: boolean;
+  /** Shareable cover URL from the cloud catalog (used when there's no local cover). */
+  coverUrl?: string | null;
 }
 
 const SYSTEM_DISPLAY: Record<string, string> = {
@@ -148,6 +155,79 @@ export function buildNexusGames(opts: BuildOpts): NexusGame[] {
     }
   }
   return games;
+}
+
+/** Normalized title used to match the same game across differently named
+ *  files ("Zelda (USA).sfc" vs "zelda.zip"). */
+export function titleMatchKey(systemId: string, title: string): string {
+  return `${systemId}|${title.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, "")}`;
+}
+
+interface GhostOpts {
+  cloud: CloudLibraryCache | null;
+  localGames: NexusGame[];
+  playHistory: Record<string, PlayRecord>;
+  favorites: Set<string>;
+  collections: Collection[];
+  pinned: string[];
+  customColors?: Record<string, string>;
+}
+
+/**
+ * Games the account has on OTHER machines (or played / favourited / pinned
+ * there) whose ROM isn't on this one. Built from the cloud-synced catalog so the
+ * library, profile and ficha can show them — dimmed, with "not on this
+ * machine" instead of "Jugar". A game already here under another file name
+ * (same system + title) is not duplicated.
+ */
+export function buildGhostGames(opts: GhostOpts): NexusGame[] {
+  const { cloud, localGames, playHistory, favorites, collections, pinned, customColors } = opts;
+  const localKeys = new Set(localGames.map((g) => g.key));
+  const localTitles = new Set(localGames.map((g) => titleMatchKey(g.systemId, g.title)));
+  const keys = new Set<string>(cloud?.remoteLib ?? []);
+  for (const [k, r] of Object.entries(playHistory)) if ((r.playCount ?? 0) > 0) keys.add(k);
+  favorites.forEach((k) => keys.add(k));
+  for (const c of collections) if (c.kind !== "smart") c.roms.forEach((k) => keys.add(k));
+  pinned.forEach((k) => keys.add(k));
+
+  const ghosts: NexusGame[] = [];
+  for (const key of keys) {
+    if (localKeys.has(key)) continue;
+    const idx = key.indexOf(":");
+    if (idx <= 0) continue;
+    const systemId = key.slice(0, idx);
+    const fileName = key.slice(idx + 1);
+    const attrs = parseRomAttributes(fileName);
+    const entry = cloud?.games[key];
+    const title = entry?.t || attrs.cleanTitle;
+    if (localTitles.has(titleMatchKey(systemId, title))) continue;
+    const systemName = systemDisplayName(systemId, entry?.s);
+    ghosts.push({
+      rom: { systemId, systemName, fileName, filePath: "", sizeBytes: 0 },
+      key,
+      title,
+      genre: "",
+      year: "",
+      rating: 0,
+      developer: "",
+      players: "",
+      blurb: "",
+      coverPath: null,
+      coverUrl: entry?.c ?? null,
+      systemId,
+      systemName,
+      tint: tintForSystem(systemId, customColors),
+      hue: hueFromKey(key),
+      addedTs: 0,
+      play: playHistory[key] ?? null,
+      region: attrs.region ?? "",
+      languages: attrs.languages ?? [],
+      revision: attrs.revision ?? "",
+      disc: attrs.disc ?? 0,
+      missing: true,
+    });
+  }
+  return ghosts;
 }
 
 /** Filter games to a platform selection. `"all"` returns everything; a system

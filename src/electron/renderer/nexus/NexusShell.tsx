@@ -13,11 +13,17 @@ import type { FocusAction } from "../hooks/useFocusManager";
 import type { SystemDefinition } from "../../../core/types";
 import {
   buildNexusGames,
+  buildGhostGames,
   buildRows,
   pickHero,
   pickContinue,
+  titleMatchKey,
   type NexusGame,
 } from "./nexusModel";
+import { useLibrarySync } from "./useLibrarySync";
+import { loadProfileEdit, PROFILE_UPDATED_EVENT } from "./profile/nexusProfileData";
+import { loadActiveId } from "./profileselect/nexusProfileSelectData";
+import { PlayIcon, CloseIcon } from "./NexusIcons";
 import {
   buildFamilies,
   selectableOrder,
@@ -133,8 +139,9 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
   // image shows through — matching the main theme.
   const hasBg = !!config?.backgroundImage;
 
-  // All games, enriched. Rebuilt when the underlying library data changes.
-  const allGames = useMemo(
+  // Games whose ROM is on this machine, enriched. Rebuilt when the underlying
+  // library data changes.
+  const localGames = useMemo(
     () =>
       buildNexusGames({
         scanResult,
@@ -147,12 +154,124 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
     [scanResult, getMetadataForRom, romAddedDates, playHistory, isRomHidden, customColors]
   );
 
+  // Cloud sync of the account's activity (playtime, favourites, collections,
+  // pinned, owned games) — only when the active profile is the signed-in account.
+  useLibrarySync(localGames, !!scanResult);
+
+  // Pinned showcase keys (profile storage) — they can reference games that only
+  // exist on another machine, so they feed the "ghost" set below.
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>(
+    () => loadProfileEdit("Jugador", loadActiveId()).pinned
+  );
+  useEffect(() => {
+    const reload = () => setPinnedKeys(loadProfileEdit("Jugador", loadActiveId()).pinned);
+    window.addEventListener(PROFILE_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, reload);
+  }, []);
+
+  // Games the account has on other machines (or played / favourited there) but
+  // whose ROM isn't here: shown dimmed, "No está en este equipo" in the ficha.
+  const ghostGames = useMemo(
+    () =>
+      buildGhostGames({
+        cloud: app.cloudLibrary,
+        localGames,
+        playHistory,
+        favorites: app.favorites,
+        collections: app.collections,
+        pinned: pinnedKeys,
+        customColors,
+      }),
+    [app.cloudLibrary, localGames, playHistory, app.favorites, app.collections, pinnedKeys, customColors]
+  );
+
+  const allGames = useMemo(() => [...localGames, ...ghostGames], [localGames, ghostGames]);
+
+  // ── A missing game shows up on this machine ──────────────────────
+  // (added from the ficha, the importer, or dropped into the ROM folder and
+  // picked up by a rescan) → offer to play it right away.
+  const [arrival, setArrival] = useState<NexusGame | null>(null);
+  const prevGhostsRef = useRef<NexusGame[] | null>(null);
+  useEffect(() => {
+    const prev = prevGhostsRef.current;
+    prevGhostsRef.current = ghostGames;
+    if (!prev || prev.length === 0) return;
+    const stillMissing = new Set(ghostGames.map((g) => g.key));
+    const byKey = new Map(localGames.map((g) => [g.key, g]));
+    const byTitle = new Map(localGames.map((g) => [titleMatchKey(g.systemId, g.title), g]));
+    for (const ghost of prev) {
+      if (stillMissing.has(ghost.key)) continue;
+      const here = byKey.get(ghost.key) ?? byTitle.get(titleMatchKey(ghost.systemId, ghost.title));
+      if (here) {
+        setArrival(here);
+        break;
+      }
+    }
+  }, [ghostGames, localGames]);
+  useEffect(() => {
+    if (!arrival) return;
+    const t = window.setTimeout(() => setArrival(null), 10000);
+    return () => window.clearTimeout(t);
+  }, [arrival]);
+
   // Keep an open ficha in sync with the (re)built game list — e.g. after a
   // metadata scrape refreshes género/desarrolladora/año/jugadores, the detail
   // would otherwise keep showing the stale game object captured when it opened.
+  // A missing game that was just added under another file name is followed to
+  // its new local entry (same system + title).
   useEffect(() => {
-    setDetailGame((cur) => (cur ? allGames.find((g) => g.key === cur.key) ?? cur : cur));
-  }, [allGames]);
+    setDetailGame((cur) => {
+      if (!cur) return cur;
+      const same = allGames.find((g) => g.key === cur.key);
+      if (same) return same;
+      if (cur.missing) {
+        const tk = titleMatchKey(cur.systemId, cur.title);
+        return localGames.find((g) => titleMatchKey(g.systemId, g.title) === tk) ?? cur;
+      }
+      return cur;
+    });
+  }, [allGames, localGames]);
+
+  // "Añadir ROM" for a game that isn't on this machine: pick the file (filtered
+  // to its system), copy it into the library, rescan, and link it to the cloud
+  // entry if the file name differs so its play time / favourites follow it.
+  const [addingRom, setAddingRom] = useState(false);
+  const addMissingRom = useCallback(
+    async (game: NexusGame) => {
+      const paths = await window.electronAPI.pickRomFiles(game.systemId);
+      const src = paths?.[0];
+      if (!src) return;
+      setAddingRom(true);
+      try {
+        const [res] = await window.electronAPI.addRoms([{ filePath: src, systemId: game.systemId }]);
+        if (!res?.success) {
+          console.warn("[add-missing] copy failed:", res?.error);
+          return;
+        }
+        const newKey = `${game.systemId}:${res.fileName}`;
+        if (newKey !== game.key) {
+          await window.electronAPI.linkLibraryKey(game.key, newKey);
+          await app.reloadUserLibrary();
+        }
+        await app.refreshScan();
+      } catch (err) {
+        console.warn("[add-missing] failed:", err);
+      } finally {
+        setAddingRom(false);
+      }
+    },
+    [app]
+  );
+
+  // While a missing game's ficha is open, coming back to the window (e.g. after
+  // copying the ROM into the folder by hand) rescans so it lights up by itself.
+  const detailMissing = !!detailGame?.missing;
+  useEffect(() => {
+    if (!detailMissing) return;
+    const onFocus = () => void app.refreshScan();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [detailMissing, app]);
 
   // ── Import: dedup keys + watched folders + real add ──────────────
   const existingKeys = useMemo(() => {
@@ -318,14 +437,19 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
   // Systems present in the library, grouped by manufacturer into families.
   const families = useMemo(() => {
     if (!scanResult) return buildFamilies([], customColors);
-    const present: SystemDefinition[] = [];
+    const ids = new Set<string>();
     for (const sys of scanResult.systems) {
-      if (sys.roms.length === 0) continue;
-      const def = systems.find((s) => s.id === sys.systemId);
+      if (sys.roms.length > 0) ids.add(sys.systemId);
+    }
+    // Systems that only have games on another machine still get a tab.
+    for (const g of ghostGames) ids.add(g.systemId);
+    const present: SystemDefinition[] = [];
+    for (const id of ids) {
+      const def = systems.find((s) => s.id === id);
       if (def) present.push(def);
     }
     return buildFamilies(present, customColors);
-  }, [scanResult, systems, customColors]);
+  }, [scanResult, systems, customColors, ghostGames]);
 
   // Flat ordered selectable ids (all → fam → its systems → …) for kbd/pad nav.
   const selectable = useMemo(() => selectableOrder(families), [families]);
@@ -374,6 +498,11 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
   }, []);
 
   const handleLaunch = useCallback((game: NexusGame) => {
+    // Not on this machine → open its ficha, which offers to add the ROM.
+    if (game.missing) {
+      setDetailGame(game);
+      return;
+    }
     // Show the "Ignición" animation FIRST; the emulator is only launched when
     // the animation finishes (or is skipped). This guarantees the sequence
     // always plays in full — the game window can't pop up over it mid-way, even
@@ -592,9 +721,13 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
             game={detailGame}
             isFavorite={checkFavorite(detailGame)}
             onBack={() => setDetailGame(null)}
-            onPlay={() => handleLaunch(detailGame)}
+            onPlay={() =>
+              detailGame.missing ? void addMissingRom(detailGame) : handleLaunch(detailGame)
+            }
             onToggleFavorite={() => handleToggleFavorite(detailGame)}
             onChangeEmulator={onOpenSettings}
+            onAddRom={() => void addMissingRom(detailGame)}
+            addingRom={addingRom}
             focusHandleRef={detailFocusRef}
           />
         )}
@@ -635,6 +768,28 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
             }}
             onClose={() => setSessionSummary(null)}
           />
+        )}
+
+        {arrival && !launchAnim && (
+          <div className="nx-arrival" role="status">
+            <span>
+              <b>{arrival.title}</b> ya está en este equipo
+            </span>
+            <button
+              className="nx-arrival-play"
+              onClick={() => {
+                const g = arrival;
+                setArrival(null);
+                setDetailGame(null);
+                handleLaunch(g);
+              }}
+            >
+              <PlayIcon size={15} /> Jugar
+            </button>
+            <button className="nx-arrival-close" onClick={() => setArrival(null)} aria-label="Cerrar">
+              <CloseIcon size={16} />
+            </button>
+          </div>
         )}
 
         {dragImport && !importOpen && (

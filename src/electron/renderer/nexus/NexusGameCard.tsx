@@ -67,17 +67,20 @@ export const NexusGameCard = forwardRef<HTMLDivElement, NexusGameCardProps>(
     return (
       <div
         ref={ref}
-        className={`nx-card${focused ? " focused" : ""}`}
+        className={`nx-card${focused ? " focused" : ""}${game.missing ? " missing" : ""}`}
         onMouseEnter={onHover}
         onClick={handleClick}
         onDoubleClick={handleDouble}
-        title={`${game.title}\n${game.systemName}`}
+        title={`${game.title}\n${game.systemName}${game.missing ? "\nNo está en este equipo" : ""}`}
       >
         <div className="nx-card-art">
           <NexusCover game={game} showMeta titleSize={16} />
           <div className="nx-card-ring" />
-          <span className="nx-card-chip" title="En tu biblioteca">
-            <span className="nx-card-chip-dot installed" />
+          <span
+            className="nx-card-chip"
+            title={game.missing ? "No está en este equipo" : "En tu biblioteca"}
+          >
+            <span className={`nx-card-chip-dot ${game.missing ? "missing" : "installed"}`} />
           </span>
           <button
             className={`nx-card-fav${isFavorite ? " on" : ""}`}

@@ -50,7 +50,9 @@ export function NexusCover({ game, showMeta = false, titleSize = 22, rounded = 1
     let cancelled = false;
     setFailed(false);
     if (!game.coverPath) {
-      setDataUrl(null);
+      // A game from the cloud library (ROM not on this machine) may carry a
+      // shareable cover URL uploaded by the device that has it.
+      setDataUrl(game.coverUrl ?? null);
       return;
     }
     window.electronAPI
@@ -65,7 +67,7 @@ export function NexusCover({ game, showMeta = false, titleSize = 22, rounded = 1
     return () => {
       cancelled = true;
     };
-  }, [game.coverPath, game.rom.systemId, game.rom.fileName, coverVersion]);
+  }, [game.coverPath, game.coverUrl, game.rom.systemId, game.rom.fileName, coverVersion]);
 
   const hasReal = dataUrl && !failed;
 

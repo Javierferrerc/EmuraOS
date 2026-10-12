@@ -435,6 +435,72 @@ export interface UserLibraryFile {
    *  Missing entry means "use defaults"; the field itself is optional so
    *  older files round-trip without touching the structure. */
   gameOverrides?: Record<string, GameOverride>;
+
+  // ── Cloud sync bookkeeping (see library-sync.ts). All optional so files
+  //    written before sync existed round-trip unchanged. ──
+  /** THIS device's own play contributions. `playHistory` is the merged view
+   *  (own + every other device); this slice is what gets uploaded. Absent
+   *  until the first sync, when it's seeded from `playHistory`. */
+  ownPlay?: Record<string, PlayRecord>;
+  /** Last favourite toggle per key, for last-writer-wins across devices. */
+  favoriteTimes?: Record<string, { on: boolean; at: string }>;
+  /** Deleted collection ids → deletion time (so a sync can't resurrect them). */
+  collectionTombstones?: Record<string, string>;
+  /** Per-game play resets → reset time; drops older contributions everywhere. */
+  playResets?: Record<string, string>;
+  /** Machine-local translation: key used in the cloud (another device's file
+   *  name) → key of the matching ROM on this machine. */
+  keyAliases?: Record<string, string>;
+  /** Cached cloud view for offline use: other devices' library keys + titles. */
+  cloud?: CloudLibraryCache;
+}
+
+// ── Cloud library sync (Supabase `user_library.data`) ─────────────────
+
+/** Display info for a game, so a device without the ROM can still render it. */
+export interface CloudGameEntry {
+  /** Title. */
+  t: string;
+  /** System display name. */
+  s?: string;
+  /** Shareable cover URL (Supabase Storage), when one was uploaded. */
+  c?: string;
+}
+
+/** A device's own slice of the cloud doc. Only that device ever writes it. */
+export interface CloudDeviceSlice {
+  name: string;
+  updatedAt: string;
+  /** key → { c: playCount, t: seconds, l: lastPlayed ISO } */
+  play: Record<string, { c: number; t: number; l: string }>;
+  /** Keys of the ROMs present on that device. */
+  lib: string[];
+}
+
+export interface CloudPinned {
+  keys: string[];
+  at: string;
+}
+
+/** The whole synced document (one row per account). */
+export interface CloudLibraryDoc {
+  v: 1;
+  devices: Record<string, CloudDeviceSlice>;
+  fav: Record<string, { on: boolean; at: string }>;
+  collections: Collection[];
+  colDel: Record<string, string>;
+  resets: Record<string, string>;
+  pinned: CloudPinned | null;
+  games: Record<string, CloudGameEntry>;
+}
+
+/** What the renderer needs offline to show games that live on other devices. */
+export interface CloudLibraryCache {
+  /** Keys (already translated to local keys) present on OTHER devices —
+   *  may include games this machine also has. */
+  remoteLib: string[];
+  games: Record<string, CloudGameEntry>;
+  syncedAt: string;
 }
 
 // ── Phase 22 — Per-game control ────────────────────────────────────

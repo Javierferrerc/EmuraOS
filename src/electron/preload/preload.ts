@@ -84,6 +84,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getUserLibrary: () => ipcRenderer.invoke("get-user-library"),
   setActiveProfile: (id: string | null) =>
     ipcRenderer.invoke("library:set-active-profile", id),
+  syncLibraryMerge: (payload: unknown) => ipcRenderer.invoke("library:sync-merge", payload),
+  linkLibraryKey: (cloudKey: string, localKey: string) =>
+    ipcRenderer.invoke("library:link-key", cloudKey, localKey),
   toggleFavorite: (systemId: string, fileName: string) =>
     ipcRenderer.invoke("toggle-favorite", systemId, fileName),
   getCollections: () => ipcRenderer.invoke("get-collections"),
