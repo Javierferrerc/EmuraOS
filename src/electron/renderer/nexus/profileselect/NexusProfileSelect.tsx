@@ -267,12 +267,16 @@ function AddUserModal({
       setErr(null);
       let accountId = newProfileId();
       let accountName = name.trim();
+      let cloudAvatar: string | undefined;
       try {
         await signInWithIdentifier(email.trim(), pass);
         const prof = await getMyProfile();
         if (prof) {
           accountId = prof.id;
           if (!accountName) accountName = prof.display_name?.trim() || prof.username?.trim() || "";
+          // The account's cloud avatar, so a first login on a new device shows
+          // the photo right away instead of the orb.
+          cloudAvatar = cspSafeAvatar(prof.avatar_url);
         }
       } catch (e) {
         setBusy(false);
@@ -293,6 +297,7 @@ function AddUserModal({
         account: true,
       };
       if (avaMode === "image" && image) p.avatar = image;
+      else if (cloudAvatar) p.avatar = cloudAvatar;
       onCreate(p);
       return;
     }

@@ -46,7 +46,7 @@ const EMULATORS = [
   { id: "pcsx2", name: "PCSX2", ini: "P2", sys: "PlayStation 2", status: "available", path: null, cores: "—" },
   { id: "ppsspp", name: "PPSSPP", ini: "PP", sys: "PSP", status: "installed", path: "/home/alex/Games/Emulators/PPSSPP", cores: "Listo" },
   { id: "cemu", name: "Cemu", ini: "CE", sys: "Wii U", status: "available", path: null, cores: "Faltan claves", needKeys: true },
-  { id: "citra", name: "Citra", ini: "CI", sys: "Nintendo 3DS", status: "unavailable", path: null, cores: "No disponible" },
+  { id: "azahar", name: "Azahar", ini: "AZ", sys: "Nintendo 3DS", status: "unavailable", path: null, cores: "No disponible" },
   { id: "ryujinx", name: "Ryujinx", ini: "RY", sys: "Nintendo Switch", status: "available", path: null, cores: "—" },
   { id: "melonds", name: "melonDS", ini: "mD", sys: "Nintendo DS", status: "installed", path: "/home/alex/Games/Emulators/melonDS", cores: "Listo" },
 ];

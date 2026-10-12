@@ -118,7 +118,9 @@ export interface ImportItem {
   include: boolean;
   /** Live-fetched (in-memory) preview — applied on confirm, discarded on cancel. */
   coverUrl?: string; // thumbnail for display
-  coverFull?: string; // full-res URL downloaded on confirm
+  coverFull?: string; // full-res URL downloaded on confirm (SteamGridDB)
+  /** Where the previewed cover came from — decides how confirm persists it. */
+  coverSource?: "sgdb" | "libretro";
   meta?: PreviewMeta;
   enriching?: boolean;
 }
@@ -387,14 +389,25 @@ export function NexusImportGames({
         }
       })();
 
-      // Covers — SteamGridDB search per title, bounded concurrency.
+      // Covers — SteamGridDB search per title, bounded concurrency. Without an
+      // SGDB key (or with no match) fall back to libretro-thumbnails, which
+      // needs no credentials.
       if (matchCovers) {
         await runPool(targets, 4, async (t) => {
           try {
             const res = await window.electronAPI.searchSteamGridDbImages(t.title, "600x900");
             if (res.success && res.candidates.length > 0) {
               const c = res.candidates[0];
-              patchItem(t.id, { coverUrl: c.thumbnailUrl, coverFull: c.fullUrl });
+              patchItem(t.id, { coverUrl: c.thumbnailUrl, coverFull: c.fullUrl, coverSource: "sgdb" });
+              return;
+            }
+          } catch {
+            /* try libretro */
+          }
+          try {
+            const lr = await window.electronAPI.previewLibretroCover(t.system as string, t.file);
+            if (lr.success && lr.dataUrl) {
+              patchItem(t.id, { coverUrl: lr.dataUrl, coverSource: "libretro" });
             }
           } catch {
             /* no cover */

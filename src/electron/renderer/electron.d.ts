@@ -76,6 +76,15 @@ export interface ElectronAPI {
     systemId: string,
     romFileName: string
   ): Promise<{ success: boolean; coverPath?: string; error?: string }>;
+  /** Import preview: libretro boxart as a small data URL, nothing persisted. */
+  previewLibretroCover(
+    systemId: string,
+    romFileName: string
+  ): Promise<{ success: boolean; dataUrl?: string; error?: string }>;
+  /** True when a SteamGridDB key is configured (config or .env). */
+  hasSteamGridDbKey(): Promise<boolean>;
+  /** Live check of a key before saving it. */
+  verifySteamGridDbKey(key: string): Promise<"valid" | "invalid" | "network">;
   listSteamGridDbCandidates(
     systemId: string,
     romFileName: string

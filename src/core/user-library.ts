@@ -11,6 +11,7 @@ import type {
   DolphinGameConfig,
   RetroArchGameConfig,
 } from "./types.js";
+import { canonicalEmulatorId } from "./emulator-mapper.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -64,7 +65,15 @@ export class UserLibrary {
 
   private load(): UserLibraryFile {
     if (existsSync(this.filePath)) {
-      return JSON.parse(readFileSync(this.filePath, "utf-8"));
+      const data: UserLibraryFile = JSON.parse(readFileSync(this.filePath, "utf-8"));
+      // Overrides saved under a renamed emulator id (citra → azahar) keep
+      // pointing at the replacement; rewritten on the next save.
+      for (const override of Object.values(data.gameOverrides ?? {})) {
+        if (override.emulatorId) {
+          override.emulatorId = canonicalEmulatorId(override.emulatorId);
+        }
+      }
+      return data;
     }
     return emptyLibrary();
   }

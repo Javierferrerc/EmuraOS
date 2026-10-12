@@ -5,6 +5,21 @@ import type { EmulatorDefinition, ResolvedEmulator } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** Emulator ids that were renamed. Per-game overrides persisted with the old
+ *  id keep resolving to the replacement. */
+const LEGACY_EMULATOR_IDS: Record<string, string> = {
+  citra: "azahar",
+};
+
+export function canonicalEmulatorId(id: string): string {
+  return LEGACY_EMULATOR_IDS[id] ?? id;
+}
+
+/** Executable names that identify an emulator, primary first. */
+export function executableNames(emu: EmulatorDefinition): string[] {
+  return [emu.executable, ...(emu.altExecutables ?? [])];
+}
+
 export class EmulatorMapper {
   private emulators: EmulatorDefinition[] = [];
 
@@ -21,7 +36,8 @@ export class EmulatorMapper {
   }
 
   getById(id: string): EmulatorDefinition | undefined {
-    return this.emulators.find((e) => e.id === id);
+    const canonical = canonicalEmulatorId(id);
+    return this.emulators.find((e) => e.id === canonical);
   }
 
   getForSystem(systemId: string): EmulatorDefinition[] {
@@ -68,8 +84,9 @@ export class EmulatorMapper {
   }
 
   resolveById(emulatorId: string, systemId: string, emulatorsPath?: string): ResolvedEmulator | null {
+    const canonical = canonicalEmulatorId(emulatorId);
     const emu = this.emulators.find(
-      (e) => e.id === emulatorId && e.systems.includes(systemId)
+      (e) => e.id === canonical && e.systems.includes(systemId)
     );
     if (!emu) return null;
     return this.findExecutable(emu, systemId, emulatorsPath);
@@ -80,25 +97,27 @@ export class EmulatorMapper {
     systemId: string,
     emulatorsPath?: string
   ): ResolvedEmulator | null {
-    if (emulatorsPath) {
-      // Check emulatorsPath/<emulatorId>/<executable>
-      const nested = resolve(emulatorsPath, emu.id, emu.executable);
-      if (existsSync(nested)) {
-        return { definition: emu, executablePath: nested, systemId };
+    for (const exe of executableNames(emu)) {
+      if (emulatorsPath) {
+        // Check emulatorsPath/<emulatorId>/<executable>
+        const nested = resolve(emulatorsPath, emu.id, exe);
+        if (existsSync(nested)) {
+          return { definition: emu, executablePath: nested, systemId };
+        }
+
+        // Check emulatorsPath/<executable>
+        const flat = resolve(emulatorsPath, exe);
+        if (existsSync(flat)) {
+          return { definition: emu, executablePath: flat, systemId };
+        }
       }
 
-      // Check emulatorsPath/<executable>
-      const flat = resolve(emulatorsPath, emu.executable);
-      if (existsSync(flat)) {
-        return { definition: emu, executablePath: flat, systemId };
-      }
-    }
-
-    // Check each defaultPath
-    for (const defaultPath of emu.defaultPaths) {
-      const fullPath = resolve(defaultPath, emu.executable);
-      if (existsSync(fullPath)) {
-        return { definition: emu, executablePath: fullPath, systemId };
+      // Check each defaultPath
+      for (const defaultPath of emu.defaultPaths) {
+        const fullPath = resolve(defaultPath, exe);
+        if (existsSync(fullPath)) {
+          return { definition: emu, executablePath: fullPath, systemId };
+        }
       }
     }
 

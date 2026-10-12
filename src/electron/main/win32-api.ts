@@ -212,7 +212,7 @@ export function showInTaskbar(hwnd: unknown): void {
  * SWP_NOACTIVATE is critical here: the emulator-overlay sync loop calls this
  * every 100ms to track the host window. Without SWP_NOACTIVATE, each call
  * triggers WM_ACTIVATE/WM_SETFOCUS on the target window, causing constant
- * focus thrashing that interferes with Qt-based emulators' (PCSX2, Citra)
+ * focus thrashing that interferes with Qt-based emulators' (PCSX2, Azahar)
  * keyboard event delivery — the user perceives this as the game controls
  * being "frozen" even though the window is visible.
  *

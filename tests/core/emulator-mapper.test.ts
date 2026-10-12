@@ -29,6 +29,19 @@ describe("EmulatorMapper", () => {
     expect(retroarch!.systems).toContain("nes");
   });
 
+  it("maps the legacy citra id to azahar", () => {
+    expect(mapper.getById("citra")?.id).toBe("azahar");
+  });
+
+  it("resolves a legacy citra-qt.exe install as azahar (also via the old id)", () => {
+    mkdirSync(resolve(TEST_DIR, "azahar"), { recursive: true });
+    writeFileSync(resolve(TEST_DIR, "azahar", "citra-qt.exe"), "");
+    const byId = mapper.resolveById("citra", "3ds", TEST_DIR);
+    expect(byId?.definition.id).toBe("azahar");
+    expect(byId?.executablePath).toBe(resolve(TEST_DIR, "azahar", "citra-qt.exe"));
+    expect(mapper.resolve("3ds", TEST_DIR)?.definition.id).toBe("azahar");
+  });
+
   it("should return undefined for unknown id", () => {
     const unknown = mapper.getById("nonexistent");
     expect(unknown).toBeUndefined();

@@ -99,6 +99,8 @@ export const AppConfigPartialSchema = z
       ])
       .optional(),
     devMode: z.boolean().optional(),
+    azaharGamepadAutoConfigured: z.boolean().optional(),
+    // Legacy (pre-Azahar) flag — still accepted so older configs validate.
     citraGamepadAutoConfigured: z.boolean().optional(),
     gameSortOrder: z
       .enum(["alpha-asc", "alpha-desc", "recent", "added"])

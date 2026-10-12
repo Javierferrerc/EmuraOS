@@ -29,7 +29,8 @@ import { MetadataCache } from "../../core/metadata-cache.js";
 import { MetadataScraper } from "../../core/metadata-scraper.js";
 import { runMetadataCascade, previewMetadata } from "../../core/metadata-cascade.js";
 import { LibretroThumbnails } from "../../core/libretro-thumbnails.js";
-import { SteamGridDb } from "../../core/steamgriddb.js";
+import sharp from "sharp";
+import { SteamGridDb, verifySteamGridDbKey } from "../../core/steamgriddb.js";
 import { UserLibrary } from "../../core/user-library.js";
 import { EmulatorConfigManager } from "../../core/emulator-config.js";
 import {
@@ -39,10 +40,11 @@ import {
 } from "../../core/cemu-setup.js";
 import { ensurePpssppPortable } from "../../core/ppsspp-setup.js";
 import {
-  applyCitraGamepadProfile,
-  readCitraGamepadStatus,
-  CITRA_GAMEPAD_PROFILES,
-} from "../../core/citra-gamepad.js";
+  applyAzaharGamepadProfile,
+  readAzaharGamepadStatus,
+  AZAHAR_GAMEPAD_PROFILES,
+  azaharConfigPath,
+} from "../../core/azahar-gamepad.js";
 import {
   readGcPadConfig,
   writeGcPadConfig,
@@ -80,7 +82,7 @@ import {
   ensureThumbnail,
 } from "../../core/thumbnail-cache.js";
 import { EmulatorDownloader } from "../../core/emulator-downloader.js";
-import { acquireEmulator } from "../../core/emulator-acquisition.js";
+import { acquireEmulator, DIRECT_PROVIDERS } from "../../core/emulator-acquisition.js";
 import { EmulatorOverlay } from "./emulator-overlay.js";
 import { AutoUpdater } from "./auto-updater.js";
 import type {
@@ -714,26 +716,33 @@ export function registerIpcHandlers(
         readFileSync(getEmulatorsPath(), "utf-8")
       );
 
-      // Emulators acquired from an official https release are always
-      // downloadable — no Drive catalog (nor API key) involved. Reuse the
-      // mapping shape the renderer already keys off.
+      // Emulators acquired from an official release (pinned https or latest
+      // GitHub asset) are always downloadable — no Drive catalog (nor API
+      // key) involved. Reuse the mapping shape the renderer already keys off.
+      // "manual" emulators are deliberately absent: they can't be downloaded.
       const httpsMapping: Record<string, DriveEmulatorMapping> = {};
       for (const def of emulatorDefs) {
-        if (def.acquisition?.provider === "https") {
+        const provider = def.acquisition?.provider;
+        if (provider && DIRECT_PROVIDERS.has(provider)) {
           httpsMapping[def.id.toLowerCase()] = {
             emulatorId: def.id,
-            folderId: "https",
+            folderId: provider,
             fileCount: 0,
             totalBytes: 0,
           };
         }
       }
 
+      // Only emulators without a declared acquisition still come from Drive.
+      const driveDefs = emulatorDefs.filter((d) => !d.acquisition || d.acquisition.provider === "gdrive");
+      if (driveDefs.length === 0) {
+        cachedDriveListing = httpsMapping;
+        return cachedDriveListing;
+      }
+
       try {
         const downloader = new EmulatorDownloader(getProjectRoot());
-        const driveMapping = await downloader.listAvailable(
-          emulatorDefs.filter((d) => d.acquisition?.provider !== "https")
-        );
+        const driveMapping = await downloader.listAvailable(driveDefs);
         cachedDriveListing = { ...driveMapping, ...httpsMapping };
         return cachedDriveListing;
       } catch (err) {
@@ -1172,6 +1181,54 @@ export function registerIpcHandlers(
           };
         }
         return { success: true, coverPath };
+      } catch (err) {
+        return { success: false, error: String(err) };
+      }
+    }
+  );
+
+  // Import preview fallback when SteamGridDB has no key / no match: find the
+  // libretro boxart and return a small in-memory JPEG data URL (nothing is
+  // written to disk — the cover is only persisted if the import is confirmed,
+  // via fetch-cover-from-libretro). A data URL also keeps the renderer CSP
+  // unchanged (raw.githubusercontent.com is not in img-src).
+  // SteamGridDB key onboarding: whether a key is configured at all (the
+  // .env one counts — the renderer can't see it), and a live check of a key
+  // before it is saved.
+  ipcMain.handle("has-steamgriddb-key", () => {
+    const appConfig = new ConfigManager(getProjectRoot()).get();
+    return !!(process.env.STEAMGRIDDB_API_KEY || appConfig.steamGridDbApiKey);
+  });
+
+  ipcMain.handle("verify-steamgriddb-key", async (_event: IpcMainInvokeEvent, key: unknown) => {
+    const parsed = z.string().trim().min(1).max(200).regex(/^[\x21-\x7e]+$/).safeParse(key);
+    if (!parsed.success) return "invalid";
+    return verifySteamGridDbKey(parsed.data);
+  });
+
+  // Shared across previews so each system's boxart listing (a rate-limited
+  // GitHub API call) is fetched once per session, not once per ROM.
+  let previewThumbs: LibretroThumbnails | null = null;
+  ipcMain.handle(
+    "preview-libretro-cover",
+    async (_event: IpcMainInvokeEvent, systemId: unknown, romFileName: unknown) => {
+      try {
+        const validatedSystem = SystemIdSchema.parse(systemId);
+        const validatedFile = FileNameSchema.parse(romFileName);
+        previewThumbs ??= new LibretroThumbnails(new MetadataCache(getProjectRoot()), {
+          systemMapPath: path.join(getDataPath(), "libretro-systems.json"),
+        });
+        const thumbs = previewThumbs;
+
+        const url = await thumbs.findCoverUrl(validatedSystem, validatedFile);
+        if (!url) return { success: false };
+        const res = await fetch(url);
+        if (!res.ok) return { success: false };
+        const jpeg = await sharp(Buffer.from(await res.arrayBuffer()))
+          .resize(300, null, { withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toBuffer();
+        return { success: true, dataUrl: `data:image/jpeg;base64,${jpeg.toString("base64")}` };
       } catch (err) {
         return { success: false, error: String(err) };
       }
@@ -1993,54 +2050,52 @@ export function registerIpcHandlers(
         configManager.getRomsPath()
       );
 
-      // Citra first-launch gamepad auto-config. Patches qt-config.ini
+      // Azahar first-launch gamepad auto-config. Patches qt-config.ini
       // with a known-good PS DualShock profile so the controller works
       // out of the box without the user walking Emulation → Configure
-      // → Controls → Auto-Assign inside Citra. Runs at most once: the
-      // `citraGamepadAutoConfigured` flag flips after the first attempt
+      // → Controls → Auto-Assign inside Azahar. Runs at most once: the
+      // `azaharGamepadAutoConfigured` flag flips after the first attempt
       // so subsequent launches no-op. If the user has already customized
-      // their bindings via Citra's own UI we respect that and mark the
+      // their bindings via Azahar's own UI we respect that and mark the
       // flag without overwriting anything.
       //
-      // Edge case: if qt-config.ini does not exist yet (Citra was never
+      // Edge case: if qt-config.ini does not exist yet (Azahar was never
       // launched even once), we defer without flipping the flag. That
       // means the user may still need one manual Auto-Assign on their
       // very first 3DS launch ever; the next launch will catch up.
       if (
-        resolved.definition.id === "citra" &&
+        resolved.definition.id === "azahar" &&
         validated.systemId === "3ds" &&
-        !configManager.get().citraGamepadAutoConfigured
+        !configManager.get().azaharGamepadAutoConfigured
       ) {
         try {
-          const citraConfigPath = path.join(
+          const qtConfigPath = azaharConfigPath(
             app.getPath("appData"),
-            "Citra",
-            "config",
-            "qt-config.ini"
+            resolved.executablePath
           );
-          const status = readCitraGamepadStatus(citraConfigPath);
+          const status = readAzaharGamepadStatus(qtConfigPath);
           if (status.configExists) {
             if (status.hasCustomGamepad) {
               console.log(
-                "[citra-gamepad] user already has custom bindings (guid:",
+                "[azahar-gamepad] user already has custom bindings (guid:",
                 status.currentGuid,
                 ") — marking configured without overwriting"
               );
             } else {
-              const applyResult = applyCitraGamepadProfile(
-                citraConfigPath,
-                CITRA_GAMEPAD_PROFILES["ps-dualshock"]
+              const applyResult = applyAzaharGamepadProfile(
+                qtConfigPath,
+                AZAHAR_GAMEPAD_PROFILES["ps-dualshock"]
               );
               if (applyResult.success) {
                 console.log(
-                  "[citra-gamepad] applied ps-dualshock profile — replaced:",
+                  "[azahar-gamepad] applied ps-dualshock profile — replaced:",
                   applyResult.linesReplaced,
                   "inserted:",
                   applyResult.linesInserted
                 );
               } else {
                 console.warn(
-                  "[citra-gamepad] failed to apply profile:",
+                  "[azahar-gamepad] failed to apply profile:",
                   applyResult.error
                 );
               }
@@ -2048,15 +2103,15 @@ export function registerIpcHandlers(
             // Flip the flag regardless of apply success: either we wrote
             // the profile, or we detected existing bindings we don't
             // want to pave over. Either way, don't re-check next launch.
-            configManager.update({ citraGamepadAutoConfigured: true });
+            configManager.update({ azaharGamepadAutoConfigured: true });
             configManager.save();
           } else {
             console.log(
-              "[citra-gamepad] qt-config.ini not yet created; deferring"
+              "[azahar-gamepad] qt-config.ini not yet created; deferring"
             );
           }
         } catch (err) {
-          console.warn("[citra-gamepad] auto-config failed:", err);
+          console.warn("[azahar-gamepad] auto-config failed:", err);
         }
       }
 

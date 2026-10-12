@@ -1,7 +1,10 @@
 {
   "configFile": "qt-config.ini",
   "configFormat": "ini",
-  "configLocations": ["{appdata}/Citra/config/qt-config.ini"],
+  "configLocations": [
+    "{appdata}/Azahar/config/qt-config.ini",
+    "{appdata}/Citra/config/qt-config.ini"
+  ],
   "categories": [
     {
       "id": "general",
@@ -82,14 +85,14 @@
           "label": "Single Window Mode",
           "type": "boolean",
           "default": "true",
-          "description": "Render both screens in a single window instead of separate windows. Close Citra before saving changes."
+          "description": "Render both screens in a single window instead of separate windows. Close Azahar before saving changes."
         },
         {
           "key": "UI.fullscreen",
           "label": "Start in Fullscreen",
           "type": "boolean",
           "default": "false",
-          "description": "Launch Citra directly in fullscreen mode"
+          "description": "Launch Azahar directly in fullscreen mode"
         },
         {
           "key": "UI.displayTitleBars",
@@ -131,14 +134,14 @@
           "label": "Pause When In Background",
           "type": "boolean",
           "default": "false",
-          "description": "Pause emulation when the Citra window loses focus"
+          "description": "Pause emulation when the Azahar window loses focus"
         },
         {
           "key": "UI.muteWhenInBackground",
           "label": "Mute Audio When In Background",
           "type": "boolean",
           "default": "false",
-          "description": "Mute audio when the Citra window loses focus"
+          "description": "Mute audio when the Azahar window loses focus"
         },
         {
           "key": "Layout.layout_option",

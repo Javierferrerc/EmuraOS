@@ -12,6 +12,7 @@ import type {
   GameSessionEvent,
 } from "../../core/types.js";
 import type { GameLauncher } from "../../core/game-launcher.js";
+import { azaharConfigPath } from "../../core/azahar-gamepad.js";
 import {
   findWindowByPid,
   stripDecorations,
@@ -74,12 +75,12 @@ export class EmulatorOverlay {
   private currentRom: DiscoveredRom | null = null;
   private currentEmulatorId: string | null = null;
   private boundHandlers: { event: string; handler: (...args: unknown[]) => void }[] = [];
-  // Citra config patching: stores the path + original values so cleanup can
+  // Azahar config patching: stores the path + original values so cleanup can
   // restore the user's settings after the game session ends.
   // `fullscreenMode` is null if the key didn't exist in the original config —
   // restore deletes the line we added instead of rewriting it.
-  private citraConfigPath: string | null = null;
-  private citraBackup: {
+  private azaharConfigPath: string | null = null;
+  private azaharBackup: {
     fullscreen: string;
     showStatusBar: string;
     fullscreenMode: string | null;
@@ -162,7 +163,7 @@ export class EmulatorOverlay {
     // Injection-safe argv: the rom path is confined to a single element.
     const { exe, args } = launcher.buildArgv(resolved, rom.filePath);
     const isRetroArch = resolved.definition.id === "retroarch";
-    const isCitra = resolved.definition.id === "citra";
+    const isAzahar = resolved.definition.id === "azahar";
     const isPCSX2 = resolved.definition.id === "pcsx2";
     const isPPSSPP = resolved.definition.id === "ppsspp";
     const isDolphin = resolved.definition.id === "dolphin";
@@ -184,10 +185,10 @@ export class EmulatorOverlay {
       args.push("--appendconfig", this.tmpConfigPath);
     }
 
-    // For Citra, patch qt-config.ini to hide the menubar (via Qt fullscreen
+    // For Azahar, patch qt-config.ini to hide the menubar (via Qt fullscreen
     // state) and the bottom status bar. Originals are restored on cleanup.
-    if (isCitra) {
-      this.patchCitraConfig();
+    if (isAzahar) {
+      this.patchAzaharConfig(resolved.executablePath);
     }
 
     // For PCSX2, patch PCSX2.ini to force safe [UI] values that are required
@@ -588,7 +589,7 @@ export class EmulatorOverlay {
    * expected to close them before toggling back.
    *
    * Scoped to Dolphin for now (see the F11 guard in `startSync`). Generalizing
-   * to PCSX2/Citra/PPSSPP requires also re-applying `clipTopPixels` with the
+   * to PCSX2/Azahar/PPSSPP requires also re-applying `clipTopPixels` with the
    * right chrome offset and isn't needed for the initial use case.
    */
   private toggleConfigMode(): void {
@@ -652,37 +653,32 @@ export class EmulatorOverlay {
   }
 
   /**
-   * Patch Citra's qt-config.ini so the main window starts in Qt fullscreen
-   * state — the same state that Citra's F11 shortcut toggles. In fullscreen
+   * Patch Azahar's qt-config.ini so the main window starts in Qt fullscreen
+   * state — the same state that Azahar's F11 shortcut toggles. In fullscreen
    * state Qt hides the menubar automatically, and we additionally disable
    * the bottom status bar.
    *
-   * We also force `fullscreen_mode=0` (Borderless Fullscreen) so Citra does
+   * We also force `fullscreen_mode=0` (Borderless Fullscreen) so Azahar does
    * not hijack the display in Exclusive mode. Borderless fullscreen is what
-   * F11 produces by default on a typical Citra install.
+   * F11 produces by default on a typical Azahar install.
    *
-   * `singleWindowMode=true` is forced so Citra renders the game inside the
+   * `singleWindowMode=true` is forced so Azahar renders the game inside the
    * main window instead of spawning a separate render window. Without this,
-   * findWindowByPid picks up the citra-qt game list window and positions it
+   * findWindowByPid picks up the Azahar game list window and positions it
    * over the game area, leaving the real render window floating elsewhere.
    *
    * The overlay's SetWindowPos still resizes the window into the game area —
    * Qt keeps its internal fullscreen flag regardless of external resize, so
    * the menubar stays hidden while we control the final screen rectangle.
    *
-   * Original values are stashed in `this.citraBackup` and restored on cleanup.
+   * Original values are stashed in `this.azaharBackup` and restored on cleanup.
    * If `fullscreen_mode` or `singleWindowMode` didn't exist in the original
    * config, restore removes the lines we inserted.
    */
-  private patchCitraConfig(): void {
-    const configPath = path.join(
-      app.getPath("appData"),
-      "Citra",
-      "config",
-      "qt-config.ini"
-    );
+  private patchAzaharConfig(executablePath: string): void {
+    const configPath = azaharConfigPath(app.getPath("appData"), executablePath);
     if (!existsSync(configPath)) {
-      console.warn("[overlay] Citra config not found:", configPath);
+      console.warn("[overlay] Azahar config not found:", configPath);
       return;
     }
 
@@ -727,12 +723,12 @@ export class EmulatorOverlay {
       }
 
       if (fullscreenIdx === -1 && statusBarIdx === -1 && singleWindowModeIdx === -1) {
-        console.warn("[overlay] Citra UI section not found in config");
+        console.warn("[overlay] Azahar UI section not found in config");
         return;
       }
 
-      this.citraConfigPath = configPath;
-      this.citraBackup = {
+      this.azaharConfigPath = configPath;
+      this.azaharBackup = {
         fullscreen: origFullscreen,
         showStatusBar: origShowStatusBar,
         fullscreenMode: origFullscreenMode,
@@ -754,8 +750,8 @@ export class EmulatorOverlay {
       }
 
       // Force Single Window Mode so the rendered game lives inside the main
-      // citra-qt window (the one we grab with findWindowByPid). Without this,
-      // Citra spawns a separate render window and findWindowByPid picks up
+      // Azahar window (the one we grab with findWindowByPid). Without this,
+      // Azahar spawns a separate render window and findWindowByPid picks up
       // the game list window instead, leaving the render window untouched.
       if (singleWindowModeIdx !== -1) {
         lines[singleWindowModeIdx] = "singleWindowMode=true";
@@ -765,27 +761,27 @@ export class EmulatorOverlay {
 
       writeFileSync(configPath, lines.join(eol), "utf-8");
     } catch (err) {
-      console.warn("[overlay] Failed to patch Citra config:", err);
+      console.warn("[overlay] Failed to patch Azahar config:", err);
     }
   }
 
   /**
-   * Restore the original Citra qt-config.ini values that were patched by
-   * `patchCitraConfig`. Safe to call if nothing was patched.
+   * Restore the original Azahar qt-config.ini values that were patched by
+   * `patchAzaharConfig`. Safe to call if nothing was patched.
    */
-  private restoreCitraConfig(): void {
-    if (!this.citraBackup || !this.citraConfigPath) return;
-    if (!existsSync(this.citraConfigPath)) {
-      this.citraBackup = null;
-      this.citraConfigPath = null;
+  private restoreAzaharConfig(): void {
+    if (!this.azaharBackup || !this.azaharConfigPath) return;
+    if (!existsSync(this.azaharConfigPath)) {
+      this.azaharBackup = null;
+      this.azaharConfigPath = null;
       return;
     }
 
     try {
-      const raw = readFileSync(this.citraConfigPath, "utf-8");
+      const raw = readFileSync(this.azaharConfigPath, "utf-8");
       const eol = raw.includes("\r\n") ? "\r\n" : "\n";
       const lines = raw.split(/\r?\n/);
-      const backup = this.citraBackup;
+      const backup = this.azaharBackup;
 
       let inUiSection = false;
       // Iterate with an index we can mutate so `splice` works cleanly.
@@ -820,12 +816,12 @@ export class EmulatorOverlay {
         }
       }
 
-      writeFileSync(this.citraConfigPath, lines.join(eol), "utf-8");
+      writeFileSync(this.azaharConfigPath, lines.join(eol), "utf-8");
     } catch (err) {
-      console.warn("[overlay] Failed to restore Citra config:", err);
+      console.warn("[overlay] Failed to restore Azahar config:", err);
     } finally {
-      this.citraBackup = null;
-      this.citraConfigPath = null;
+      this.azaharBackup = null;
+      this.azaharConfigPath = null;
     }
   }
 
@@ -1385,8 +1381,8 @@ export class EmulatorOverlay {
       this.tmpConfigPath = null;
     }
 
-    // Restore Citra's qt-config.ini if we patched it before launch.
-    this.restoreCitraConfig();
+    // Restore Azahar's qt-config.ini if we patched it before launch.
+    this.restoreAzaharConfig();
 
     // Restore PCSX2.ini [UI] values if we patched them before launch.
     this.restorePCSX2Config();

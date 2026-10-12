@@ -1,23 +1,23 @@
 /**
- * Citra gamepad profile management.
+ * Azahar gamepad profile management.
  *
- * This module patches the `[Controls]` section of Citra's `qt-config.ini`
+ * This module patches the `[Controls]` section of Azahar's `qt-config.ini`
  * so users don't have to navigate Emulation → Configure → Controls →
  * Auto-Assign before their gamepad works. On the first launch of a 3DS
- * game we write a known-good profile (see `CITRA_GAMEPAD_PROFILES`) and
- * flip `config.citraGamepadAutoConfigured` so we never touch the file
+ * game we write a known-good profile (see `AZAHAR_GAMEPAD_PROFILES`) and
+ * flip `config.azaharGamepadAutoConfigured` so we never touch the file
  * again unless the user explicitly asks.
  *
  * ── Format context ─────────────────────────────────────────────────
  *
- * Citra stores controller bindings in Qt's nested-INI style inside a
+ * Azahar stores controller bindings in Qt's nested-INI style inside a
  * `[Controls]` section. Keys use a literal backslash as separator in
  * the key name itself (not as a path), e.g.:
  *
  *     profiles\1\button_a="button:1,engine:sdl,guid:...,port:0"
  *     profiles\1\button_a\default=false
  *
- * Every binding has a sibling `\default` line. If it says `true` Citra
+ * Every binding has a sibling `\default` line. If it says `true` Azahar
  * ignores the value next to it and reapplies its own defaults, so both
  * lines MUST be written together — forgetting the `\default=false`
  * sibling silently reverts the binding.
@@ -35,7 +35,7 @@
  *
  * The `[Controls]` section also contains non-gamepad keys we leave
  * alone, because overwriting them would break the user's customisation
- * or Citra's own defaults:
+ * or Azahar's own defaults:
  *
  *   - motion_device       (emulated gyro)
  *   - touch_device        (touchscreen mapping)
@@ -49,8 +49,23 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
-export interface CitraGamepadProfile {
+/**
+ * Where the running install keeps its qt-config.ini:
+ *  - portable install (a `user` dir next to the exe) → {exeDir}/user/config
+ *  - legacy Citra build (citra-qt.exe)                → {appData}/Citra/config
+ *  - Azahar                                           → {appData}/Azahar/config
+ */
+export function azaharConfigPath(appDataDir: string, executablePath: string): string {
+  const portable = join(dirname(executablePath), "user");
+  if (existsSync(portable)) return join(portable, "config", "qt-config.ini");
+  const root =
+    basename(executablePath).toLowerCase() === "citra-qt.exe" ? "Citra" : "Azahar";
+  return join(appDataDir, root, "config", "qt-config.ini");
+}
+
+export interface AzaharGamepadProfile {
   id: string;
   displayName: string;
   /** SDL joystick GUID, 32 hex chars, no separators. */
@@ -94,12 +109,12 @@ export interface CitraGamepadProfile {
 }
 
 /**
- * PlayStation DualShock 4 / DualSense profile matching the layout Citra
+ * PlayStation DualShock 4 / DualSense profile matching the layout Azahar
  * writes after "Auto-Assign" with a PS controller connected. Captured
  * from GUID `03008fe54c050000c405000000016800` (Sony DualShock 4 v2 on
  * Windows SDL).
  *
- * Naming convention (Citra label ↔ 3DS button ↔ PS physical button):
+ * Naming convention (Azahar label ↔ 3DS button ↔ PS physical button):
  *   button_a = east  = Circle
  *   button_b = south = Cross
  *   button_x = north = Triangle
@@ -109,7 +124,7 @@ export interface CitraGamepadProfile {
  * controller. Triggers (L2/R2) are bound to axes 4/5 so ZL/ZR feel
  * analog in N3DS games that use them.
  */
-export const PS_DUALSHOCK_PROFILE: CitraGamepadProfile = {
+export const PS_DUALSHOCK_PROFILE: AzaharGamepadProfile = {
   id: "ps-dualshock",
   displayName: "PlayStation DualShock / DualSense",
   guid: "03008fe54c050000c405000000016800",
@@ -138,32 +153,32 @@ export const PS_DUALSHOCK_PROFILE: CitraGamepadProfile = {
  * controllers (Xbox, Switch Pro, generic XInput) can be added here
  * without touching the apply logic.
  */
-export const CITRA_GAMEPAD_PROFILES: Record<string, CitraGamepadProfile> = {
+export const AZAHAR_GAMEPAD_PROFILES: Record<string, AzaharGamepadProfile> = {
   "ps-dualshock": PS_DUALSHOCK_PROFILE,
 };
 
-// ── Internal: build the set of Citra Controls keys we own ────────────
+// ── Internal: build the set of Azahar Controls keys we own ────────────
 
 /**
  * Build a `Map<key, value>` containing every `[Controls]` line this
  * module writes for the given profile. Key strings use literal
- * backslashes to match exactly what Citra writes on disk.
+ * backslashes to match exactly what Azahar writes on disk.
  *
  * We emit both the binding line and its companion `\default=false`
- * sibling — Citra ignores custom values when `\default=true`, so
+ * sibling — Azahar ignores custom values when `\default=true`, so
  * skipping the sibling would silently revert the binding.
  *
  * Map insertion order is preserved and drives the order of inserted
  * lines when `[Controls]` is empty or missing.
  */
 function buildProfileKeyValues(
-  profile: CitraGamepadProfile
+  profile: AzaharGamepadProfile
 ): Map<string, string> {
   const m = new Map<string, string>();
   const suffix = `engine:sdl,guid:${profile.guid},port:0`;
 
-  // Profile header. Citra expects these even for a single-profile setup;
-  // omitting them leaves the profile list empty and Citra ignores all
+  // Profile header. Azahar expects these even for a single-profile setup;
+  // omitting them leaves the profile list empty and Azahar ignores all
   // bindings below.
   m.set("profile\\default", "true");
   m.set("profile", "0");
@@ -267,7 +282,7 @@ function findControlsSection(lines: string[]): SectionBounds | null {
 
 // ── Public: read status ─────────────────────────────────────────────
 
-export interface CitraGamepadStatus {
+export interface AzaharGamepadStatus {
   /** Whether qt-config.ini exists at the given path. */
   configExists: boolean;
   /** Whether a `[Controls]` section is present in the file. */
@@ -276,7 +291,7 @@ export interface CitraGamepadStatus {
    * Whether a custom gamepad binding is already present. True when any
    * `profiles\1\button_*` key we care about has `\default=false` AND
    * an SDL engine binding. Lets us skip auto-config when the user has
-   * already set up their own layout via Citra's Auto-Assign flow.
+   * already set up their own layout via Azahar's Auto-Assign flow.
    */
   hasCustomGamepad: boolean;
   /**
@@ -287,13 +302,13 @@ export interface CitraGamepadStatus {
 }
 
 /**
- * Snapshot the current gamepad state of a Citra config without modifying
+ * Snapshot the current gamepad state of a Azahar config without modifying
  * anything. Returns `configExists: false` when the file is missing so
  * callers can decide whether to create a fresh config or bail.
  */
-export function readCitraGamepadStatus(
+export function readAzaharGamepadStatus(
   configPath: string
-): CitraGamepadStatus {
+): AzaharGamepadStatus {
   if (!existsSync(configPath)) {
     return {
       configExists: false,
@@ -316,7 +331,7 @@ export function readCitraGamepadStatus(
   }
 
   // Matches the gamepad keys we own. Excludes button_debug/button_gpio14/
-  // button_power (keyboard-only) since those are tied to Citra defaults
+  // button_power (keyboard-only) since those are tied to Azahar defaults
   // and don't indicate a custom gamepad setup.
   const gamepadKeyRe =
     /^profiles\\1\\(button_a|button_b|button_x|button_y|button_up|button_down|button_left|button_right|button_l|button_r|button_start|button_select|button_home|button_zl|button_zr|circle_pad|c_stick)$/;
@@ -388,14 +403,14 @@ export interface ApplyResult {
  * If the file has no `[Controls]` section, a fresh one is appended at
  * the end. If the file does not exist, the function returns
  * `{ success: false }` — we never create qt-config.ini ourselves
- * because Citra uses the file's presence to decide initial defaults
+ * because Azahar uses the file's presence to decide initial defaults
  * at first launch.
  *
  * Idempotent: running twice on the same file produces identical bytes.
  */
-export function applyCitraGamepadProfile(
+export function applyAzaharGamepadProfile(
   configPath: string,
-  profile: CitraGamepadProfile
+  profile: AzaharGamepadProfile
 ): ApplyResult {
   if (!existsSync(configPath)) {
     return {

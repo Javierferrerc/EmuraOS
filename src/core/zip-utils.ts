@@ -97,7 +97,10 @@ export function extractZipBufferTo(buf: Buffer, destDir: string): string[] {
     const commentLen = buf.readUInt16LE(p + 32);
     const externalAttrs = buf.readUInt32LE(p + 38);
     const localOffset = buf.readUInt32LE(p + 42);
-    const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    // Some Windows tools (PowerShell Compress-Archive — e.g. Azahar's release
+    // zip) write "\" separators, which the spec forbids. Normalise to "/" so
+    // directory entries are recognised and nesting works on every OS.
+    const name = buf.toString("utf8", p + 46, p + 46 + nameLen).replace(/\\/g, "/");
     p += 46 + nameLen + extraLen + commentLen;
 
     // Directory entries end with "/" — created implicitly via mkdirSync.

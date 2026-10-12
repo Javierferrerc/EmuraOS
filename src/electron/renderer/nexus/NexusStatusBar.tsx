@@ -70,7 +70,10 @@ export function NexusStatusBar({
       : null) ||
     localProfile.name?.trim() ||
     "Jugador";
-  const avatarUrl = localProfile.avatarUrl ?? null;
+  // Cloud-first like NexusProfile: on a fresh device the local layer is empty,
+  // but the account's `avatar_url` is already there.
+  const avatarUrl =
+    (signedIn ? social.profile?.avatar_url ?? null : null) ?? localProfile.avatarUrl ?? null;
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);

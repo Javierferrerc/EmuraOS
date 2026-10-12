@@ -15,6 +15,29 @@ export type { SgdbCandidate };
 
 const API_BASE = "https://www.steamgriddb.com/api/v2";
 const DEFAULT_FETCH_DELAY_MS = 250;
+
+export type SgdbKeyCheck = "valid" | "invalid" | "network";
+
+/**
+ * Check an API key with one cheap authenticated call. 401/403 → "invalid";
+ * anything else that isn't a 2xx (or a network failure) → "network", so a
+ * flaky connection is never reported as a wrong key.
+ */
+export async function verifySteamGridDbKey(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<SgdbKeyCheck> {
+  try {
+    const res = await fetchImpl(`${API_BASE}/search/autocomplete/mario`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) return "valid";
+    if (res.status === 401 || res.status === 403) return "invalid";
+    return "network";
+  } catch {
+    return "network";
+  }
+}
 // Bump when the hero-lookup strategy improves so previously "none"-cached games
 // are re-checked. v2 added the wide-grid fallback for retro titles w/o heroes;
 // v3 fixed diacritic-insensitive title matching (Pokemon ↔ Pokémon).
