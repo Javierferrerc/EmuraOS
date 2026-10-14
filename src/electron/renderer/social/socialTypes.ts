@@ -11,6 +11,27 @@ export interface PinnedGame {
   system?: string | null;
 }
 
+/** Audience of a profile section: any signed-in user, accepted friends, or
+ *  only the owner. */
+export type ProfileVisibility = "everyone" | "friends" | "nobody";
+
+/** A game in another user's library / likes, as returned by
+ *  get_profile_showcase (safe projection of their synced library). */
+export interface ShowcaseGame {
+  title: string;
+  /** System display name (or id when the catalog has no name). */
+  system: string | null;
+  system_id: string;
+  cover: string | null;
+}
+
+/** What the viewer may see of a profile's library / likes / pinned. */
+export interface ProfileShowcase {
+  library: { visible: boolean; games: ShowcaseGame[] };
+  favorites: { visible: boolean; games: ShowcaseGame[] };
+  pinned: { visible: boolean };
+}
+
 /** Aggregate stats the client syncs so others can see them. */
 export interface ProfileStats {
   play_seconds?: number;
@@ -35,6 +56,11 @@ export interface Profile {
   age?: number | null;
   show_name?: boolean;
   show_age?: boolean;
+  /** Who can see each profile section (0014). Only present on the owner's own
+   *  row; other viewers get the already-filtered data instead. */
+  vis_library?: ProfileVisibility;
+  vis_pinned?: ProfileVisibility;
+  vis_favorites?: ProfileVisibility;
   /** Showcase games + aggregate stats, shared so other accounts can view them. */
   pinned?: PinnedGame[];
   stats?: ProfileStats;

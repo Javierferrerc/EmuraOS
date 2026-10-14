@@ -46,6 +46,7 @@ import { NexusSessionSummary } from "./session/NexusSessionSummary";
 import { NexusImportGames, type ImportItem } from "./import/NexusImportGames";
 import { NexusRomGuide } from "./import/NexusRomGuide";
 import { NexusSgdbKeyModal } from "./import/NexusSgdbKeyModal";
+import { useGhostCovers } from "./useGhostCovers";
 import type { DiscoveredRom } from "../../../core/types";
 import "./nexus.css";
 
@@ -181,9 +182,21 @@ export function NexusShell({ onOpenSettings, onSwitchUser }: NexusShellProps) {
         collections: app.collections,
         pinned: pinnedKeys,
         customColors,
+        getMetadataForRom,
       }),
-    [app.cloudLibrary, localGames, playHistory, app.favorites, app.collections, pinnedKeys, customColors]
+    [
+      app.cloudLibrary,
+      localGames,
+      playHistory,
+      app.favorites,
+      app.collections,
+      pinnedKeys,
+      customColors,
+      getMetadataForRom,
+    ]
   );
+  // Ghosts that arrived without a cloud cover get one fetched on this machine.
+  useGhostCovers(ghostGames, app.loadAllMetadata);
 
   const allGames = useMemo(() => [...localGames, ...ghostGames], [localGames, ghostGames]);
 

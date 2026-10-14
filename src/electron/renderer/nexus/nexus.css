@@ -996,6 +996,10 @@
   scroll-snap-align: start;
   width: 172px;
 }
+/* Another user's game (their profile): not clickable. */
+.nx-card.read-only {
+  cursor: default;
+}
 .nx-card-art {
   position: relative;
   width: 100%;

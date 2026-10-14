@@ -54,11 +54,7 @@ interface SocialContextValue {
   resetPassword: (identifier: string, token: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
-  updateProfile: (
-    patch: Partial<
-      Pick<Profile, "display_name" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats">
-    >
-  ) => Promise<void>;
+  updateProfile: (patch: api.ProfilePatch) => Promise<void>;
   addFriendByCode: (code: string) => Promise<{ ok: boolean; message: string }>;
   /** Add by either a handle ("usuario#TAG") or a friend code ("NX-0000-0000"). */
   addFriend: (input: string) => Promise<{ ok: boolean; message: string }>;
@@ -412,14 +408,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   }, [loadFriends]);
 
   const updateProfile = useCallback(
-    async (
-      patch: Partial<
-        Pick<
-          Profile,
-          "display_name" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats"
-        >
-      >
-    ) => {
+    async (patch: api.ProfilePatch) => {
       const p = await api.updateMyProfile(patch);
       setProfile(p);
     },

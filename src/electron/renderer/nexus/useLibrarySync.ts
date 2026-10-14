@@ -164,15 +164,18 @@ export function useLibrarySync(localGames: NexusGame[], scanReady: boolean): voi
       }
       if (didLink) again.current = true;
 
-      // Upload covers for games that matter on the profile (played, favourites,
-      // collections, pinned) so other machines show real box art. Cached by key,
-      // a few per pass to stay light.
+      // Upload the cover of EVERY library game so other machines (and other
+      // users viewing this library) show real box art instead of a blank card.
+      // Games that matter on the profile (played, favourites, collections,
+      // pinned) go first. Cached by key; a few per pass to stay light — the
+      // pass re-runs while it keeps uploading, so the backlog drains over time.
       const wanted = new Set<string>([...lib.favorites, ...lib.recentlyPlayed, ...edit.pinned]);
       lib.collections.forEach((c) => c.roms.forEach((k) => wanted.add(k)));
+      const ordered = [...games].sort((a, b) => Number(wanted.has(b.key)) - Number(wanted.has(a.key)));
       let uploaded = 0;
-      for (const g of games) {
+      for (const g of ordered) {
         if (uploaded >= MAX_COVER_UPLOADS_PER_PASS) break;
-        if (!wanted.has(g.key) || !g.coverPath || getCachedCoverUrl(g.key)) continue;
+        if (!g.coverPath || g.missing || getCachedCoverUrl(g.key)) continue;
         try {
           const dataUrl = await window.electronAPI.readThumbnailDataUrl(g.rom.systemId, g.rom.fileName);
           if (dataUrl && (await uploadCoverDataUrl(g.key, dataUrl))) uploaded++;
