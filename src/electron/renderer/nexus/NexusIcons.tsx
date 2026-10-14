@@ -357,3 +357,34 @@ export const EyeOffIcon = ({ size = 18, className }: IconProps) =>
     </>,
     className
   );
+
+export const LockIcon = ({ size = 18, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <rect x="5" y="11" width="14" height="9.5" rx="2" />
+      <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+    </>,
+    className
+  );
+
+export const UsersIcon = ({ size = 18, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5" />
+      <path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2" />
+    </>,
+    className
+  );
+
+export const GlobeIcon = ({ size = 18, className }: IconProps) =>
+  svg(
+    size,
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z" />
+    </>,
+    className
+  );

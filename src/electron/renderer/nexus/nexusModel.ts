@@ -171,6 +171,9 @@ interface GhostOpts {
   collections: Collection[];
   pinned: string[];
   customColors?: Record<string, string>;
+  /** Local metadata cache — a cover fetched on THIS machine for a game that
+   *  lives on another one (see useGhostCovers) is used before the cloud one. */
+  getMetadataForRom?: (systemId: string, fileName: string) => GameMetadata | null;
 }
 
 /**
@@ -181,7 +184,8 @@ interface GhostOpts {
  * (same system + title) is not duplicated.
  */
 export function buildGhostGames(opts: GhostOpts): NexusGame[] {
-  const { cloud, localGames, playHistory, favorites, collections, pinned, customColors } = opts;
+  const { cloud, localGames, playHistory, favorites, collections, pinned, customColors, getMetadataForRom } =
+    opts;
   const localKeys = new Set(localGames.map((g) => g.key));
   const localTitles = new Set(localGames.map((g) => titleMatchKey(g.systemId, g.title)));
   const keys = new Set<string>(cloud?.remoteLib ?? []);
@@ -212,7 +216,7 @@ export function buildGhostGames(opts: GhostOpts): NexusGame[] {
       developer: "",
       players: "",
       blurb: "",
-      coverPath: null,
+      coverPath: getMetadataForRom?.(systemId, fileName)?.coverPath || null,
       coverUrl: entry?.c ?? null,
       systemId,
       systemName,
@@ -228,6 +232,54 @@ export function buildGhostGames(opts: GhostOpts): NexusGame[] {
     });
   }
   return ghosts;
+}
+
+/** A game from ANOTHER user's profile (their library / likes / pinned), shaped
+ *  as a NexusGame so it renders with the same card as the viewer's own games.
+ *  Only title/system/cover are known; it is never launchable here. `systemId`
+ *  may be unknown (pinned entries only carry the display name) — it is then
+ *  resolved from the name for the platform tint. */
+export function remoteGame(
+  g: { title: string; systemId?: string | null; systemName?: string | null; cover?: string | null },
+  index: number
+): NexusGame {
+  const systemId = g.systemId || systemIdFromName(g.systemName) || "unknown";
+  const systemName =
+    systemId === "unknown" ? g.systemName ?? "" : systemDisplayName(systemId, g.systemName ?? undefined);
+  const key = `remote:${index}:${systemId}:${g.title}`;
+  return {
+    rom: { systemId, systemName, fileName: g.title, filePath: "", sizeBytes: 0 },
+    key,
+    title: g.title,
+    genre: "",
+    year: "",
+    rating: 0,
+    developer: "",
+    players: "",
+    blurb: "",
+    coverPath: null,
+    coverUrl: g.cover ?? null,
+    systemId,
+    systemName,
+    tint: tintForSystem(systemId),
+    hue: hueFromKey(key),
+    addedTs: 0,
+    play: null,
+    region: "",
+    languages: [],
+    revision: "",
+    disc: 0,
+  };
+}
+
+/** Reverse of systemDisplayName ("Game Boy" → "gb"), null when unknown. */
+function systemIdFromName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const n = name.trim().toLowerCase();
+  for (const [id, label] of Object.entries(SYSTEM_DISPLAY)) {
+    if (label.toLowerCase() === n || id === n) return id;
+  }
+  return null;
 }
 
 /** Filter games to a platform selection. `"all"` returns everything; a system

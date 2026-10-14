@@ -19,8 +19,10 @@ import type { SgdbCandidate } from "../../../../core/types";
 import { NexusCover } from "../NexusCover";
 import { NexusGameCard } from "../NexusGameCard";
 import { NexusFriendsSidebar } from "./NexusFriendsSidebar";
-import { NexusPublicProfile } from "./NexusPublicProfile";
+import { NexusUserProfile } from "./NexusUserProfile";
 import { NexusProfileShots } from "./NexusProfileShots";
+import { GameShelf, StatCard, VisibilityChip, VISIBILITY_LABEL } from "./profileParts";
+import type { ProfileVisibility } from "../../social/socialTypes";
 import {
   buildProfileStats,
   loadProfileEdit,
@@ -146,14 +148,15 @@ export function NexusProfile({
   // user dismissing an input). If the options menu is open, Esc closes it first.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || editing || pickerOpen) return;
+      // Another user's profile handles its own Esc (back to this one).
+      if (e.key !== "Escape" || editing || pickerOpen || viewingUserId) return;
       e.preventDefault();
       if (menuOpen) setMenuOpen(false);
       else onBack();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onBack, editing, pickerOpen, menuOpen]);
+  }, [onBack, editing, pickerOpen, menuOpen, viewingUserId]);
 
   // Close the options menu on any outside click.
   useEffect(() => {
@@ -175,6 +178,15 @@ export function NexusProfile({
     [view.pinned, gamesByKey]
   );
   const bannerGame = pinnedGames[0] ?? allGames[0] ?? null;
+  const likedGames = useMemo(() => allGames.filter((g) => isFavorite(g)), [allGames, isFavorite]);
+
+  // Who else can see each section (account only; defaults mirror migration 0014).
+  const visibility = {
+    library: social.profile?.vis_library ?? "nobody",
+    pinned: social.profile?.vis_pinned ?? "everyone",
+    favorites: social.profile?.vis_favorites ?? "nobody",
+  } satisfies Record<string, ProfileVisibility>;
+  const ownCardFor = (g: NexusGame) => ({ isFavorite: isFavorite(g), onOpen, onLaunch, onToggleFavorite });
 
   const startEdit = useCallback(() => {
     setDraft(current);
@@ -258,6 +270,7 @@ export function NexusProfile({
       status: string;
       bannerUrl: string | null;
       avatarUrl: string | null;
+      privacy: PrivacyValues | null;
     }) => {
       const name = next.name.trim() || fallbackName;
       const status = next.status.trim();
@@ -282,6 +295,13 @@ export function NexusProfile({
             status,
             avatar_url: avatarUrl,
             banner_url: bannerUrl,
+            ...(next.privacy && {
+              vis_library: next.privacy.library,
+              vis_pinned: next.privacy.pinned,
+              vis_favorites: next.privacy.favorites,
+              show_name: next.privacy.showName,
+              show_age: next.privacy.showAge,
+            }),
           });
           // Delete the previous Storage objects we just replaced so old avatars
           // / banners don't pile up as orphans in the bucket (no-op for non-
@@ -383,6 +403,15 @@ export function NexusProfile({
   return (
     <div className={"profile" + (leaving ? " pf-leaving" : "")}>
       <div className="pf-body">
+        {/* Another user's profile swaps in for the own column — same layout,
+            same sidebar — so both profiles look identical. */}
+        {viewingUserId ? (
+          <NexusUserProfile
+            key={viewingUserId}
+            userId={viewingUserId}
+            onBack={() => setViewingUserId(null)}
+          />
+        ) : (
         <div className="pf-col">
           {/* Topbar lives inside the content column so "Biblioteca" stays
               aligned with the cover's left edge (same 880px centering) once
@@ -560,7 +589,7 @@ export function NexusProfile({
                   <StatCard icon={<GridIcon size={18} />} label="En biblioteca">
                     {stats.ownedGames}
                   </StatCard>
-                  <StatCard icon={<HeartIcon size={18} />} label="Favoritos">
+                  <StatCard icon={<HeartIcon size={18} />} label="Me gusta">
                     {stats.favorites}
                   </StatCard>
                   <StatCard icon={<LibraryIcon size={18} />} label="Colecciones">
@@ -573,6 +602,7 @@ export function NexusProfile({
                 <div className="pf-section-head">
                   <h2>Juegos fijados</h2>
                   <span className="count">{pinnedGames.length}</span>
+                  {signedIn && <VisibilityChip level={visibility.pinned} />}
                   <div className="pf-section-spacer" />
                   {editing ? (
                     <div className="pf-pin-edit-actions">
@@ -625,6 +655,27 @@ export function NexusProfile({
                   </div>
                 )}
               </div>
+
+              <GameShelf
+                title="Biblioteca"
+                games={allGames}
+                headExtra={signedIn && <VisibilityChip level={visibility.library} />}
+                empty={<div className="pf-empty small">Tu biblioteca está vacía. Importa juegos para verlos aquí.</div>}
+                cardProps={ownCardFor}
+              />
+
+              <GameShelf
+                title="Me gusta"
+                games={likedGames}
+                headExtra={signedIn && <VisibilityChip level={visibility.favorites} />}
+                empty={
+                  <div className="pf-empty small">
+                    Aún no tienes juegos que te gusten. Pulsa el corazón de un juego para añadirlo.
+                  </div>
+                }
+                cardProps={ownCardFor}
+              />
+
               {signedIn && social.user && (
                 <div className="pf-section">
                   <NexusProfileShots userId={social.user.id} />
@@ -633,9 +684,10 @@ export function NexusProfile({
             </div>
           </div>
         </div>
+        )}
 
         <NexusFriendsSidebar
-          onOpenFriend={(id) => setViewingUserId(id)}
+          onOpenFriend={(id) => setViewingUserId(id === social.user?.id ? null : id)}
           me={{ stats, name, avatarUrl: current.avatarUrl ?? null }}
         />
       </div>
@@ -658,6 +710,15 @@ export function NexusProfile({
           initialStatus={current.status}
           initialBannerUrl={current.bannerUrl ?? null}
           initialAvatarUrl={current.avatarUrl ?? null}
+          initialPrivacy={
+            signedIn
+              ? {
+                  ...visibility,
+                  showName: social.profile?.show_name ?? true,
+                  showAge: social.profile?.show_age ?? false,
+                }
+              : null
+          }
           saving={savingProfile}
           error={saveError}
           onCancel={() => {
@@ -668,10 +729,6 @@ export function NexusProfile({
           }}
           onSave={(vals) => void saveInfo(vals)}
         />
-      )}
-
-      {viewingUserId && (
-        <NexusPublicProfile userId={viewingUserId} onBack={() => setViewingUserId(null)} />
       )}
     </div>
   );
@@ -719,11 +776,92 @@ async function fileToImageDataUrl(
  * per the "Editar perfil" handoff: a combined live preview (wide cover with an
  * overlapping avatar), glass toolbar, camera badge, wrapping actions and
  * drag&drop. Rendered inside .profile like PinPicker (absolute overlay). */
+/** Privacy settings edited in "Editar perfil" (account only). */
+interface PrivacyValues {
+  library: ProfileVisibility;
+  pinned: ProfileVisibility;
+  favorites: ProfileVisibility;
+  showName: boolean;
+  showAge: boolean;
+}
+
+const VISIBILITY_OPTIONS: ProfileVisibility[] = ["everyone", "friends", "nobody"];
+
+/** Todos / Solo amigos / Solo tú segmented control for one profile section. */
+function VisibilityRow({
+  title,
+  sub,
+  value,
+  onChange,
+}: {
+  title: string;
+  sub: string;
+  value: ProfileVisibility;
+  onChange: (v: ProfileVisibility) => void;
+}) {
+  return (
+    <div className="ep-priv-row">
+      <div className="ep-priv-txt">
+        <b>{title}</b>
+        <span>{sub}</span>
+      </div>
+      <div className="ep-seg" role="radiogroup" aria-label={title}>
+        {VISIBILITY_OPTIONS.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            role="radio"
+            aria-checked={value === opt}
+            className={"ep-seg-opt" + (value === opt ? " on" : "")}
+            onClick={() => onChange(opt)}
+          >
+            {VISIBILITY_LABEL[opt]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** On/off switch row (mostrar nombre real / edad). */
+function SwitchRow({
+  title,
+  sub,
+  on,
+  onChange,
+}: {
+  title: string;
+  sub: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="ep-priv-row">
+      <div className="ep-priv-txt">
+        <b>{title}</b>
+        <span>{sub}</span>
+      </div>
+      <button
+        type="button"
+        className="ep-sw"
+        data-on={on ? "1" : "0"}
+        role="switch"
+        aria-checked={on}
+        aria-label={title}
+        onClick={() => onChange(!on)}
+      >
+        <i />
+      </button>
+    </div>
+  );
+}
+
 function EditProfileModal({
   initialName,
   initialStatus,
   initialBannerUrl,
   initialAvatarUrl,
+  initialPrivacy,
   saving,
   error,
   onCancel,
@@ -733,6 +871,8 @@ function EditProfileModal({
   initialStatus: string;
   initialBannerUrl: string | null;
   initialAvatarUrl: string | null;
+  /** null when signed out — privacy only exists for an EMURA account. */
+  initialPrivacy: PrivacyValues | null;
   saving: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -741,8 +881,12 @@ function EditProfileModal({
     status: string;
     bannerUrl: string | null;
     avatarUrl: string | null;
+    privacy: PrivacyValues | null;
   }) => void;
 }) {
+  const [privacy, setPrivacy] = useState<PrivacyValues | null>(initialPrivacy);
+  const setPriv = <K extends keyof PrivacyValues>(k: K, v: PrivacyValues[K]) =>
+    setPrivacy((p) => (p ? { ...p, [k]: v } : p));
   const [name, setName] = useState(initialName);
   const [status, setStatus] = useState(initialStatus);
   const [bannerUrl, setBannerUrl] = useState<string | null>(initialBannerUrl);
@@ -803,7 +947,7 @@ function EditProfileModal({
           </div>
           <div className="ep-head-txt">
             <h1>Editar perfil</h1>
-            <p>Cambia tu foto, tu portada, tu nombre y tu frase de estado.</p>
+            <p>Cambia tu foto, tu portada, tu nombre, tu frase de estado y tu privacidad.</p>
           </div>
           <button type="button" className="ep-close" onClick={onCancel} aria-label="Cerrar">
             <CloseIcon size={20} />
@@ -968,6 +1112,47 @@ function EditProfileModal({
               onChange={(e) => setStatus(e.target.value)}
             />
           </div>
+
+          {/* ── Privacidad (cuenta EMURA) ── */}
+          {privacy && (
+            <div className="ep-section">
+              <div className="ep-sec-label">
+                Privacidad <span className="muted">· quién puede ver cada sección de tu perfil</span>
+              </div>
+              <div className="ep-priv">
+                <VisibilityRow
+                  title="Biblioteca"
+                  sub="Los juegos que tienes en EMURA"
+                  value={privacy.library}
+                  onChange={(v) => setPriv("library", v)}
+                />
+                <VisibilityRow
+                  title="Juegos fijados"
+                  sub="Los destacados de tu perfil"
+                  value={privacy.pinned}
+                  onChange={(v) => setPriv("pinned", v)}
+                />
+                <VisibilityRow
+                  title="Me gusta"
+                  sub="Los juegos marcados con corazón"
+                  value={privacy.favorites}
+                  onChange={(v) => setPriv("favorites", v)}
+                />
+                <SwitchRow
+                  title="Mostrar mi nombre real"
+                  sub="Nombre y apellido del registro"
+                  on={privacy.showName}
+                  onChange={(v) => setPriv("showName", v)}
+                />
+                <SwitchRow
+                  title="Mostrar mi edad"
+                  sub="Visible en tu perfil público"
+                  on={privacy.showAge}
+                  onChange={(v) => setPriv("showAge", v)}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -994,7 +1179,7 @@ function EditProfileModal({
             type="button"
             className="ep-btn primary"
             disabled={saving}
-            onClick={() => onSave({ name, status, bannerUrl, avatarUrl })}
+            onClick={() => onSave({ name, status, bannerUrl, avatarUrl, privacy })}
           >
             <CheckIcon size={18} /> {saving ? "Guardando…" : "Guardar"}
           </button>
@@ -1196,24 +1381,6 @@ function NexusImagePicker({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="pf-stat">
-      <span className="pf-stat-ico">{icon}</span>
-      <span className="pf-stat-val">{children}</span>
-      <span className="pf-stat-lbl">{label}</span>
     </div>
   );
 }

@@ -19,11 +19,14 @@ interface NexusGameCardProps {
   onLaunch: (game: NexusGame) => void;
   onToggleFavorite: (game: NexusGame) => void;
   onHover?: () => void;
+  /** Someone else's game (their profile): same visuals, no heart / library
+   *  chip, and clicks do nothing — it isn't in this user's library. */
+  readOnly?: boolean;
 }
 
 export const NexusGameCard = forwardRef<HTMLDivElement, NexusGameCardProps>(
   function NexusGameCard(
-    { game, focused, showFooter, isFavorite, onOpen, onLaunch, onToggleFavorite, onHover },
+    { game, focused, showFooter, isFavorite, onOpen, onLaunch, onToggleFavorite, onHover, readOnly },
     ref
   ) {
     const handleFav = useCallback(
@@ -63,6 +66,28 @@ export const NexusGameCard = forwardRef<HTMLDivElement, NexusGameCardProps>(
       }
       onLaunch(game);
     }, [game, onLaunch]);
+
+    if (readOnly) {
+      return (
+        <div
+          ref={ref}
+          className={`nx-card read-only${focused ? " focused" : ""}`}
+          onMouseEnter={onHover}
+          title={`${game.title}\n${game.systemName}`}
+        >
+          <div className="nx-card-art">
+            <NexusCover game={game} showMeta titleSize={16} />
+            <div className="nx-card-ring" />
+          </div>
+          {showFooter && (
+            <div className="nx-card-foot">
+              <div className="nx-card-name">{game.title}</div>
+              <div className="nx-card-genre">{game.systemName}</div>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div

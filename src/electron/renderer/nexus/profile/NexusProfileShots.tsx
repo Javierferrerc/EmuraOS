@@ -1,7 +1,7 @@
 /**
  * NexusProfileShots — own-profile screenshot gallery. Upload images to the
  * cloud ('screenshots' bucket), list them and delete them. Shown on the user's
- * own profile when signed in; other accounts see these via NexusPublicProfile.
+ * own profile when signed in; other accounts see them read-only via NexusUserProfile.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,8 @@ import { addScreenshot, listScreenshots, deleteScreenshot } from "../../social/s
 import type { ProfileScreenshot } from "../../social/socialTypes";
 import { UploadIcon, TrashIcon } from "../NexusIcons";
 
-export function NexusProfileShots({ userId }: { userId: string }) {
+/** `readOnly`: another user's gallery (no upload / delete). */
+export function NexusProfileShots({ userId, readOnly = false }: { userId: string; readOnly?: boolean }) {
   const [shots, setShots] = useState<ProfileScreenshot[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,31 +56,39 @@ export function NexusProfileShots({ userId }: { userId: string }) {
     <div className="nps">
       <div className="nps-head">
         <span className="nps-title">Capturas</span>
-        <button className="pf-act-btn" disabled={busy} onClick={() => fileRef.current?.click()}>
-          <UploadIcon size={15} /> {busy ? "Subiendo…" : "Subir"}
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => {
-            void onPick(e.target.files);
-            e.target.value = "";
-          }}
-        />
+        {!readOnly && (
+          <>
+            <button className="pf-act-btn" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <UploadIcon size={15} /> {busy ? "Subiendo…" : "Subir"}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                void onPick(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </>
+        )}
       </div>
       {shots.length === 0 ? (
-        <div className="nps-empty">Aún no has subido capturas. Sube imágenes para mostrarlas en tu perfil.</div>
+        <div className="nps-empty">
+          {readOnly ? "Sin capturas." : "Aún no has subido capturas. Sube imágenes para mostrarlas en tu perfil."}
+        </div>
       ) : (
         <div className="nps-grid">
           {shots.map((s) => (
             <div className="nps-item" key={s.id}>
               <img src={s.url} alt={s.caption ?? ""} />
-              <button className="nps-del" title="Eliminar" onClick={() => void remove(s)}>
-                <TrashIcon size={15} />
-              </button>
+              {!readOnly && (
+                <button className="nps-del" title="Eliminar" onClick={() => void remove(s)}>
+                  <TrashIcon size={15} />
+                </button>
+              )}
             </div>
           ))}
         </div>

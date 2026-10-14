@@ -2306,3 +2306,185 @@
 .nexus-social-pop .cmp-pin-art { width: 92px; height: 122px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); display: grid; place-items: center; color: var(--text-faint); overflow: hidden; }
 .nexus-social-pop .cmp-pin-art img { width: 100%; height: 100%; object-fit: cover; }
 .nexus-social-pop .cmp-pin span { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Profile visibility (0014): chips, private sections, other user's view ── */
+.nexus-root .pf-vis-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text-faint);
+}
+.nexus-root .pf-vis-chip.everyone {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.nexus-root .pf-vis-chip.friends {
+  color: var(--good, #4ade80);
+  border-color: color-mix(in oklab, var(--good, #4ade80) 35%, transparent);
+  background: color-mix(in oklab, var(--good, #4ade80) 10%, transparent);
+}
+.nexus-root .pf-private {
+  gap: 10px;
+  align-items: center;
+  color: var(--text-faint);
+}
+.nexus-root .pf-user-state {
+  margin-top: 40px;
+}
+.nexus-root .pf-cover-edit.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.nexus-root .pf-cover-edit.primary:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.nexus-root .pf-cover-edit:disabled {
+  cursor: default;
+}
+.nexus-root .pf-cover-edit.primary:disabled {
+  opacity: 0.7;
+}
+.nexus-root .pf-action-msg {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  z-index: 3;
+  max-width: 320px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(8, 10, 15, 0.75);
+  backdrop-filter: blur(10px);
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.nexus-root .pf-account-pop-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.nexus-root .pf-report {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+.nexus-root .pf-report-input {
+  width: 100%;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.nexus-root .pf-report-input:focus {
+  border-color: color-mix(in oklab, var(--accent) 65%, transparent);
+}
+.nexus-root .pf-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Editar perfil → Privacidad ─────────────────────────────── */
+.nexus-root .ep-priv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nexus-root .ep-priv-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.nexus-root .ep-priv-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nexus-root .ep-priv-txt b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.nexus-root .ep-priv-txt span {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.nexus-root .ep-seg {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.28);
+}
+.nexus-root .ep-seg-opt {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.nexus-root .ep-seg-opt:hover {
+  color: var(--text);
+}
+.nexus-root .ep-seg-opt.on {
+  background: var(--accent);
+  color: #fff;
+}
+.nexus-root .ep-sw {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-3);
+  cursor: pointer;
+  transition: all 0.18s var(--ease);
+}
+.nexus-root .ep-sw[data-on="1"] {
+  background: var(--accent);
+  border-color: transparent;
+  box-shadow: 0 0 14px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+.nexus-root .ep-sw i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s var(--ease);
+}
+.nexus-root .ep-sw[data-on="1"] i {
+  transform: translateX(18px);
+}

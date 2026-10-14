@@ -21,6 +21,7 @@ import type {
   PresenceState,
   Profile,
   ProfileScreenshot,
+  ProfileShowcase,
 } from "./socialTypes";
 
 function db() {
@@ -431,14 +432,26 @@ export async function ensureMyProfile(): Promise<Profile | null> {
   return (row as Profile) ?? null;
 }
 
-export async function updateMyProfile(
-  patch: Partial<
-    Pick<
-      Profile,
-      "display_name" | "username" | "status" | "avatar_url" | "banner_url" | "pinned" | "stats"
-    >
+/** Profile fields the owner may change from the app. */
+export type ProfilePatch = Partial<
+  Pick<
+    Profile,
+    | "display_name"
+    | "username"
+    | "status"
+    | "avatar_url"
+    | "banner_url"
+    | "pinned"
+    | "stats"
+    | "show_name"
+    | "show_age"
+    | "vis_library"
+    | "vis_pinned"
+    | "vis_favorites"
   >
-): Promise<Profile> {
+>;
+
+export async function updateMyProfile(patch: ProfilePatch): Promise<Profile> {
   const { data: u } = await db().auth.getUser();
   if (!u.user) throw new Error("Not signed in.");
   const { data, error } = await db()
@@ -449,6 +462,14 @@ export async function updateMyProfile(
     .single();
   if (error) throw error;
   return data as Profile;
+}
+
+/** Another user's library / likes / pinned visibility, already filtered
+ *  server-side by their privacy settings (get_profile_showcase). */
+export async function getProfileShowcase(userId: string): Promise<ProfileShowcase | null> {
+  const { data, error } = await db().rpc("get_profile_showcase", { p_user_id: userId });
+  if (error) throw error;
+  return (data as ProfileShowcase | null) ?? null;
 }
 
 /** Look up someone to add by their exact friend code (NX-0000-0000). */
