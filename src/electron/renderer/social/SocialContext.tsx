@@ -15,10 +15,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { RealtimeChannel, User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { useApp } from "../context/AppContext";
 import { getSupabase, isSocialConfigured } from "./supabaseClient";
 import * as api from "./socialApi";
+import { PresenceSession, type LocalPresence } from "./presence";
+import { ArrivalLog, PRESENCE_PRUNE_MS, resolvePresence, samePresence } from "./presenceModel";
 import type { FriendEdge, PresenceState, Profile } from "./socialTypes";
 
 interface SocialContextValue {
@@ -83,20 +85,6 @@ function gameRefOf(fileName: string | null | undefined): string | null {
   return fileName.replace(/\.[^.]+$/, "");
 }
 
-// Presence heartbeat: each client refreshes its entry on this cadence, and
-// viewers drop a friend whose last heartbeat is older than STALE (crash /
-// force-quit / frozen socket) instead of waiting on Supabase's server-side
-// leave timeout — fixes "sigue online/jugando tras cerrar la app".
-const PRESENCE_HEARTBEAT_MS = 25_000;
-const PRESENCE_STALE_MS = 75_000;
-const PRESENCE_PRUNE_MS = 15_000;
-
-/** Keep only presence entries seen within STALE. Entries without a heartbeat
- *  (older clients) are kept for backward compatibility. */
-function freshPresence(states: PresenceState[], now: number): PresenceState[] {
-  return states.filter((s) => s.heartbeat == null || now - s.heartbeat < PRESENCE_STALE_MS);
-}
-
 export function SocialProvider({ children }: { children: ReactNode }) {
   const app = useApp();
   const configured = isSocialConfigured();
@@ -110,12 +98,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const [away, setAway] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const channelRef = useRef<RealtimeChannel | null>(null);
   const userRef = useRef<User | null>(null);
   userRef.current = user;
-  // Always-current presence sender, reassigned every render so the heartbeat
-  // interval re-broadcasts with the latest playing/away instead of stale values.
-  const sendPresenceRef = useRef<() => void>(() => {});
+  // Effects below key on the id, NOT the User object: supabase-js emits a new
+  // object on every INITIAL_SESSION / TOKEN_REFRESHED / SIGNED_IN, and tearing
+  // down + re-joining the realtime channels on each of those is what left
+  // presence dead after a while.
+  const userId = user?.id ?? null;
+  const presenceRef = useRef<PresenceSession | null>(null);
 
   // Current "now playing" gameRef from the real game session.
   const playing = useMemo(
@@ -171,7 +161,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
   // ── On sign-in: ensure profile, load friends, subscribe to changes ──
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setProfile(null);
       setFriends([]);
       return;
@@ -188,9 +178,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     })();
 
     // Realtime: refresh friends whenever a friendship row touching me changes.
+    // Unique topic per run: supabase-js would hand back the previous run's
+    // channel (still being removed) for a reused topic, leaving this dead.
     const sb = getSupabase();
     const sub = sb
-      ?.channel("db:friendships")
+      ?.channel(`db:friendships:${userId}:${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, () => {
         void loadFriends();
       })
@@ -200,55 +192,54 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       if (sub) void sb?.removeChannel(sub);
     };
-  }, [user, loadFriends]);
+  }, [userId, loadFriends]);
 
-  // ── Presence: join on sign-in, update on game change, leave on out ──
+  // ── Presence: one self-healing session per signed-in account ──────
+  // PresenceSession owns the lobby channel (reconnects, watchdog, heartbeat);
+  // here we only feed it the local state and resolve what it receives.
   useEffect(() => {
-    if (!user) return;
-    let channel: RealtimeChannel | null = null;
-    // Best-effort clean leave when the window/app closes. React's unmount
-    // cleanup does NOT run when the renderer is destroyed on app quit, so
-    // without this a friend would linger (last state, e.g. "jugando") until the
-    // staleness prune catches it. untrack() sends the presence leave over the
-    // socket before it closes; the prune remains the guaranteed backstop.
-    const leaveOnExit = () => {
-      try {
-        void channelRef.current?.untrack();
-      } catch {
-        /* window is tearing down */
-      }
+    if (!userId) {
+      setPresence(new Map());
+      return;
+    }
+    const log = new ArrivalLog();
+    let latest: PresenceState[] = [];
+    const publish = () => {
+      const next = resolvePresence(latest, log, Date.now());
+      setPresence((prev) => (samePresence(prev, next) ? prev : next));
     };
+    const session = new PresenceSession(
+      userId,
+      () => localPresenceRef.current(),
+      (states) => {
+        latest = states;
+        log.observe(states, Date.now());
+        publish();
+      }
+    );
+    presenceRef.current = session;
+    session.start();
+    // Ages out friends between syncs (crash / force-quit / frozen socket).
+    const prune = window.setInterval(publish, PRESENCE_PRUNE_MS);
+    // Best-effort clean leave when the window/app closes. React's unmount
+    // cleanup does NOT run when the renderer is destroyed on app quit; the
+    // friends' staleness prune remains the guaranteed backstop.
+    const leaveOnExit = () => session.leaveNow();
     window.addEventListener("pagehide", leaveOnExit);
     window.addEventListener("beforeunload", leaveOnExit);
-    try {
-      const state: PresenceState = {
-        user_id: user.id,
-        status: "online",
-        playing,
-        heartbeat: Date.now(),
-        since: new Date().toISOString(),
-      };
-      channel = api.joinPresence(state, (states) => {
-        setPresence(new Map(freshPresence(states, Date.now()).map((s) => [s.user_id, s])));
-      });
-      channelRef.current = channel;
-    } catch (e) {
-      console.warn("[social] presence join failed:", e);
-    }
     return () => {
       window.removeEventListener("pagehide", leaveOnExit);
       window.removeEventListener("beforeunload", leaveOnExit);
-      channelRef.current = null;
-      if (channel) void api.leavePresence(channel);
+      window.clearInterval(prune);
+      if (presenceRef.current === session) presenceRef.current = null;
+      session.stop();
     };
-    // Re-join only when the user changes; `playing` updates via the effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [userId]);
 
   // Idle detection → presence "away". Any input resets the timer; after a
   // stretch of inactivity we flip to away, which the update effect broadcasts.
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     const IDLE_MS = 5 * 60 * 1000;
     let timer: number;
     const reset = () => {
@@ -269,59 +260,25 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
       events.forEach((e) => window.removeEventListener(e, reset));
     };
-  }, [user]);
+  }, [userId]);
 
-  // Build + push the current presence state. Reassigned every render so the
-  // heartbeat interval always broadcasts fresh playing/away.
-  sendPresenceRef.current = () => {
-    const channel = channelRef.current;
-    const u = userRef.current;
-    if (!channel || !u) return;
-    void api.updatePresence(channel, {
-      // A running game counts as activity: input goes to the emulator, not the
-      // EMURA window, so the idle timer would otherwise flip us to "away" mid-
-      // session. Stay "online" while `playing` is set.
-      user_id: u.id,
-      status: away && !playing ? "away" : "online",
-      playing,
-      playing_title: playingTitle,
-      playing_since: playingSince,
-      heartbeat: Date.now(),
-      since: new Date().toISOString(),
-    });
-  };
+  // Current local state, read by the session on every heartbeat / re-join so it
+  // never re-sends a stale snapshot. Reassigned every render.
+  const localPresenceRef = useRef<() => LocalPresence>(() => ({ status: "online", playing: null }));
+  localPresenceRef.current = () => ({
+    // A running game counts as activity: input goes to the emulator, not the
+    // EMURA window, so the idle timer would otherwise flip us to "away" mid-
+    // session. Stay "online" while `playing` is set.
+    status: away && !playing ? "away" : "online",
+    playing,
+    playing_title: playingTitle,
+    playing_since: playingSince,
+  });
 
   // Broadcast immediately whenever the now-playing / away state changes.
   useEffect(() => {
-    sendPresenceRef.current();
+    presenceRef.current?.push();
   }, [playing, playingTitle, playingSince, away]);
-
-  // Heartbeat + staleness prune: refresh our own presence on a cadence, and drop
-  // friends whose heartbeat went stale (crash / force-quit / frozen socket)
-  // without waiting on Supabase's server-side leave — the fix for a friend who
-  // stays "online / jugando" after closing the game or the app.
-  useEffect(() => {
-    if (!user) return;
-    const beat = window.setInterval(() => sendPresenceRef.current(), PRESENCE_HEARTBEAT_MS);
-    const prune = window.setInterval(() => {
-      const now = Date.now();
-      setPresence((prev) => {
-        let changed = false;
-        const next = new Map(prev);
-        for (const [id, s] of prev) {
-          if (s.heartbeat != null && now - s.heartbeat >= PRESENCE_STALE_MS) {
-            next.delete(id);
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, PRESENCE_PRUNE_MS);
-    return () => {
-      window.clearInterval(beat);
-      window.clearInterval(prune);
-    };
-  }, [user]);
 
   // ── Actions ──────────────────────────────────────────────────────
   const signUpEmail = useCallback(async (email: string, password: string) => {

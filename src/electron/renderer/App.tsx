@@ -471,7 +471,7 @@ export default function App() {
   // Keep the social layer (auth + live presence) mounted ACROSS view changes.
   // NexusSession replaces NexusShell on /game (and NexusSettings on /settings),
   // and SocialProvider used to live INSIDE NexusShell — so launching a game
-  // unmounted the provider, ran its cleanup (leavePresence → untrack), and
+  // unmounted the provider, ran its cleanup (presence leave → untrack), and
   // dropped the account from the presence lobby ("offline", no "jugando").
   // Hoisted here (outside the keyed fade wrapper) it spans library ↔ game ↔
   // settings, so presence — including the now-playing broadcast — survives a

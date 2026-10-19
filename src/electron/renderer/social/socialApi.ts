@@ -11,14 +11,13 @@
  * in the next phase.
  */
 
-import type { RealtimeChannel, Session, User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { getSupabase } from "./supabaseClient";
 import * as vault from "./sessionVault";
 import type {
   ActivityItem,
   FriendEdge,
   Friendship,
-  PresenceState,
   Profile,
   ProfileScreenshot,
   ProfileShowcase,
@@ -748,44 +747,4 @@ export async function listActivity(limit = 40): Promise<ActivityItem[]> {
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as ActivityItem[];
-}
-
-// ── Presence (Realtime) ──────────────────────────────────────────────────
-/**
- * Join the shared presence channel and broadcast my state. `onSync` fires with
- * the full list of present users whenever presence changes. The caller updates
- * `playing` when a game session starts/ends. Friend filtering is applied by the
- * consumer (only show presence of accepted friends); per-friend channel privacy
- * is a later refinement.
- *
- * IMPORTANT: the `sync` listener is registered BEFORE `subscribe()` — the order
- * Supabase Realtime requires. Registering it afterwards (as this used to) can
- * drop the INITIAL snapshot, so a friend who was already online never shows up
- * and no later `sync` arrives to correct it.
- */
-export function joinPresence(
-  state: PresenceState,
-  onSync: (states: PresenceState[]) => void
-): RealtimeChannel {
-  const channel = db().channel("presence:lobby", {
-    config: { presence: { key: state.user_id } },
-  });
-  channel.on("presence", { event: "sync" }, () => {
-    const raw = channel.presenceState<PresenceState>();
-    const flat = Object.values(raw).flat() as PresenceState[];
-    onSync(flat);
-  });
-  channel.subscribe(async (status) => {
-    if (status === "SUBSCRIBED") await channel.track(state);
-  });
-  return channel;
-}
-
-export async function updatePresence(channel: RealtimeChannel, state: PresenceState): Promise<void> {
-  await channel.track(state);
-}
-
-export async function leavePresence(channel: RealtimeChannel): Promise<void> {
-  await channel.untrack();
-  await db().removeChannel(channel);
 }

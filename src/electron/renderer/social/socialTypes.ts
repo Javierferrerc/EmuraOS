@@ -117,9 +117,13 @@ export interface PresenceState {
   /** Epoch ms when the current game session started, for a live "00:23:45"
    *  timer on the viewer side. Stable across away/online toggles. */
   playing_since?: number | null;
-  /** Epoch ms of the last heartbeat. Refreshed periodically while the client is
-   *  alive; viewers drop a friend whose heartbeat goes stale (crash / force-quit
-   *  / frozen socket) without waiting on Supabase's server-side leave timeout. */
+  /** Epoch ms (server clock when available) of the last heartbeat. A new value
+   *  goes out periodically while the client is alive; viewers drop a friend
+   *  from whom nothing new arrived for a while (crash / force-quit / frozen
+   *  socket), timed with THEIR clock — see presenceModel. */
   heartbeat?: number;
+  /** Random id of the app instance, so the same account open on two PCs is
+   *  two distinct entries that viewers merge. */
+  client_id?: string;
   since: string;
 }
